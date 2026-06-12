@@ -14,8 +14,8 @@ Update the **Progress summary** counts when you complete a phase. Tags: `[INFRA]
 
 | Phase | Theme | Status | Done / Total |
 |------:|-------|:------:|:------------:|
-| 0 | Foundations | ☐ | 0 / 19 |
-| 1 | Identity & family (Clerk) | ☐ | 0 / 18 |
+| 0 | Foundations | ☑ | 19 / 19 |
+| 1 | Identity & family (Clerk) | ☑ | 18 / 18 |
 | 2 | Calendar core ⭐ | ☐ | 0 / 22 |
 | 3 | Tasks & routines | ☐ | 0 / 11 |
 | 4 | Lists & groceries | ☐ | 0 / 11 |
@@ -24,7 +24,7 @@ Update the **Progress summary** counts when you complete a phase. Tags: `[INFRA]
 | 7 | External sync | ☐ | 0 / 16 |
 | 8 | Device & system | ☐ | 0 / 13 |
 | 9 | Polish & hardening | ☐ | 0 / 12 |
-| | **Total** | | **0 / 151** |
+| | **Total** | | **37 / 151** |
 
 ---
 
