@@ -5,7 +5,7 @@ import { useQuery } from "@tanstack/react-query"
 import { useApi } from "@/hooks/use-api"
 import { useRouter } from "next/navigation"
 import { useEffect } from "react"
-import Link from "next/link"
+import { CalendarView } from "@/components/calendar/calendar-view"
 
 interface MeResponse {
   id: string
@@ -47,37 +47,13 @@ export default function AppHomePage() {
     if (me && memberships.length === 0) router.push("/app/onboarding")
   }, [me, memberships, router])
 
-  if (!isLoaded) {
-    return <div className="flex flex-1 items-center justify-center">Loading…</div>
+  if (!isLoaded || !familyId) {
+    return <div className="flex flex-1 items-center justify-center text-muted-foreground text-sm">Loading…</div>
   }
 
   return (
-    <div className="flex flex-1 flex-col gap-6 p-4">
-      <div>
-        <h1 className="font-heading text-2xl font-bold">
-          Hello, {user?.firstName ?? me?.email ?? "there"}
-        </h1>
-        <p className="text-muted-foreground text-sm">Your family calendar</p>
-      </div>
-
-      {familyId && (
-        <nav className="flex flex-col gap-2">
-          <Link
-            href={`/app/family/${familyId}/members`}
-            className="bg-card border-border hover:bg-accent flex items-center gap-3 rounded-lg border p-4 transition-colors"
-          >
-            <span className="text-2xl">👨‍👩‍👧‍👦</span>
-            <div>
-              <p className="font-medium">Family Members</p>
-              <p className="text-muted-foreground text-sm">Manage calendar profiles</p>
-            </div>
-          </Link>
-        </nav>
-      )}
-
-      <div className="text-muted-foreground rounded-xl border border-dashed p-12 text-center text-sm">
-        Calendar view coming in Phase 2
-      </div>
+    <div className="flex flex-1 flex-col overflow-hidden">
+      <CalendarView familyId={familyId} defaultView="month" />
     </div>
   )
 }
