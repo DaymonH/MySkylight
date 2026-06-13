@@ -31,7 +31,7 @@ export default function AppHomePage() {
     retry: false,
   })
 
-  const { data: memberships = [] } = useQuery({
+  const { data: memberships = [], isPending: membershipsPending } = useQuery({
     queryKey: ["me", "memberships"],
     queryFn: () => api.get<MembershipResponse[]>("/me/memberships"),
     enabled: !!me,
@@ -44,8 +44,8 @@ export default function AppHomePage() {
   }, [isError, router])
 
   useEffect(() => {
-    if (me && memberships.length === 0) router.push("/app/onboarding")
-  }, [me, memberships, router])
+    if (me && !membershipsPending && memberships.length === 0) router.push("/app/onboarding")
+  }, [me, memberships, membershipsPending, router])
 
   if (!isLoaded || !familyId) {
     return <div className="flex flex-1 items-center justify-center text-muted-foreground text-sm">Loading…</div>

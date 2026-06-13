@@ -4,7 +4,7 @@ import { useState } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
-import { useMutation } from "@tanstack/react-query"
+import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { useRouter } from "next/navigation"
 import { useApi } from "@/hooks/use-api"
 import { Button } from "@/components/ui/button"
@@ -22,6 +22,7 @@ interface FamilyOut {
 export default function OnboardingPage() {
   const api = useApi()
   const router = useRouter()
+  const queryClient = useQueryClient()
   const [step, setStep] = useState<"family" | "done">("family")
 
   const {
@@ -33,6 +34,7 @@ export default function OnboardingPage() {
   const createFamily = useMutation({
     mutationFn: (values: FormValues) => api.post<FamilyOut>("/families", values),
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["me", "memberships"] })
       setStep("done")
       setTimeout(() => router.push("/app"), 1500)
     },
