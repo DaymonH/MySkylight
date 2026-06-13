@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo } from "react"
+import { useMemo, useEffect, useRef } from "react"
 import type { OccurrenceOut } from "@/lib/types/calendar"
 import type { WeatherDay } from "@/hooks/use-weather"
 import { WeatherIcon } from "./weather-icon"
@@ -24,7 +24,16 @@ function fmt12(h: number) {
   return h < 12 ? `${h}am` : `${h - 12}pm`
 }
 
+const SCROLL_TO_HOUR = 7
+
 export function WeekView({ startDate, occurrences, onEventClick, weatherByDate }: WeekViewProps) {
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const hourRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    hourRef.current?.scrollIntoView({ block: "start" })
+  }, [])
+
   const days = useMemo(() =>
     Array.from({ length: 7 }, (_, i) => {
       const d = new Date(startDate)
@@ -73,7 +82,12 @@ export function WeekView({ startDate, occurrences, onEventClick, weatherByDate }
       {/* Time grid */}
       <div className="relative" style={{ gridTemplateColumns: "3rem repeat(7, 1fr)" }}>
         {HOURS.map((h) => (
-          <div key={h} className="grid border-b" style={{ gridTemplateColumns: "3rem repeat(7, 1fr)", minHeight: "3rem" }}>
+          <div
+            key={h}
+            ref={h === SCROLL_TO_HOUR ? hourRef : undefined}
+            className="grid border-b"
+            style={{ gridTemplateColumns: "3rem repeat(7, 1fr)", minHeight: "3rem" }}
+          >
             <div className="border-r px-1 pt-0.5 text-right text-xs text-muted-foreground">
               {fmt12(h)}
             </div>

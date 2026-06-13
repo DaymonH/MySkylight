@@ -1,5 +1,6 @@
 "use client"
 
+import { useEffect, useRef } from "react"
 import type { OccurrenceOut } from "@/lib/types/calendar"
 import type { WeatherDay } from "@/hooks/use-weather"
 import { WeatherIcon } from "./weather-icon"
@@ -12,6 +13,7 @@ interface DayViewProps {
 }
 
 const HOURS = Array.from({ length: 24 }, (_, i) => i)
+const SCROLL_TO_HOUR = 7
 
 function fmt12(h: number) {
   if (h === 0) return "12 AM"
@@ -20,8 +22,14 @@ function fmt12(h: number) {
 }
 
 export function DayView({ date, occurrences, onEventClick, weather }: DayViewProps) {
+  const hourRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    hourRef.current?.scrollIntoView({ block: "start" })
+  }, [])
+
   return (
-    <div className="flex flex-col overflow-auto">
+    <div className="flex flex-col">
       {/* Weather row */}
       {weather && (
         <div className="flex items-center gap-2 border-b px-4 py-2">
@@ -49,7 +57,7 @@ export function DayView({ date, occurrences, onEventClick, weather }: DayViewPro
       {HOURS.map((h) => {
         const evts = occurrences.filter((o) => !o.all_day && new Date(o.start_dt).getHours() === h)
         return (
-          <div key={h} className="flex min-h-12 border-b last:border-b-0">
+          <div key={h} ref={h === SCROLL_TO_HOUR ? hourRef : undefined} className="flex min-h-12 border-b last:border-b-0">
             <div className="w-16 flex-shrink-0 px-2 pt-1 text-right text-xs text-muted-foreground">
               {fmt12(h)}
             </div>
