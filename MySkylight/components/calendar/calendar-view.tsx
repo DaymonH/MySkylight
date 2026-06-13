@@ -1,13 +1,16 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { useApi } from "@/hooks/use-api"
 import { useCalendars, useCreateCalendar, useOccurrences, useCreateEvent, useUpdateEvent } from "@/hooks/use-calendars"
+import { useRealtime } from "@/hooks/use-realtime"
+import { useGeolocation, useWeatherDays } from "@/hooks/use-weather"
 import { MonthView } from "./month-view"
 import { WeekView } from "./week-view"
 import { DayView } from "./day-view"
 import { ScheduleView } from "./schedule-view"
+import { CountdownStrip } from "./countdown-strip"
 import { EventSheet } from "./event-sheet"
 import { Button } from "@/components/ui/button"
 import type { CalendarView, MemberBrief, OccurrenceOut } from "@/lib/types/calendar"
@@ -15,6 +18,7 @@ import type { CalendarView, MemberBrief, OccurrenceOut } from "@/lib/types/calen
 interface CalendarViewProps {
   familyId: string
   defaultView?: CalendarView
+  storageKey?: string
 }
 
 function toYMD(d: Date) {
@@ -77,14 +81,24 @@ function navigate(view: CalendarView, anchor: Date, dir: -1 | 1): Date {
   return d
 }
 
-export function CalendarView({ familyId, defaultView = "month" }: CalendarViewProps) {
-  const [view, setView] = useState<CalendarView>(defaultView)
+export function CalendarView({ familyId, defaultView = "month", storageKey }: CalendarViewProps) {
+  const [view, setView] = useState<CalendarView>(() => {
+    if (storageKey && typeof window !== "undefined") {
+      const saved = localStorage.getItem(storageKey)
+      if (saved) return saved as CalendarView
+    }
+    return defaultView
+  })
   const [anchor, setAnchor] = useState(new Date())
   const [sheetOpen, setSheetOpen] = useState(false)
   const [defaultDate, setDefaultDate] = useState<string | undefined>()
   const [editing, setEditing] = useState<OccurrenceOut | undefined>()
 
   const api = useApi()
+
+  useRealtime(familyId)
+
+  const coords = useGeolocation()
 
   const { data: calendars = [] } = useCalendars(familyId)
   const { data: members = [] } = useQuery({
@@ -96,6 +110,19 @@ export function CalendarView({ familyId, defaultView = "month" }: CalendarViewPr
   const { from, to } = rangeForView(view, anchor)
   const { data: occurrences = [], isLoading } = useOccurrences(familyId, from, to)
 
+  // Collect dates needing weather (day + week views only)
+  const weatherDates = useMemo(() => {
+    if (view === "day") return [toYMD(anchor)]
+    if (view === "week") {
+      const ws = weekStart(anchor)
+      return Array.from({ length: 7 }, (_, i) => {
+        const d = new Date(ws); d.setDate(d.getDate() + i); return toYMD(d)
+      })
+    }
+    return []
+  }, [view, anchor])
+  const weatherByDate = useWeatherDays(familyId, coords, weatherDates)
+
   const createCalendar = useCreateCalendar(familyId)
   const createEvent = useCreateEvent(familyId)
   const updateEvent = useUpdateEvent(familyId)
@@ -106,6 +133,11 @@ export function CalendarView({ familyId, defaultView = "month" }: CalendarViewPr
       createCalendar.mutate({ name: "Family", color: "#6366f1" })
     }
   }, [calendars.length]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  function changeView(v: CalendarView) {
+    setView(v)
+    if (storageKey) localStorage.setItem(storageKey, v)
+  }
 
   function openNew(date?: string) {
     setEditing(undefined)
@@ -176,7 +208,7 @@ export function CalendarView({ familyId, defaultView = "month" }: CalendarViewPr
           {VIEW_TABS.map((t) => (
             <button
               key={t.value}
-              onClick={() => setView(t.value)}
+              onClick={() => changeView(t.value)}
               className={`px-2 py-1 transition-colors first:rounded-l-lg last:rounded-r-lg ${
                 view === t.value ? "bg-primary text-primary-foreground" : "hover:bg-accent"
               }`}
@@ -187,6 +219,9 @@ export function CalendarView({ familyId, defaultView = "month" }: CalendarViewPr
         </div>
         <Button size="sm" onClick={() => openNew()}>+ Add</Button>
       </div>
+
+      {/* Countdown strip — shown on all views */}
+      <CountdownStrip occurrences={occurrences} onEventClick={openEdit} />
 
       {/* View content */}
       <div className="flex-1 overflow-auto">
@@ -205,12 +240,14 @@ export function CalendarView({ familyId, defaultView = "month" }: CalendarViewPr
             startDate={weekStart(anchor)}
             occurrences={occurrences}
             onEventClick={openEdit}
+            weatherByDate={weatherByDate}
           />
         ) : view === "day" ? (
           <DayView
             date={anchor}
             occurrences={occurrences}
             onEventClick={openEdit}
+            weather={weatherByDate[toYMD(anchor)]}
           />
         ) : (
           <ScheduleView

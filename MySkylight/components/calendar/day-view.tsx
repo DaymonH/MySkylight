@@ -1,11 +1,14 @@
 "use client"
 
 import type { OccurrenceOut } from "@/lib/types/calendar"
+import type { WeatherDay } from "@/hooks/use-weather"
+import { WeatherIcon } from "./weather-icon"
 
 interface DayViewProps {
   date: Date
   occurrences: OccurrenceOut[]
   onEventClick: (occ: OccurrenceOut) => void
+  weather?: WeatherDay
 }
 
 const HOURS = Array.from({ length: 24 }, (_, i) => i)
@@ -16,9 +19,16 @@ function fmt12(h: number) {
   return h < 12 ? `${h} AM` : `${h - 12} PM`
 }
 
-export function DayView({ date, occurrences, onEventClick }: DayViewProps) {
+export function DayView({ date, occurrences, onEventClick, weather }: DayViewProps) {
   return (
     <div className="flex flex-col overflow-auto">
+      {/* Weather row */}
+      {weather && (
+        <div className="flex items-center gap-2 border-b px-4 py-2">
+          <WeatherIcon {...weather} />
+        </div>
+      )}
+
       {/* All-day strip */}
       {occurrences.filter((o) => o.all_day).length > 0 && (
         <div className="flex flex-wrap gap-1 border-b px-4 py-2">

@@ -53,7 +53,7 @@ export default function AppHomePage() {
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
-      <CalendarView familyId={familyId} defaultView="month" />
+      <CalendarView familyId={familyId} defaultView="month" storageKey="skylight:view:app" />
     </div>
   )
 }

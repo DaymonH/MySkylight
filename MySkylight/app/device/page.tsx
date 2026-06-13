@@ -44,7 +44,7 @@ export default function DevicePage() {
 
   return (
     <div className="flex h-full w-full flex-col overflow-hidden">
-      <CalendarView familyId={familyId} defaultView="week" />
+      <CalendarView familyId={familyId} defaultView="week" storageKey="skylight:view:device" />
     </div>
   )
 }

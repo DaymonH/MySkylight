@@ -2,11 +2,14 @@
 
 import { useMemo } from "react"
 import type { OccurrenceOut } from "@/lib/types/calendar"
+import type { WeatherDay } from "@/hooks/use-weather"
+import { WeatherIcon } from "./weather-icon"
 
 interface WeekViewProps {
   startDate: Date  // Sunday of the week
   occurrences: OccurrenceOut[]
   onEventClick: (occ: OccurrenceOut) => void
+  weatherByDate?: Record<string, WeatherDay>
 }
 
 const HOURS = Array.from({ length: 24 }, (_, i) => i)
@@ -21,7 +24,7 @@ function fmt12(h: number) {
   return h < 12 ? `${h}am` : `${h - 12}pm`
 }
 
-export function WeekView({ startDate, occurrences, onEventClick }: WeekViewProps) {
+export function WeekView({ startDate, occurrences, onEventClick, weatherByDate }: WeekViewProps) {
   const days = useMemo(() =>
     Array.from({ length: 7 }, (_, i) => {
       const d = new Date(startDate)
@@ -57,6 +60,11 @@ export function WeekView({ startDate, occurrences, onEventClick }: WeekViewProps
               <div className={`mx-auto mt-0.5 flex h-7 w-7 items-center justify-center rounded-full text-sm font-medium ${isToday ? "bg-primary text-primary-foreground" : ""}`}>
                 {d.getDate()}
               </div>
+              {weatherByDate?.[ymd] && (
+                <div className="mt-0.5 flex justify-center">
+                  <WeatherIcon compact {...weatherByDate[ymd]} />
+                </div>
+              )}
             </div>
           )
         })}
