@@ -26,9 +26,11 @@ export function DayView({ date, occurrences, onEventClick, weather }: DayViewPro
   const scrollRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = SCROLL_TO_HOUR * HOUR_HEIGHT_PX
-    }
+    requestAnimationFrame(() => {
+      if (scrollRef.current) {
+        scrollRef.current.scrollTop = SCROLL_TO_HOUR * HOUR_HEIGHT_PX
+      }
+    })
   }, [])
 
   return (
