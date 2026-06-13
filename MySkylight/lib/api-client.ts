@@ -1,27 +1,6 @@
-const API_PREFIX = "/api/backend/api/v1"
+import { apiRequest } from "@/lib/api"
 
 type RequestOptions = Omit<RequestInit, "body"> & { body?: unknown }
-
-async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const { body, ...rest } = options
-
-  const res = await fetch(`${API_PREFIX}${path}`, {
-    ...rest,
-    headers: {
-      "Content-Type": "application/json",
-      ...(rest.headers ?? {}),
-    },
-    ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
-  })
-
-  if (!res.ok) {
-    const text = await res.text().catch(() => res.statusText)
-    throw new ApiError(res.status, text)
-  }
-
-  if (res.status === 204) return undefined as T
-  return res.json() as Promise<T>
-}
 
 export class ApiError extends Error {
   constructor(
@@ -31,6 +10,18 @@ export class ApiError extends Error {
     super(message)
     this.name = "ApiError"
   }
+}
+
+async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
+  const { body, ...rest } = options
+  const result = await apiRequest<T>(`api/v1${path}`, {
+    ...rest,
+    ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+  })
+  if (!result.ok) {
+    throw new ApiError(result.status, result.error ?? "Request failed")
+  }
+  return result.data as T
 }
 
 export function makeApi() {
