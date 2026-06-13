@@ -224,17 +224,19 @@ export function CalendarView({ familyId, defaultView = "month", storageKey }: Ca
       <CountdownStrip occurrences={occurrences} onEventClick={openEdit} />
 
       {/* View content */}
-      <div className="flex-1 overflow-auto">
+      <div className="flex-1 overflow-hidden">
         {isLoading ? (
           <div className="flex h-full items-center justify-center text-sm text-muted-foreground">Loading…</div>
         ) : view === "month" ? (
-          <MonthView
-            year={anchor.getFullYear()}
-            month={anchor.getMonth()}
-            occurrences={occurrences}
-            onDayClick={(date) => openNew(date)}
-            onEventClick={openEdit}
-          />
+          <div className="h-full overflow-auto">
+            <MonthView
+              year={anchor.getFullYear()}
+              month={anchor.getMonth()}
+              occurrences={occurrences}
+              onDayClick={(date) => openNew(date)}
+              onEventClick={openEdit}
+            />
+          </div>
         ) : view === "week" ? (
           <WeekView
             startDate={weekStart(anchor)}
@@ -250,10 +252,12 @@ export function CalendarView({ familyId, defaultView = "month", storageKey }: Ca
             weather={weatherByDate[toYMD(anchor)]}
           />
         ) : (
-          <ScheduleView
-            occurrences={occurrences}
-            onEventClick={openEdit}
-          />
+          <div className="h-full overflow-auto">
+            <ScheduleView
+              occurrences={occurrences}
+              onEventClick={openEdit}
+            />
+          </div>
         )}
       </div>
 

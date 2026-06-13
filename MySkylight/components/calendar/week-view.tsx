@@ -13,6 +13,8 @@ interface WeekViewProps {
 }
 
 const HOURS = Array.from({ length: 24 }, (_, i) => i)
+const HOUR_HEIGHT_PX = 48  // matches minHeight: "3rem"
+const SCROLL_TO_HOUR = 7
 
 function toYMD(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`
@@ -24,14 +26,13 @@ function fmt12(h: number) {
   return h < 12 ? `${h}am` : `${h - 12}pm`
 }
 
-const SCROLL_TO_HOUR = 7
-
 export function WeekView({ startDate, occurrences, onEventClick, weatherByDate }: WeekViewProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
-  const hourRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    hourRef.current?.scrollIntoView({ block: "start" })
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = SCROLL_TO_HOUR * HOUR_HEIGHT_PX
+    }
   }, [])
 
   const days = useMemo(() =>
@@ -56,9 +57,9 @@ export function WeekView({ startDate, occurrences, onEventClick, weatherByDate }
   const DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
 
   return (
-    <div className="flex flex-col overflow-auto">
-      {/* Header row */}
-      <div className="sticky top-0 z-10 grid border-b bg-background" style={{ gridTemplateColumns: "3rem repeat(7, 1fr)" }}>
+    <div className="flex h-full flex-col">
+      {/* Sticky day header */}
+      <div className="grid flex-shrink-0 border-b bg-background" style={{ gridTemplateColumns: "3rem repeat(7, 1fr)" }}>
         <div className="border-r" />
         {days.map((d, i) => {
           const ymd = toYMD(d)
@@ -79,14 +80,13 @@ export function WeekView({ startDate, occurrences, onEventClick, weatherByDate }
         })}
       </div>
 
-      {/* Time grid */}
-      <div className="relative" style={{ gridTemplateColumns: "3rem repeat(7, 1fr)" }}>
+      {/* Scrollable time grid */}
+      <div ref={scrollRef} className="flex-1 overflow-auto">
         {HOURS.map((h) => (
           <div
             key={h}
-            ref={h === SCROLL_TO_HOUR ? hourRef : undefined}
             className="grid border-b"
-            style={{ gridTemplateColumns: "3rem repeat(7, 1fr)", minHeight: "3rem" }}
+            style={{ gridTemplateColumns: "3rem repeat(7, 1fr)", minHeight: `${HOUR_HEIGHT_PX}px` }}
           >
             <div className="border-r px-1 pt-0.5 text-right text-xs text-muted-foreground">
               {fmt12(h)}
