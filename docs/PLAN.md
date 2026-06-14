@@ -3,22 +3,31 @@
 A self-hosted clone of the **Skylight Family Calendar** (Calendar Max): a WiFi-connected
 touchscreen "hub of the home" plus a companion mobile app, backed by our own API.
 
-> **Status:** Planning complete. Implementation not yet started.
+> **Status:** Active implementation. Phase 0 (foundations) and much of Phases 1–2 (identity & family,
+> calendar core) are built across **both** surfaces; later phases not started.
 > See [TRACKER.md](./TRACKER.md) for live progress and [FEATURES.md](./FEATURES.md) for per-feature specs.
+>
+> **Actual repository layout** (the `MySkylight/` and `MySkylightBackend/` names below are the original
+> single-repo design; the code currently lives split across two existing repos):
+> - **Backend** → `HomeServerAPI/skylight-api/` (FastAPI app, shares the home-server repo). Runs on port `8001`.
+> - **Frontend (PWA)** → `SkylightClone/MySkylight/` (Next.js 16 app: shell, Clerk auth, family/members,
+>   and the calendar views/components are scaffolded). The granular FE build checklist + conventions that
+>   used to live in `SkylightClone/{Plan,Tracker,Features}.md` have been **folded into**
+>   [TRACKER.md](./TRACKER.md) Appendices A–B; those root files are now thin pointers to this `docs/` set.
 
 ---
 
 ## 1. Product vision
 
-One shared family system that runs in two surfaces from a single codebase:
+One shared family system that runs in two surfaces from a **single PWA codebase**:
 
-- **Device view** (`/device`) — a full-screen, landscape, touch-first "kiosk" that lives on a
+- **Device view** (`/device`) — the same PWA installed in **standalone/fullscreen mode** on a
   wall-mounted screen (tablet, old laptop, Raspberry Pi + display). Always-on, glanceable,
   big tap targets, sleep/wake schedule, photo screensaver when idle.
-- **Companion app** (`/app`) — a mobile-responsive, installable **PWA** for on-the-go updates.
+- **Companion app** (`/app`) — the same PWA installed on phones and tablets for on-the-go updates.
 
-Both talk to one **FastAPI + SQLite** backend. Changes on a phone appear on the wall screen
-in near real-time.
+There is no separate native app or separate codebase — one Next.js app serves both surfaces.
+Both talk to one **FastAPI + SQLite** backend. Changes on a phone appear on the wall screen in near real-time.
 
 ---
 
@@ -43,13 +52,17 @@ in near real-time.
   maps the `sub` (Clerk user id) to our `User`. User lifecycle syncs through **Clerk webhooks** (Svix-verified
   `user.created/updated/deleted`) with just-in-time provisioning as a fallback. **Family, Membership,
   Invitation, and roles remain in our SQLite DB** — Share Access (F13) is our own invite flow. The
-  **device/kiosk keeps its own pairing-code token** (not a Clerk session).
+  **device/kiosk keeps its own pairing-code token** (not a Clerk session). No passwords are stored.
+  - *Implementation note:* two **local, non-Clerk PINs** were added on top of this: an optional **family
+    lock PIN** (`Family.lock_pin_hash`) and an optional **child PIN** (`Member.pin_hash`), both stored only
+    as **HMAC-SHA256 digests** peppered with `PIN_PEPPER`. These gate kiosk actions; they are not auth
+    credentials and never reach Clerk.
 
 ---
 
 ## 3. Tech stack
 
-### Frontend — `MySkylight/` (Next.js 16, React 19)
+### Frontend — `MySkylight/` (Next.js 16, React 19) — *actual location: `SkylightClone/`*
 - **Next.js 16 App Router** + **TypeScript**. ⚠️ This is a newer Next.js with breaking changes —
   consult `node_modules/next/dist/docs/` before writing routing/data code (see `AGENTS.md`).
 - **Tailwind v4** + **shadcn/ui** + **radix-ui** + **lucide-react** + **next-themes** (already installed).
@@ -57,17 +70,21 @@ in near real-time.
   `<SignIn>/<SignUp>/<UserButton>`, `auth()`/`currentUser()` server helpers. The Clerk session token is
   attached to every backend request.
 - **TanStack Query** for server state/caching; **react-hook-form** + **zod** for forms/validation.
-- **Realtime client**: SSE (or WebSocket) subscription so the device live-updates.
-- **PWA**: web app manifest + service worker (offline shell, installability, auto-update).
+- **Realtime client**: SSE subscription so the device live-updates. SSE drops when the PWA is
+  backgrounded on iOS — the subscription hook must reconnect on `visibilitychange`.
+- **PWA**: web app manifest + service worker (offline shell, asset caching, installability).
+  On **Android**: native install banner via `beforeinstallprompt`.
+  On **iOS**: manual "Add to Home Screen" from Safari's share menu; detect with `navigator.standalone`.
+  **Web Push on iOS** requires the PWA to be installed to the home screen (iOS 16.4+).
 - **Calendar UI**: custom touch-friendly grid (day/week/month/schedule) — avoids heavyweight libs
   and gives us full control of the kiosk aesthetic.
 
-### Backend — `MySkylightBackend/` (FastAPI)
+### Backend — `MySkylightBackend/` (FastAPI) — *actual location: `HomeServerAPI/skylight-api/`*
 - **FastAPI** + **Pydantic v2**, **Uvicorn**.
 - **SQLite** via **SQLAlchemy 2.0** (async) + **Alembic** migrations.
 - **Auth**: **Clerk** for identity. Backend verifies Clerk JWTs via **JWKS** (networkless) and maps the
   Clerk user id → our `User`; user sync via **Clerk webhooks** (`svix` signature verification). No passwords
-  stored. Child **PIN** profiles and **device pairing** tokens remain app-managed.
+  stored. **Device pairing** tokens remain app-managed.
 - **Realtime**: FastAPI **SSE/WebSocket** broadcast per family.
 - **Scheduling**: **APScheduler** for reminders, sleep-mode toggles, weather refresh, countdown
   rollovers, and (later) external-sync polling.
@@ -117,8 +134,7 @@ in near real-time.
   no password stored). Clerk **webhooks** keep `User` in sync; JIT provisioning covers first-touch.
 - A user can belong to **multiple families** via **Membership** (covers co-parenting / shared access across
   households) — Membership, roles, and invitations live in **our DB**, not Clerk Organizations.
-- **Roles** per membership: `owner`, `adult`, `child`, `viewer`. Drives permissions + **Parental Lock**.
-- **Child profiles** can be PIN-gated (lightweight, kid-friendly) rather than full Clerk logins.
+- **Roles** per membership: `owner`, `adult`, `child`, `viewer`. Drives permissions.
 - **Devices** authenticate via a **pairing code** + device token (not Clerk) and carry their own settings
   (sleep schedule, orientation, default view) — this powers **Device Linking**.
 
@@ -143,17 +159,17 @@ Family 1───* MealPlan *───0..1 Recipe ;  Family 1───* Recipe
 Family 1───* Album 1───* Photo
 Family 1───* WeatherCache              (by location)
 Family 1───* MagicImportJob            (AI ingestion + extracted drafts)  [Phase 6]
-Family 1───* AuditLog                  (parental lock / share-access trail)
+Family 1───* AuditLog                  (share-access trail)
 ```
 
 Key design points:
 - **`User`** is keyed by **`clerk_user_id`** (no credentials stored locally); Clerk webhooks upsert it.
-  `Member` (a calendar persona — possibly a PIN-only kid) is distinct from `User` (a real Clerk login).
+  `Member` (a calendar persona shown on the calendar) is distinct from `User` (a real Clerk login).
 - **Recurrence** stored as **RRULE** on `Event` with per-occurrence **overrides/exceptions**
   (edit-this / edit-following / edit-all). `TaskCompletion` is logged **per occurrence** so chores
   and routines track streaks without exploding rows.
 - **Color** resolves in priority order: event override → assigned member color → calendar color.
-- **Soft delete + AuditLog** so Parental Lock and shared-household edits are traceable.
+- **Soft delete + AuditLog** so shared-household edits are traceable.
 
 ---
 
@@ -177,14 +193,14 @@ Each phase is independently shippable and has an **exit criteria**. Detailed tas
 | Phase | Theme | Delivers | Exit criteria |
 |------:|-------|----------|---------------|
 | **0** | Foundations | Repo wiring, FastAPI skeleton, DB+migrations, Next.js shell, API client, **Clerk wiring (both ends)**, CI, PWA manifest | `GET /health` green; `/device` & `/app` routes render; one model migrates; tests run. |
-| **1** | Identity & family | **Clerk** sign-in + JWT verification + user-sync webhooks, Family setup, Members + colors + avatars, child PIN profiles, **Share Access** (invites), **Parental Lock** | Two Clerk users share one family; a child profile is PIN-gated; locked items reject edits. |
+| **1** | Identity & family | **Clerk** sign-in + JWT verification + user-sync webhooks, Family setup, Members + colors + avatars, **Share Access** (invites) | Two Clerk users share one family with correct roles. |
 | **2** | Calendar core ⭐ | Calendars, Events CRUD, **recurrence**, reminders, member assignment (**color coding**), **Day/Week/Month/Schedule views**, realtime live-update, **Weather**, **Event Countdowns** | Create a recurring event on phone → appears on device instantly with correct color + weather; countdown ticks. |
 | **3** | Tasks & routines | **Tasks Manager**: chores/tasks, assignment, recurring chores, **Routines** (morning/bedtime checklists), completion + streaks | A kid checks off a morning routine on the device; parent sees it on mobile. |
 | **4** | Lists & groceries | **Custom Lists** (to-dos/groceries), items, check/categorize/assign, **Grocery → Instacart** (US, with deep-link fallback) | Shared grocery list edits sync across surfaces; "send to Instacart" works or degrades gracefully. |
 | **5** | Calendar Plus I | **Rewards** (star economy), **Meal Planning** (slots → calendar), **Recipes** (manual/upload), **Photo Screensaver** (albums, idle slideshow) | Stars awarded on chore completion + redeemed; meals show on calendar; idle device shows album slideshow. |
 | **6** | Smart / AI | **Magic Import** (email/PDF/photo → OCR → DeepSeek → draft events → confirm), **Smart recipe** generation | Forwarded flyer becomes a reviewed, saved event; recipe generated from a prompt. |
 | **7** | External sync | **Google** → **Outlook** → **Apple/Yahoo (CalDAV)** → **Cozi** (best-effort ICS). Two-way where possible. | A Google event appears in MySkylight and vice-versa; others import read-only. |
-| **8** | Device & system | **Device Linking** (pairing, multi-screen), **Sleep Mode**, orientation, default views, **Software Updates** (PWA auto-update channel) | Two paired screens share data; screen sleeps/wakes on schedule; new build auto-applies. |
+| **8** | Device & system | **Device Linking** (pairing, multi-screen), **Sleep Mode**, orientation, default views | Two paired screens share data; screen sleeps/wakes on schedule. |
 | **9** | Polish & hardening | Web **push notifications** + reminder delivery, offline/PWA caching, a11y, kiosk wake-lock, perf, backups, deploy | Reminder fires as a push; app usable offline; Lighthouse PWA passes; one-command deploy. |
 
 > Weather and Countdowns ride with Phase 2 because they attach to events. Instacart is isolated in
@@ -199,7 +215,9 @@ Each phase is independently shippable and has an **exit criteria**. Detailed tas
   pairing codes, secrets only in `.env`. Audit trail for privileged actions.
 - **Testing**: pytest for backend (unit + API), Vitest/Playwright for frontend later; seed/factory
   fixtures; recurrence + permission logic get dedicated test suites.
-- **Offline/PWA**: cache the app shell + last-known data; queue writes when offline and replay.
+- **Offline/PWA**: service worker caches the app shell + static assets; last-known API data in
+  TanStack Query cache; writes queued offline and replayed on reconnect. PWA updates deploy
+  automatically — new service worker activates on next navigation (no app store, no reinstall).
 - **Accessibility & kiosk**: large tap targets, high-contrast device theme, screen wake-lock,
   prevent accidental navigation in kiosk mode.
 - **Observability**: structured logging, request IDs, a simple `/health` + `/version`.
@@ -218,6 +236,9 @@ Each phase is independently shippable and has an **exit criteria**. Detailed tas
 | **Next.js 16 is pre-GA-ish / breaking** | FE churn | Follow bundled docs in `node_modules/next/dist/docs/`; pin versions. |
 | **Clerk dependency / pricing / outage** | Auth is third-party | Verify JWTs networklessly (cached JWKS) so brief Clerk outages don't break verified sessions; webhook + JIT user sync; keep identity isolated so it's swappable. |
 | **SQLite write concurrency** | Many devices writing | WAL mode; serialize writes; fine for household scale. |
+| **iOS Web Push requires home screen install** | Notifications don't work on iOS if PWA not installed | Require "Add to Home Screen" before enabling push; detect `navigator.standalone`; show prompt if not installed. iOS 16.4+ only. |
+| **SSE drops on iOS background** | Real-time updates miss while app is backgrounded | Reconnect SSE on `visibilitychange` (foreground event); TanStack Query refetch on focus covers the gap. |
+| **No install banner on iOS Safari** | iOS users may not know to install the PWA | Show an in-app "Install" prompt with Add to Home Screen instructions when `navigator.standalone` is false and browser is iOS Safari. |
 | Native mobile later? | Re-platform cost | PWA now; API is client-agnostic so RN/Expo can be added without backend changes. |
 
 ---

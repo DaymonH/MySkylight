@@ -8,122 +8,126 @@ Update the **Progress summary** counts when you complete a phase. Tags: `[INFRA]
 
 **Status legend:** ☐ not started · ◐ in progress · ☑ done · ⏸ blocked/parked
 
----
+> **Status note (reconciled with the code):** both surfaces are live — backend at
+> `HomeServerAPI/skylight-api/` and frontend at `SkylightClone/MySkylight/`. Phase 0 is done; Phases 1–2
+> are largely done with a few FE items + automated tests outstanding. **Backend** items below were verified
+> against the code; **`[FE]` ticks are inferred from the presence of the corresponding files/components**
+> (e.g. `components/calendar/{day,week,month,schedule}-view.tsx`, `event-sheet.tsx`, `countdown-strip.tsx`)
+> and may need a behavioural pass to confirm. The previously-separate finer-grained FE checklist (the old
+> `SkylightClone/{Plan,Tracker,Features}.md`) has been **folded into this file** — see
+> [Appendix A](#appendix-a--frontend-granular-checklist-fe-only); those root files are now thin pointers here.
 
 ## Progress summary
 
 | Phase | Theme | Status | Done / Total |
 |------:|-------|:------:|:------------:|
 | 0 | Foundations | ☑ | 19 / 19 |
-| 1 | Identity & family (Clerk) | ☑ | 18 / 18 |
-| 2 | Calendar core ⭐ | ☐ | 0 / 22 |
-| 3 | Tasks & routines | ☐ | 0 / 11 |
+| 1 | Identity & family (Clerk) | ◐ | 11 / 15 (invite-accept FE, profile switcher, tests pending) |
+| 2 | Calendar core ⭐ | ◐ | 20 / 23 (FE wiring/AC pending) |
+| 3 | Tasks & routines | ☐ | 0 / 10 |
 | 4 | Lists & groceries | ☐ | 0 / 11 |
 | 5 | Calendar Plus I (rewards/meals/photos) | ☐ | 0 / 18 |
 | 6 | Smart / AI (DeepSeek) | ☐ | 0 / 11 |
 | 7 | External sync | ☐ | 0 / 16 |
-| 8 | Device & system | ☐ | 0 / 13 |
-| 9 | Polish & hardening | ☐ | 0 / 12 |
-| | **Total** | | **37 / 151** |
+| 8 | Device & system | ☐ | 0 / 10 |
+| 9 | Polish & hardening | ☐ | 0 / 15 |
+| | **Total** | | **50 / 147** |
 
 ---
 
-## Phase 0 — Foundations  `☐`
+## Phase 0 — Foundations  `☑`
 Goal: both apps boot, talk to each other, and the data/auth/realtime plumbing exists.
 
 **Repo & tooling**
-- [ ] `[INFRA]` Initialize git repo at root; add root `.gitignore` (Python, Node, `.env`, `*.db`)
-- [ ] `[INFRA]` Add root `README.md` + `docs/` (done) and a `.env.example` for each app
-- [ ] `[INFRA]` Decide local dev: run scripts / `docker-compose.yml` (api + web)
+- [x] `[INFRA]` Initialize git repo at root; add root `.gitignore` (Python, Node, `.env`, `*.db`) — both repos have `.gitignore` covering `.env`, `*.db`, `.venv`
+- [x] `[INFRA]` Add root `README.md` + `docs/` (done) and a `.env.example` for each app — FE + BE both have `.env.example`; backend README still TODO
+- [x] `[INFRA]` Decide local dev: run scripts / `docker-compose.yml` (api + web) — API via `HomeServerAPI/docker-compose.yml`; web via Netlify (`netlify.toml`)
 
-**Backend skeleton — `MySkylightBackend/`**
-- [ ] `[BE]` FastAPI app factory, settings (pydantic-settings), CORS, `/health`, `/version`
-- [ ] `[BE]` SQLAlchemy 2.0 async engine + session; SQLite WAL; base model + mixins (id, timestamps, soft-delete)
-- [ ] `[BE]` Alembic configured; first migration; `make`/script to upgrade
-- [ ] `[BE]` Project layout: `app/{core,models,schemas,routers,services,deps}`
-- [ ] `[BE]` Realtime bus skeleton + `GET /api/v1/stream` (SSE) auth-scoped to family
-- [ ] `[BE]` Clerk: env keys (`CLERK_SECRET_KEY`, JWKS URL, webhook secret) + JWT-verification dependency stub (JWKS) + `/webhooks/clerk` skeleton (Svix verify)
-- [ ] `[BE]` Pytest + httpx async client; one passing smoke test
-- [ ] `[BE]` Structured logging + request IDs
+**Backend skeleton — `HomeServerAPI/skylight-api/`**
+- [x] `[BE]` FastAPI app factory, settings (pydantic-settings), CORS, `/health`, `/version`
+- [x] `[BE]` SQLAlchemy 2.0 async engine + session; SQLite WAL + `foreign_keys=ON`; base model + mixins (id, timestamps, soft-delete)
+- [x] `[BE]` Alembic configured; first migration; `entrypoint.sh` runs `alembic upgrade head`
+- [x] `[BE]` Project layout: `app/{core,models,schemas,routers,services,deps}`
+- [x] `[BE]` Realtime bus skeleton + `GET /api/v1/.../stream` (SSE) auth-scoped to family
+- [x] `[BE]` Clerk: env keys (`CLERK_SECRET_KEY`, JWKS URL, webhook secret) + JWT-verification dependency (JWKS) + `/webhooks/clerk` (Svix verify)
+- [x] `[BE]` Pytest + httpx async client; passing smoke tests
+- [x] `[BE]` Structured logging + request IDs
 
-**Frontend shell — `MySkylight/`**
-- [ ] `[FE]` Read Next.js 16 docs in `node_modules/next/dist/docs/` before routing/data work
-- [ ] `[FE]` Routes: `/device` (kiosk layout) and `/app` (mobile layout) shells render
-- [ ] `[FE]` Clerk: `@clerk/nextjs` `<ClerkProvider>` + `clerkMiddleware` + sign-in/up routes; attach session token to API client
-- [ ] `[FE]` Typed API client + TanStack Query provider + env (`NEXT_PUBLIC_API_URL`)
-- [ ] `[FE]` Design tokens / theme (next-themes), base shadcn components, device vs mobile layouts
-- [ ] `[FE]` Realtime subscription hook (SSE) wired to query cache (F24 scaffold)
-- [ ] `[FE]` PWA: web manifest + service worker registration (F03 shell)
-- [ ] `[FE]` App shell loading/error states; offline fallback page
+**Frontend shell — `SkylightClone/MySkylight/`**
+- [x] `[FE]` Read Next.js 16 docs before routing/data work (see `MySkylight/AGENTS.md`)
+- [x] `[FE]` Routes: `/device` (kiosk layout) and `/app` (mobile layout) shells render
+- [x] `[FE]` Clerk: `@clerk/nextjs` `<ClerkProvider>` + sign-in/up routes; session token attached server-side via the `/api/backend` proxy
+- [x] `[FE]` Typed API client (`lib/api-client.ts`, `hooks/use-api.ts`) + Query provider + env
+- [x] `[FE]` Design tokens / theme (`theme-provider`), base shadcn components (`components/ui`), device vs mobile layouts
+- [x] `[FE]` Realtime subscription hook (SSE) wired to cache (`hooks/use-realtime.ts`, F24 scaffold)
+- [x] `[FE]` PWA: web manifest + service worker registration (`public/manifest.json`, `public/sw.js`, `components/pwa-register.tsx`)
+- [ ] `[FE]` App shell loading/error states; offline fallback page *(verify)*
 
 ---
 
-## Phase 1 — Identity & family  `☐`   → F00, F02, F10, F13
-Goal: real auth, families, members with colors, sharing, and parental lock.
+## Phase 1 — Identity & family  `◐`  (backend + core FE done; invite-accept FE, profile switcher, tests pending)   → F00, F02, F13
+Goal: real auth, families, members with colors, and sharing.
 
-- [ ] `[BE]` Models: `User` (keyed by `clerk_user_id`, no password), `Family`, `Membership`, `Member` (role, color, avatar, PIN)
-- [ ] `[BE]` Clerk JWT verification dependency (JWKS, networkless) → resolve `clerk_user_id` → `User`; `GET /me`
-- [ ] `[BE]` `/webhooks/clerk` (Svix-verified `user.created/updated/deleted`) → upsert/soft-delete `User`; JIT provisioning fallback
-- [ ] `[BE]` Per-family authorization dependency (role-aware) used by all routers
-- [ ] `[BE]` `/families` CRUD + `/members` CRUD (color, avatar, PIN child profiles) — **F02**
-- [ ] `[BE]` `Invitation` model + `/invitations` create/accept/revoke (roles) — **F13**
-- [ ] `[BE]` Parental Lock: lock state + PIN, mutation guard, `AuditLog` — **F10**
-- [ ] `[FE]` Clerk `<SignIn>`/`<SignUp>` + `clerkMiddleware` route protection + `<UserButton>`; attach Clerk token to API client
-- [ ] `[FE]` Create-family wizard (post sign-in onboarding)
-- [ ] `[FE]` Member management UI: add member, color picker, avatar, child PIN — **F02**
+- [x] `[BE]` Models: `User` (keyed by `clerk_user_id`, no password), `Family`, `Membership`, `Member` (role, color, avatar)
+- [x] `[BE]` Clerk JWT verification dependency (JWKS, networkless) → resolve `clerk_user_id` → `User`; `GET /me`
+- [x] `[BE]` `/webhooks/clerk` (Svix-verified `user.created/updated/deleted`) → upsert/soft-delete `User`; JIT provisioning fallback
+- [x] `[BE]` Per-family authorization dependency (role-aware) used by all routers
+- [x] `[BE]` `/families` CRUD + `/members` CRUD (color, avatar) — **F02**
+- [x] `[BE]` `Invitation` model + `/invitations` create/accept/revoke (roles) — **F13**  *(accept auto-creates the user's `Member` persona via `ensure_member_for_user`, idempotent; the owner's persona is created on family-create the same way)*
+- [x] `[FE]` Clerk `<SignIn>`/`<SignUp>` + route protection + `<UserButton>`; Clerk token attached via the proxy (`app/sign-in`, `app/sign-up`, `app/app/layout.tsx`)
+- [x] `[FE]` Create-family wizard (post sign-in onboarding) (`app/app/onboarding/page.tsx`)
+- [x] `[FE]` Member management UI: add member, color picker, avatar (`app/app/family/[familyId]/members/page.tsx`) — **F02**  *(edit-member drawer still TODO — see Appendix A)*
 - [ ] `[FE]` Profile switcher (device + mobile)
-- [ ] `[FE]` Invite flow: send invite (role), pending list, accept-invite landing — **F13**
-- [ ] `[FE]` Parental Lock UI: toggle + PIN prompt before edit/add/delete — **F10**
-- [ ] `[BE]` Color-resolution helper (event→member→calendar) — **F02**
-- [ ] `[ ] ` Tests: Clerk JWT verification, webhook user-sync, cross-family authz rejection, invite accept, lock enforcement
-- [ ] `[ ] ` AC: two Clerk users share one family; child profile PIN-gated
-- [ ] `[ ] ` AC: locked family rejects child mutations, accepts parent PIN
-- [ ] `[ ] ` Realtime: emit member/family changes
+- [ ] `[FE]` Invite flow: send invite (role picker), pending list, accept-invite landing → member onboarding (name/color/avatar) — **F13**  *(pending — see Appendix A)*
+- [x] `[BE]` Color-resolution helper (event→member→calendar) — **F02**  *(`_resolve_color` in `services/calendar.py`)*
+- [ ] `[ ] ` Tests: Clerk JWT verification, webhook user-sync, cross-family authz rejection, invite accept
+- [ ] `[ ] ` AC: two Clerk users share one family with correct roles
+- [x] `[BE]` Realtime: emit member/family changes  *(members + families routers publish `member.*` / `family.updated`)*
 
 ---
 
-## Phase 2 — Calendar core ⭐  `☐`   → F23, F24, F06, F07, F08, F02
+## Phase 2 — Calendar core ⭐  `◐`  (backend + FE views built; FE wiring/AC pending)   → F23, F24, F06, F07, F08, F02
 Goal: the heart — recurring events, four views, color, weather, countdowns, live updates.
 
 **Events engine — F23**
-- [ ] `[BE]` Models: `Calendar`, `Event`, `EventAssignment`, `Reminder`
-- [ ] `[BE]` RRULE recurrence (`python-dateutil`) + per-occurrence overrides/exceptions
-- [ ] `[BE]` `/calendars`, `/events` CRUD; `/events/{id}/occurrences?from&to`
-- [ ] `[BE]` Edit modes: this-occurrence / this-and-following / all
-- [ ] `[BE]` Member assignment on events (multi) → color coding — **F02**
-- [ ] `[BE]` Reminders persisted (delivery in Phase 9)
-- [ ] `[FE]` Event create/edit sheet (title, time, all-day, location, repeat, members, color, reminder)
-- [ ] `[FE]` Color rendering across views (dots/bars, multi-assignee) — **F02**
+- [x] `[BE]` Models: `Calendar`, `Event`, `EventAssignment`, `Reminder` (+ `EventException` for overrides)
+- [x] `[BE]` RRULE recurrence (`python-dateutil`) + per-occurrence overrides/exceptions
+- [x] `[BE]` `/calendars`, `/events` CRUD; `/families/{id}/events/occurrences?from&to`
+- [x] `[BE]` Edit modes: this-occurrence / this-and-following / all
+- [x] `[BE]` Member assignment on events (multi) → color coding — **F02**
+- [x] `[BE]` Reminders persisted (delivery in Phase 9)
+- [x] `[FE]` Event create/edit sheet (`components/calendar/event-sheet.tsx`)
+- [x] `[FE]` Color rendering across views (`components/calendar/event-dot.tsx`) — **F02**
 
 **Views — F06**
-- [ ] `[FE]` Day view (timeline, touch)
-- [ ] `[FE]` Week view
-- [ ] `[FE]` Month view
-- [ ] `[FE]` Schedule (agenda list) view
-- [ ] `[FE]` View toggle + remember per-device default
+- [x] `[FE]` Day view (timeline, touch) (`components/calendar/day-view.tsx`)
+- [x] `[FE]` Week view (`components/calendar/week-view.tsx`)
+- [x] `[FE]` Month view (`components/calendar/month-view.tsx`)
+- [x] `[FE]` Schedule (agenda list) view (`components/calendar/schedule-view.tsx`)
+- [x] `[FE]` View toggle (`components/calendar/calendar-view.tsx` + `components/ui/tabs.tsx`) — *remember-per-device default: verify*
 
 **Realtime — F24**
-- [ ] `[BE]` Emit `event.*` on mutations to family channel
-- [ ] `[FE]` Subscribe + reconcile cache; device updates ≤ ~1s
+- [x] `[BE]` Emit `event.*` / `calendar.*` on mutations to family channel
+- [x] `[FE]` Subscribe + reconcile cache (`hooks/use-realtime.ts`); device updates ≤ ~1s *(verify latency/iOS reconnect)*
 - [ ] `[ ] ` AC: phone-created recurring event appears on device instantly, correct color
 
 **Weather — F07**
-- [ ] `[BE]` Weather client (Open-Meteo default) + `WeatherCache` + scheduled refresh; `/weather`
-- [ ] `[FE]` Weather strip on day/week; per-event forecast when location+time known
+- [x] `[BE]` Weather client (Open-Meteo default) + `WeatherCache` (on-demand, 1 h TTL); `/families/{id}/weather`
+- [x] `[BE]` Scheduled weather refresh (APScheduler) — `services/scheduler.py` re-fetches cached forecasts every `WEATHER_REFRESH_MINUTES` (default 30) so the device stays fresh without a request
+- [x] `[FE]` Weather strip (`components/calendar/weather-icon.tsx`, `hooks/use-weather.ts`)
 
 **Countdowns — F08**
-- [ ] `[BE]` `Countdown` (flag/model) returned with events
-- [ ] `[FE]` Countdown tiles on device home + on event detail
+- [x] `[BE]` `is_countdown` flag + `days_until` returned with occurrences
+- [x] `[FE]` Countdown tiles (`components/calendar/countdown-strip.tsx`)
 
 ---
 
 ## Phase 3 — Tasks & routines  `☐`   → F01
-Goal: interactive chores/routines kids can check off; streaks; parental-lock aware.
+Goal: interactive chores/routines kids can check off; streaks.
 
 - [ ] `[BE]` Models: `Task`, `Routine`, `TaskCompletion` (per-occurrence)
 - [ ] `[BE]` Recurring chores via RRULE engine; assignment to members
 - [ ] `[BE]` `/tasks`, `/routines`, `/tasks/{id}/complete` (+ undo); streak calc
-- [ ] `[BE]` Respect Parental Lock on task mutations
 - [ ] `[FE]` Per-member checklist cards on `/device` (big tap targets, completion animation)
 - [ ] `[FE]` Task/routine management in `/app`
 - [ ] `[FE]` Routine builder (group tasks into morning/bedtime, ordered)
@@ -216,8 +220,8 @@ Goal: connect Google/Outlook/Apple/Yahoo/Cozi. Two-way where possible; read-only
 
 ---
 
-## Phase 8 — Device & system  `☐`   → F12, F09, F11
-Goal: pairing/multi-screen, sleep schedule, auto-updates.
+## Phase 8 — Device & system  `☐`   → F12, F09
+Goal: pairing/multi-screen, sleep schedule.
 
 - [ ] `[BE]` `Device` model + settings (sleep window, orientation, default view)
 - [ ] `[BE]` Pairing: issue/redeem short code, device-scoped token; `/devices/pair` — **F12**
@@ -227,9 +231,6 @@ Goal: pairing/multi-screen, sleep schedule, auto-updates.
 - [ ] `[FE]` Sleep overlay on `/device` (clock/blank) + wake-lock; settings UI — **F09**
 - [ ] `[ ] ` AC: device sleeps/wakes on schedule, per device
 - [ ] `[FE]` Orientation (landscape/portrait) + default-view settings
-- [ ] `[BE]` `/version` + optional release-notes feed — **F11**
-- [ ] `[FE]` SW update lifecycle (skipWaiting/clientsClaim) + "update ready" auto-apply — **F11**
-- [ ] `[ ] ` AC: new deploy auto-updates device without reinstall
 - [ ] `[BE]` Realtime: emit `device.*` (settings/sleep)
 - [ ] `[ ] ` Tests: pairing, sleep scheduling, settings scope
 
@@ -241,6 +242,9 @@ Goal: notifications, offline, accessibility, performance, deploy.
 - [ ] `[FE]` Web Push subscription + permission flow
 - [ ] `[BE]` Push delivery for reminders + scheduler wiring (delivers Phase 2 reminders)
 - [ ] `[FE]` Offline PWA: cache shell + last data; queue writes + replay on reconnect
+- [ ] `[FE]` Android install: handle `beforeinstallprompt`, surface "Install app" button
+- [ ] `[FE]` iOS install: show "Add to Home Screen" tooltip when `navigator.standalone === false` + iOS Safari
+- [ ] `[FE]` SW update toast: listen for `controllerchange`, show "Updated — reload to apply" nudge
 - [ ] `[FE]` Accessibility pass (contrast, focus, tap targets, screen-reader labels)
 - [ ] `[FE]` Kiosk hardening: wake-lock, prevent stray navigation, fullscreen
 - [ ] `[BE]` Rate limiting on abuse-sensitive routes + `/webhooks/clerk` (Clerk handles login rate-limiting)
@@ -257,3 +261,84 @@ Goal: notifications, offline, accessibility, performance, deploy.
 - Native mobile (Expo/React Native) deferred — PWA first; API stays client-agnostic (PLAN §9).
 - Instacart, DeepSeek vision, and Cozi each have a research spike before their phase — keep
   expectations realistic and ship graceful fallbacks.
+
+---
+
+## Appendix A — Frontend granular checklist (FE-only)
+
+Folded here from the former `SkylightClone/Tracker.md` (now a pointer). These are finer-grained FE build
+items that **roll up into the phase checklists above** — they're kept for day-to-day FE work. Statuses
+reconciled against the actual `SkylightClone/MySkylight/` tree.
+
+**App shell** *(→ Phase 0)*
+- [x] Root layout (`app/layout.tsx`) — ClerkProvider, ThemeProvider, fonts
+- [x] Sign-in / sign-up pages (`app/sign-in`, `app/sign-up`)
+- [x] App layout (`app/app/layout.tsx`) — header with logo + `UserButton`
+- [x] Auth guard via `proxy.ts` / `middleware.ts` (`clerkMiddleware` + `auth.protect`)
+- [x] Clerk webhook route (`app/api/webhooks/clerk/route.ts`)
+
+**Onboarding** *(→ Phase 1)*
+- [x] Onboarding page (`app/app/onboarding/page.tsx`) — create-family form
+- [ ] Invite-accept page (`app/invite/accept/page.tsx`) — token from URL → `POST /invitations/accept` *(route is whitelisted in `proxy.ts` but the page isn't built; the BE now auto-creates the persona on accept, so this can be a thin landing → optional rename/recolour)*
+
+**Family dashboard** *(→ Phase 1)*
+- [x] App home (`app/app/page.tsx`) — fetches `/me` + `/me/memberships`; redirects to onboarding if no family
+- [ ] Edit family name (owner/adult) → `PATCH /families/{id}`
+
+**Members** *(→ Phase 1 / F02)*
+- [x] Members page (`app/app/family/[familyId]/members/page.tsx`) — list, add, delete
+- [x] Navigation to members from dashboard
+- [ ] Edit-member drawer (name, color, avatar URL, PIN reset) → `PATCH /members/{id}`
+
+**Invitations** *(→ Phase 1 / F13)*
+- [ ] Invitations page (`app/app/invitations/page.tsx`) — pending list (owner/adult)
+- [ ] Send-invite form — email + role selector → `POST /families/{id}/invitations`
+- [ ] Revoke-invite action → `DELETE /families/{id}/invitations/{id}`
+
+**Family PIN lock** *(BE done: `PATCH /families/{id}/lock`, `POST /families/{id}/lock/verify`)*
+- [ ] Enable-lock / set-PIN flow (owner/adult)
+- [ ] PIN-verify screen shown when the lock is active
+
+**Realtime wiring** *(→ Phase 2 / F24; `hooks/use-realtime.ts` exists)*
+- [ ] Wire the SSE stream into the member list (member.created/updated/deleted)
+- [ ] Wire the SSE stream into the family header (family.updated)
+
+**Infra / deploy**
+- [x] Proxy route (`app/api/backend/[...path]/route.ts`) — injects Clerk JWT server-side
+- [x] API helpers (`lib/api-client.ts`, `hooks/use-api.ts`, `lib/api.ts`, `lib/use-api-query.ts`)
+- [x] `.env.local` configured; `skylight-api` Clerk JWT template created
+- [ ] Netlify deploy configured (`netlify.toml` present — confirm pipeline)
+- [ ] `app/api/webhooks/clerk` registered in the Clerk dashboard
+
+## Appendix B — Frontend conventions (FE-only)
+
+Folded from the former `SkylightClone/Plan.md` (now a pointer). Architecture lives in [PLAN.md](./PLAN.md) §3.
+
+**Actual route tree** (supersedes the old `(auth)/(app)` route-group sketch, which was never built):
+```
+app/
+├── layout.tsx                         # ClerkProvider + theme + Query providers
+├── page.tsx                           # landing / redirect
+├── sign-in/[[...sign-in]]/page.tsx    # Clerk <SignIn />
+├── sign-up/[[...sign-up]]/page.tsx    # Clerk <SignUp />
+├── device/{layout,page}.tsx           # kiosk surface
+├── app/
+│   ├── layout.tsx                     # companion app shell (UserButton, nav)
+│   ├── page.tsx                       # dashboard (redirects to onboarding if no family)
+│   ├── onboarding/page.tsx            # create family
+│   └── family/[familyId]/members/page.tsx
+└── api/
+    ├── backend/[...path]/route.ts     # proxy → backend (injects Clerk JWT)
+    └── webhooks/clerk/route.ts        # forwards Svix-signed body to backend
+```
+*Not yet built (see Appendix A): `app/invite/accept`, `app/app/invitations`.*
+
+**API calls** — go through the proxy via the typed helpers; the proxy injects the Clerk JWT server-side, so
+the client never handles tokens:
+- reads → `useApi()` / `useApiQuery<T>(path)`
+- mutations → `api.post/patch/delete` (TanStack Query mutations)
+
+**Webhooks** — the Next.js route only forwards the raw body + Svix headers; **the backend verifies the
+signature** (don't verify in Next). Register `…/api/webhooks/clerk` in the Clerk dashboard.
+
+**Naming** — files kebab-case; components/types PascalCase; hooks/functions camelCase.

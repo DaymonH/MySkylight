@@ -1,13 +1,16 @@
 import type { Metadata, Viewport } from "next"
 import { ClerkProvider } from "@clerk/nextjs"
 import { Geist_Mono, Inter, Montserrat } from "next/font/google"
-import { Toaster } from "sonner"
+import { Toaster } from "@/components/ui/sonner"
 
 import "./globals.css"
 import { Providers } from "@/components/providers"
 import { cn } from "@/lib/utils"
 
-const montserratHeading = Montserrat({ subsets: ["latin"], variable: "--font-heading" })
+const montserratHeading = Montserrat({
+  subsets: ["latin"],
+  variable: "--font-heading",
+})
 const inter = Inter({ subsets: ["latin"], variable: "--font-sans" })
 const fontMono = Geist_Mono({ subsets: ["latin"], variable: "--font-mono" })
 
@@ -18,7 +21,7 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     title: "MySkylight",
-    statusBarStyle: "black-translucent",
+    statusBarStyle: "default",
   },
   icons: {
     apple: "/apple-touch-icon.png",
@@ -35,7 +38,11 @@ export const viewport: Viewport = {
   ],
 }
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode
+}) {
   return (
     <ClerkProvider>
       <html
@@ -46,12 +53,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           fontMono.variable,
           "font-sans",
           inter.variable,
-          montserratHeading.variable,
+          montserratHeading.variable
         )}
       >
         <body>
           <Providers>{children}</Providers>
-          <Toaster richColors position="top-center" />
+          <Toaster richColors position="top-center" expand />
         </body>
       </html>
     </ClerkProvider>

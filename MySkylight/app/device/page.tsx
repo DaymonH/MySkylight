@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query"
 import { useApi } from "@/hooks/use-api"
 import { useRouter } from "next/navigation"
 import { useEffect } from "react"
+import { CalendarDaysIcon, Loader2Icon } from "lucide-react"
 import { CalendarView } from "@/components/calendar/calendar-view"
 
 interface MembershipResponse {
@@ -34,9 +35,17 @@ export default function DevicePage() {
   if (!isLoaded || !familyId) {
     return (
       <div className="flex h-full w-full items-center justify-center">
-        <div className="text-center">
-          <h1 className="font-heading text-4xl font-bold">MySkylight</h1>
-          <p className="text-muted-foreground mt-2">Loading…</p>
+        <div className="flex flex-col items-center gap-4 text-center">
+          <span className="bg-primary text-primary-foreground flex size-14 items-center justify-center rounded-2xl shadow-md">
+            <CalendarDaysIcon className="size-7" />
+          </span>
+          <div>
+            <h1 className="font-heading text-3xl font-bold tracking-tight">MySkylight</h1>
+            <p className="text-muted-foreground mt-1.5 flex items-center justify-center gap-2 text-sm">
+              <Loader2Icon className="size-4 animate-spin" />
+              Loading your calendar…
+            </p>
+          </div>
         </div>
       </div>
     )
@@ -44,7 +53,7 @@ export default function DevicePage() {
 
   return (
     <div className="flex h-full w-full flex-col overflow-hidden">
-      <CalendarView familyId={familyId} defaultView="week" storageKey="skylight:view:device" />
+      <CalendarView familyId={familyId} defaultView="week" storageKey="skylight:view:device" surface="device" />
     </div>
   )
 }

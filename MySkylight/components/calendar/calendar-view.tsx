@@ -1,9 +1,18 @@
 "use client"
 
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect, useMemo, useRef } from "react"
 import { useQuery } from "@tanstack/react-query"
+import { toast } from "sonner"
+import { ChevronLeftIcon, ChevronRightIcon, PlusIcon } from "lucide-react"
 import { useApi } from "@/hooks/use-api"
-import { useCalendars, useCreateCalendar, useOccurrences, useCreateEvent, useUpdateEvent } from "@/hooks/use-calendars"
+import {
+  useCalendars,
+  useCreateCalendar,
+  useOccurrences,
+  useCreateEvent,
+  useUpdateEvent,
+  useDeleteEvent,
+} from "@/hooks/use-calendars"
 import { useRealtime } from "@/hooks/use-realtime"
 import { useGeolocation, useWeatherDays } from "@/hooks/use-weather"
 import { MonthView } from "./month-view"
@@ -12,13 +21,23 @@ import { DayView } from "./day-view"
 import { ScheduleView } from "./schedule-view"
 import { CountdownStrip } from "./countdown-strip"
 import { EventSheet } from "./event-sheet"
+import { CalendarSkeleton } from "./calendar-skeleton"
 import { Button } from "@/components/ui/button"
-import type { CalendarView, MemberBrief, OccurrenceOut } from "@/lib/types/calendar"
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { DEFAULT_CALENDAR_COLOR } from "@/lib/colors"
+import { cn } from "@/lib/utils"
+import type {
+  CalendarView,
+  MemberBrief,
+  OccurrenceOut,
+} from "@/lib/types/calendar"
 
 interface CalendarViewProps {
   familyId: string
   defaultView?: CalendarView
   storageKey?: string
+  /** "device" gets the larger, high-contrast wall-display treatment. */
+  surface?: "device" | "app"
 }
 
 function toYMD(d: Date) {
@@ -32,13 +51,27 @@ function weekStart(d: Date) {
 }
 
 const MONTH_NAMES = [
-  "January", "February", "March", "April", "May", "June",
-  "July", "August", "September", "October", "November", "December",
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
 ]
 
-function rangeForView(view: CalendarView, anchor: Date): { from: string; to: string } {
+function rangeForView(
+  view: CalendarView,
+  anchor: Date
+): { from: string; to: string } {
   if (view === "month") {
-    const y = anchor.getFullYear(), m = anchor.getMonth()
+    const y = anchor.getFullYear(),
+      m = anchor.getMonth()
     return {
       from: `${y}-${String(m + 1).padStart(2, "0")}-01`,
       to: `${y}-${String(m + 1).padStart(2, "0")}-${new Date(y, m + 1, 0).getDate()}`,
@@ -46,7 +79,8 @@ function rangeForView(view: CalendarView, anchor: Date): { from: string; to: str
   }
   if (view === "week") {
     const ws = weekStart(anchor)
-    const we = new Date(ws); we.setDate(we.getDate() + 6)
+    const we = new Date(ws)
+    we.setDate(we.getDate() + 6)
     return { from: toYMD(ws), to: toYMD(we) }
   }
   if (view === "day") {
@@ -54,21 +88,28 @@ function rangeForView(view: CalendarView, anchor: Date): { from: string; to: str
     return { from: ymd, to: ymd }
   }
   // schedule: next 90 days
-  const we = new Date(anchor); we.setDate(we.getDate() + 90)
+  const we = new Date(anchor)
+  we.setDate(we.getDate() + 90)
   return { from: toYMD(anchor), to: toYMD(we) }
 }
 
 function navLabel(view: CalendarView, anchor: Date) {
-  if (view === "month") return `${MONTH_NAMES[anchor.getMonth()]} ${anchor.getFullYear()}`
+  if (view === "month")
+    return `${MONTH_NAMES[anchor.getMonth()]} ${anchor.getFullYear()}`
   if (view === "week") {
     const ws = weekStart(anchor)
-    const we = new Date(ws); we.setDate(we.getDate() + 6)
+    const we = new Date(ws)
+    we.setDate(we.getDate() + 6)
     if (ws.getMonth() === we.getMonth())
       return `${MONTH_NAMES[ws.getMonth()]} ${ws.getDate()}–${we.getDate()}, ${ws.getFullYear()}`
     return `${MONTH_NAMES[ws.getMonth()]} ${ws.getDate()} – ${MONTH_NAMES[we.getMonth()]} ${we.getDate()}`
   }
   if (view === "day") {
-    return anchor.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })
+    return anchor.toLocaleDateString(undefined, {
+      weekday: "long",
+      month: "long",
+      day: "numeric",
+    })
   }
   return "Upcoming"
 }
@@ -81,7 +122,14 @@ function navigate(view: CalendarView, anchor: Date, dir: -1 | 1): Date {
   return d
 }
 
-export function CalendarView({ familyId, defaultView = "month", storageKey }: CalendarViewProps) {
+export function CalendarView({
+  familyId,
+  defaultView = "month",
+  storageKey,
+  surface = "app",
+}: CalendarViewProps) {
+  const isDevice = surface === "device"
+
   const [view, setView] = useState<CalendarView>(() => {
     if (storageKey && typeof window !== "undefined") {
       const saved = localStorage.getItem(storageKey)
@@ -100,7 +148,8 @@ export function CalendarView({ familyId, defaultView = "month", storageKey }: Ca
 
   const coords = useGeolocation()
 
-  const { data: calendars = [] } = useCalendars(familyId)
+  const calendarsQuery = useCalendars(familyId)
+  const calendars = calendarsQuery.data ?? []
   const { data: members = [] } = useQuery({
     queryKey: ["members", familyId],
     queryFn: () => api.get<MemberBrief[]>(`/families/${familyId}/members`),
@@ -108,7 +157,11 @@ export function CalendarView({ familyId, defaultView = "month", storageKey }: Ca
   })
 
   const { from, to } = rangeForView(view, anchor)
-  const { data: occurrences = [], isLoading } = useOccurrences(familyId, from, to)
+  const { data: occurrences = [], isLoading } = useOccurrences(
+    familyId,
+    from,
+    to
+  )
 
   // Collect dates needing weather (day + week views only)
   const weatherDates = useMemo(() => {
@@ -116,7 +169,9 @@ export function CalendarView({ familyId, defaultView = "month", storageKey }: Ca
     if (view === "week") {
       const ws = weekStart(anchor)
       return Array.from({ length: 7 }, (_, i) => {
-        const d = new Date(ws); d.setDate(d.getDate() + i); return toYMD(d)
+        const d = new Date(ws)
+        d.setDate(d.getDate() + i)
+        return toYMD(d)
       })
     }
     return []
@@ -126,13 +181,23 @@ export function CalendarView({ familyId, defaultView = "month", storageKey }: Ca
   const createCalendar = useCreateCalendar(familyId)
   const createEvent = useCreateEvent(familyId)
   const updateEvent = useUpdateEvent(familyId)
+  const deleteEvent = useDeleteEvent(familyId)
 
-  // Auto-create default "Family" calendar on first load
+  // Auto-create default "Family" calendar on first load — only after the query
+  // has actually resolved (so initial undefined -> [] doesn't trigger a create),
+  // and only once per mount to avoid racing duplicates.
+  const autoCreatedRef = useRef(false)
   useEffect(() => {
-    if (calendars.length === 0 && !createCalendar.isPending) {
-      createCalendar.mutate({ name: "Family", color: "#6366f1" })
+    if (
+      calendarsQuery.isSuccess &&
+      calendars.length === 0 &&
+      !autoCreatedRef.current &&
+      !createCalendar.isPending
+    ) {
+      autoCreatedRef.current = true
+      createCalendar.mutate({ name: "Family", color: DEFAULT_CALENDAR_COLOR })
     }
-  }, [calendars.length]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [calendarsQuery.isSuccess, calendars.length]) // eslint-disable-line react-hooks/exhaustive-deps
 
   function changeView(v: CalendarView) {
     setView(v)
@@ -152,9 +217,17 @@ export function CalendarView({ familyId, defaultView = "month", storageKey }: Ca
   }
 
   async function handleSubmit(data: {
-    title: string; calendar_id: string; start_dt: string; end_dt: string
-    all_day: boolean; location?: string; description?: string; rrule?: string
-    is_countdown: boolean; member_ids: string[]; reminder_minutes: number[]
+    title: string
+    calendar_id: string
+    start_dt: string
+    end_dt: string
+    all_day: boolean
+    location?: string
+    description?: string
+    rrule?: string
+    is_countdown: boolean
+    member_ids: string[]
+    reminder_minutes: number[]
   }) {
     const calendar_id = data.calendar_id || calendars[0]?.id
     if (!calendar_id) return
@@ -169,12 +242,32 @@ export function CalendarView({ familyId, defaultView = "month", storageKey }: Ca
       description: data.description || undefined,
     }
 
-    if (editing) {
-      await updateEvent.mutateAsync({ eventId: editing.event_id, data: { ...payload, edit_mode: "all" } })
-    } else {
-      await createEvent.mutateAsync(payload)
+    try {
+      if (editing) {
+        await updateEvent.mutateAsync({
+          eventId: editing.event_id,
+          data: { ...payload, edit_mode: "all" },
+        })
+        toast.success("Event updated")
+      } else {
+        await createEvent.mutateAsync(payload)
+        toast.success("Event created")
+      }
+      setSheetOpen(false)
+    } catch {
+      toast.error("Couldn't save the event. Please try again.")
     }
-    setSheetOpen(false)
+  }
+
+  async function handleDelete() {
+    if (!editing) return
+    try {
+      await deleteEvent.mutateAsync({ eventId: editing.event_id })
+      toast.success("Event deleted")
+      setSheetOpen(false)
+    } catch {
+      toast.error("Couldn't delete the event. Please try again.")
+    }
   }
 
   const VIEW_TABS: { label: string; value: CalendarView }[] = [
@@ -187,54 +280,95 @@ export function CalendarView({ familyId, defaultView = "month", storageKey }: Ca
   return (
     <div className="flex h-full flex-col">
       {/* Toolbar */}
-      <div className="flex items-center gap-2 border-b px-3 py-2">
-        <Button size="sm" variant="outline" onClick={() => setAnchor(new Date())}>Today</Button>
-        <button
-          onClick={() => setAnchor(navigate(view, anchor, -1))}
-          className="rounded p-1 hover:bg-accent"
-          aria-label="Previous"
-        >
-          ‹
-        </button>
-        <button
-          onClick={() => setAnchor(navigate(view, anchor, 1))}
-          className="rounded p-1 hover:bg-accent"
-          aria-label="Next"
-        >
-          ›
-        </button>
-        <span className="flex-1 text-center text-sm font-medium">{navLabel(view, anchor)}</span>
-        <div className="flex rounded-lg border text-xs">
-          {VIEW_TABS.map((t) => (
-            <button
-              key={t.value}
-              onClick={() => changeView(t.value)}
-              className={`px-2 py-1 transition-colors first:rounded-l-lg last:rounded-r-lg ${
-                view === t.value ? "bg-primary text-primary-foreground" : "hover:bg-accent"
-              }`}
+      <div
+        className={cn(
+          "flex flex-col gap-2.5 border-b px-3 py-2.5 lg:flex-row lg:items-center lg:gap-3",
+          isDevice && "lg:px-5 lg:py-3.5"
+        )}
+      >
+        {/* Date navigation */}
+        <div className="flex items-center gap-1.5">
+          <Button
+            variant="outline"
+            size={isDevice ? "lg" : "sm"}
+            onClick={() => setAnchor(new Date())}
+          >
+            Today
+          </Button>
+          <div className="flex items-center">
+            <Button
+              variant="ghost"
+              size={isDevice ? "icon" : "icon-sm"}
+              onClick={() => setAnchor(navigate(view, anchor, -1))}
+              aria-label="Previous"
             >
-              {t.label}
-            </button>
-          ))}
+              <ChevronLeftIcon />
+            </Button>
+            <Button
+              variant="ghost"
+              size={isDevice ? "icon" : "icon-sm"}
+              onClick={() => setAnchor(navigate(view, anchor, 1))}
+              aria-label="Next"
+            >
+              <ChevronRightIcon />
+            </Button>
+          </div>
+          <h2
+            className={cn(
+              "min-w-0 flex-1 truncate font-heading font-semibold tracking-tight lg:flex-none",
+              isDevice ? "text-2xl" : "text-base sm:text-lg"
+            )}
+          >
+            {navLabel(view, anchor)}
+          </h2>
         </div>
-        <Button size="sm" onClick={() => openNew()}>+ Add</Button>
+
+        {/* View switcher + add */}
+        <div className="flex items-center gap-2 lg:ml-auto">
+          <Tabs
+            value={view}
+            onValueChange={(v) => changeView(v as CalendarView)}
+            className="min-w-0 flex-1 lg:flex-none"
+          >
+            <TabsList className={cn("w-full lg:w-fit", isDevice && "h-11")}>
+              {VIEW_TABS.map((t) => (
+                <TabsTrigger
+                  key={t.value}
+                  value={t.value}
+                  className={cn("flex-1", isDevice && "px-4 text-base")}
+                >
+                  {t.label}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </Tabs>
+          <Button size={isDevice ? "lg" : "sm"} onClick={() => openNew()}>
+            <PlusIcon />
+            <span className={isDevice ? "" : "hidden sm:inline"}>Add</span>
+          </Button>
+        </div>
       </div>
 
       {/* Countdown strip — shown on all views */}
-      <CountdownStrip occurrences={occurrences} onEventClick={openEdit} />
+      <CountdownStrip
+        occurrences={occurrences}
+        onEventClick={openEdit}
+        large={isDevice}
+      />
 
       {/* View content */}
-      <div className="flex-1 overflow-hidden">
+      <div className="thin-scrollbar flex-1 overflow-hidden">
         {isLoading ? (
-          <div className="flex h-full items-center justify-center text-sm text-muted-foreground">Loading…</div>
+          <CalendarSkeleton view={view} />
         ) : view === "month" ? (
-          <div className="h-full overflow-auto">
+          <div className="thin-scrollbar h-full overflow-auto">
             <MonthView
               year={anchor.getFullYear()}
               month={anchor.getMonth()}
               occurrences={occurrences}
               onDayClick={(date) => openNew(date)}
               onEventClick={openEdit}
+              large={isDevice}
             />
           </div>
         ) : view === "week" ? (
@@ -243,6 +377,7 @@ export function CalendarView({ familyId, defaultView = "month", storageKey }: Ca
             occurrences={occurrences}
             onEventClick={openEdit}
             weatherByDate={weatherByDate}
+            large={isDevice}
           />
         ) : view === "day" ? (
           <DayView
@@ -250,12 +385,14 @@ export function CalendarView({ familyId, defaultView = "month", storageKey }: Ca
             occurrences={occurrences}
             onEventClick={openEdit}
             weather={weatherByDate[toYMD(anchor)]}
+            large={isDevice}
           />
         ) : (
-          <div className="h-full overflow-auto">
+          <div className="thin-scrollbar h-full overflow-auto">
             <ScheduleView
               occurrences={occurrences}
               onEventClick={openEdit}
+              onAdd={() => openNew()}
             />
           </div>
         )}
@@ -265,7 +402,9 @@ export function CalendarView({ familyId, defaultView = "month", storageKey }: Ca
         open={sheetOpen}
         onClose={() => setSheetOpen(false)}
         onSubmit={handleSubmit}
+        onDelete={editing ? handleDelete : undefined}
         isPending={createEvent.isPending || updateEvent.isPending}
+        isDeleting={deleteEvent.isPending}
         calendars={calendars}
         members={members}
         defaultDate={defaultDate}

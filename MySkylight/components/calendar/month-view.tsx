@@ -1,6 +1,7 @@
 "use client"
 
 import { useMemo } from "react"
+import { cn } from "@/lib/utils"
 import type { OccurrenceOut } from "@/lib/types/calendar"
 import { EventDot } from "./event-dot"
 
@@ -10,6 +11,7 @@ interface MonthViewProps {
   occurrences: OccurrenceOut[]
   onDayClick: (date: string) => void
   onEventClick: (occ: OccurrenceOut) => void
+  large?: boolean
 }
 
 const DOW_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
@@ -18,7 +20,7 @@ function toYMD(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`
 }
 
-export function MonthView({ year, month, occurrences, onDayClick, onEventClick }: MonthViewProps) {
+export function MonthView({ year, month, occurrences, onDayClick, onEventClick, large = false }: MonthViewProps) {
   const today = toYMD(new Date())
 
   const { days, startOffset } = useMemo(() => {
@@ -44,60 +46,86 @@ export function MonthView({ year, month, occurrences, onDayClick, onEventClick }
   // pad to full weeks
   while (cells.length % 7 !== 0) cells.push(null)
 
+  const maxVisible = large ? 5 : 3
+
   return (
-    <div className="flex flex-col gap-0">
+    <div className="flex h-full flex-col">
       {/* Weekday headers */}
-      <div className="grid grid-cols-7 border-b">
-        {DOW_LABELS.map((d) => (
-          <div key={d} className="py-1 text-center text-xs font-medium text-muted-foreground">
-            {d}
+      <div className="bg-background sticky top-0 z-10 grid grid-cols-7 border-b">
+        {DOW_LABELS.map((d, i) => (
+          <div
+            key={d}
+            className={cn(
+              "py-1.5 text-center text-xs font-semibold tracking-wide uppercase",
+              i === 0 || i === 6 ? "text-muted-foreground/70" : "text-muted-foreground",
+            )}
+          >
+            <span className="hidden sm:inline">{d}</span>
+            <span className="sm:hidden">{d[0]}</span>
           </div>
         ))}
       </div>
 
       {/* Weeks */}
-      {Array.from({ length: cells.length / 7 }, (_, row) => (
-        <div key={row} className="grid grid-cols-7 border-b last:border-b-0">
-          {cells.slice(row * 7, row * 7 + 7).map((day, col) => {
-            if (!day) return <div key={col} className="border-r bg-muted/30 p-1 last:border-r-0" />
-            const ymd = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`
-            const evts = byDay.get(ymd) ?? []
-            const isToday = ymd === today
+      <div className="grid flex-1 auto-rows-fr">
+        {Array.from({ length: cells.length / 7 }, (_, row) => (
+          <div key={row} className="grid grid-cols-7 border-b last:border-b-0">
+            {cells.slice(row * 7, row * 7 + 7).map((day, col) => {
+              const isWeekend = col === 0 || col === 6
+              if (!day) return <div key={col} className="bg-muted/40 border-r last:border-r-0" />
+              const ymd = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`
+              const evts = byDay.get(ymd) ?? []
+              const isToday = ymd === today
 
-            return (
-              <div
-                key={col}
-                className="min-h-[5rem] cursor-pointer border-r p-1 last:border-r-0 hover:bg-accent/50"
-                onClick={() => onDayClick(ymd)}
-              >
-                <span
-                  className={`mb-0.5 inline-flex h-6 w-6 items-center justify-center rounded-full text-sm font-medium ${
-                    isToday ? "bg-primary text-primary-foreground" : "text-foreground"
-                  }`}
-                >
-                  {day}
-                </span>
-                <div className="flex flex-col gap-0.5">
-                  {evts.slice(0, 3).map((occ, i) => (
-                    <div
-                      key={i}
-                      onClick={(e) => { e.stopPropagation(); onEventClick(occ) }}
-                    >
-                      <EventDot
-                        colors={occ.members.length ? occ.members.map((m) => m.color) : [occ.effective_color]}
-                        title={occ.title}
-                      />
-                    </div>
-                  ))}
-                  {evts.length > 3 && (
-                    <span className="text-xs text-muted-foreground">+{evts.length - 3} more</span>
+              return (
+                <button
+                  key={col}
+                  type="button"
+                  className={cn(
+                    "hover:bg-accent/60 focus-visible:ring-ring/40 group flex flex-col items-stretch border-r p-1 text-left transition-colors outline-none last:border-r-0 focus-visible:ring-2 focus-visible:ring-inset",
+                    large ? "min-h-[7rem]" : "min-h-[5rem]",
+                    isWeekend && !isToday && "bg-muted/20",
                   )}
-                </div>
-              </div>
-            )
-          })}
-        </div>
-      ))}
+                  onClick={() => onDayClick(ymd)}
+                >
+                  <span
+                    className={cn(
+                      "mb-0.5 inline-flex items-center justify-center rounded-full font-medium tabular-nums",
+                      large ? "h-8 w-8 text-base" : "h-6 w-6 text-sm",
+                      isToday
+                        ? "bg-primary text-primary-foreground shadow-sm"
+                        : "text-foreground group-hover:bg-background/60",
+                    )}
+                  >
+                    {day}
+                  </span>
+                  <div className="flex flex-col gap-0.5">
+                    {evts.slice(0, maxVisible).map((occ, i) => (
+                      <div
+                        key={i}
+                        role="button"
+                        tabIndex={-1}
+                        onClick={(e) => { e.stopPropagation(); onEventClick(occ) }}
+                      >
+                        <EventDot
+                          colors={occ.members.length ? occ.members.map((m) => m.color) : [occ.effective_color]}
+                          title={occ.title}
+                          large={large}
+                        />
+                      </div>
+                    ))}
+                    {evts.length > maxVisible && (
+                      <span className={cn("text-muted-foreground pl-1 font-medium", large ? "text-sm" : "text-xs")}>
+                        +{evts.length - maxVisible} more
+                      </span>
+                    )}
+                  </div>
+                </button>
+              )
+            })}
+          </div>
+        ))}
+      </div>
     </div>
   )
 }

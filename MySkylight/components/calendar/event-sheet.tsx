@@ -1,14 +1,50 @@
 "use client"
 
 import { useEffect } from "react"
-import { useForm } from "react-hook-form"
+import { useForm, Controller } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
+import { Trash2Icon } from "lucide-react"
+
 import { Button } from "@/components/ui/button"
-import type { CalendarOut, MemberBrief, OccurrenceOut } from "@/lib/types/calendar"
+import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
+import { Label } from "@/components/ui/label"
+import { Switch } from "@/components/ui/switch"
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetFooter,
+} from "@/components/ui/sheet"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
+import type {
+  CalendarOut,
+  MemberBrief,
+  OccurrenceOut,
+} from "@/lib/types/calendar"
 
 const RRULE_OPTIONS = [
-  { label: "Does not repeat", value: "" },
+  { label: "Does not repeat", value: "none" },
   { label: "Every day", value: "FREQ=DAILY" },
   { label: "Every week", value: "FREQ=WEEKLY" },
   { label: "Every 2 weeks", value: "FREQ=WEEKLY;INTERVAL=2" },
@@ -35,10 +71,12 @@ interface EventSheetProps {
   open: boolean
   onClose: () => void
   onSubmit: (data: FormValues) => void
+  onDelete?: () => void
   isPending: boolean
+  isDeleting?: boolean
   calendars: CalendarOut[]
   members: MemberBrief[]
-  defaultDate?: string   // YYYY-MM-DD
+  defaultDate?: string // YYYY-MM-DD
   editing?: OccurrenceOut
 }
 
@@ -53,17 +91,47 @@ function toDatetimeLocal(iso: string) {
 }
 
 export function EventSheet({
-  open, onClose, onSubmit, isPending, calendars, members, defaultDate, editing,
+  open,
+  onClose,
+  onSubmit,
+  onDelete,
+  isPending,
+  isDeleting,
+  calendars,
+  members,
+  defaultDate,
+  editing,
 }: EventSheetProps) {
   const now = new Date()
   const defaultStart = defaultDate
     ? isoLocal(defaultDate, `${String(now.getHours()).padStart(2, "0")}:00`)
-    : toDatetimeLocal(new Date(now.getFullYear(), now.getMonth(), now.getDate(), now.getHours() + 1).toISOString())
+    : toDatetimeLocal(
+        new Date(
+          now.getFullYear(),
+          now.getMonth(),
+          now.getDate(),
+          now.getHours() + 1
+        ).toISOString()
+      )
   const defaultEnd = defaultDate
     ? isoLocal(defaultDate, `${String(now.getHours() + 1).padStart(2, "0")}:00`)
-    : toDatetimeLocal(new Date(now.getFullYear(), now.getMonth(), now.getDate(), now.getHours() + 2).toISOString())
+    : toDatetimeLocal(
+        new Date(
+          now.getFullYear(),
+          now.getMonth(),
+          now.getDate(),
+          now.getHours() + 2
+        ).toISOString()
+      )
 
-  const { register, handleSubmit, watch, setValue, reset, formState: { errors } } = useForm<FormValues>({
+  const {
+    register,
+    handleSubmit,
+    control,
+    watch,
+    reset,
+    formState: { errors },
+  } = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
       title: "",
@@ -71,7 +139,7 @@ export function EventSheet({
       start_dt: defaultStart,
       end_dt: defaultEnd,
       all_day: false,
-      rrule: "",
+      rrule: "none",
       is_countdown: false,
       member_ids: [],
       reminder_minutes: [],
@@ -89,7 +157,7 @@ export function EventSheet({
           all_day: editing.all_day,
           location: editing.location ?? "",
           description: editing.description ?? "",
-          rrule: "",
+          rrule: "none",
           is_countdown: editing.is_countdown,
           member_ids: editing.members.map((m) => m.id),
           reminder_minutes: editing.reminder_minutes,
@@ -101,7 +169,7 @@ export function EventSheet({
           start_dt: defaultStart,
           end_dt: defaultEnd,
           all_day: false,
-          rrule: "",
+          rrule: "none",
           is_countdown: false,
           member_ids: [],
           reminder_minutes: [],
@@ -110,129 +178,285 @@ export function EventSheet({
     }
   }, [open, editing, defaultDate]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const selectedMemberIds = watch("member_ids")
+  const allDay = watch("all_day")
 
-  function toggleMember(id: string) {
-    setValue(
-      "member_ids",
-      selectedMemberIds.includes(id)
-        ? selectedMemberIds.filter((m) => m !== id)
-        : [...selectedMemberIds, id],
-    )
+  // Map the sentinel "none" back to "" so the parent's payload logic is unchanged.
+  function submit(values: FormValues) {
+    onSubmit({ ...values, rrule: values.rrule === "none" ? "" : values.rrule })
   }
 
-  if (!open) return null
-
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 sm:items-center">
-      <div className="bg-background w-full max-w-lg rounded-t-2xl p-4 shadow-xl sm:rounded-2xl">
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-semibold">{editing ? "Edit Event" : "New Event"}</h2>
-          <button onClick={onClose} className="text-muted-foreground hover:text-foreground text-xl leading-none">✕</button>
-        </div>
+    <Sheet open={open} onOpenChange={(o) => !o && onClose()}>
+      <SheetContent side="right" className="w-full gap-0 p-0 sm:max-w-md">
+        <SheetHeader className="border-b">
+          <SheetTitle className="text-lg">
+            {editing ? "Edit event" : "New event"}
+          </SheetTitle>
+        </SheetHeader>
 
-        <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-3 overflow-y-auto max-h-[70vh]">
-          {/* Title */}
-          <input
-            {...register("title")}
-            placeholder="Event title"
-            className="border-input bg-background w-full rounded-lg border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary"
-          />
-          {errors.title && <p className="text-destructive -mt-2 text-xs">{errors.title.message}</p>}
+        <form
+          onSubmit={handleSubmit(submit)}
+          className="flex min-h-0 flex-1 flex-col"
+        >
+          <div className="thin-scrollbar flex-1 space-y-5 overflow-y-auto p-6">
+            {/* Title */}
+            <div className="space-y-1.5">
+              <Label htmlFor="title">Title</Label>
+              <Input
+                id="title"
+                {...register("title")}
+                placeholder="Event title"
+              />
+              {errors.title && (
+                <p className="text-xs text-destructive">
+                  {errors.title.message}
+                </p>
+              )}
+            </div>
 
-          {/* Calendar */}
-          <select
-            {...register("calendar_id")}
-            className="border-input bg-background rounded-lg border px-3 py-2 text-sm"
-          >
-            {calendars.map((c) => (
-              <option key={c.id} value={c.id}>{c.name}</option>
-            ))}
-          </select>
+            {/* Calendar */}
+            <div className="space-y-1.5">
+              <Label>Calendar</Label>
+              <Controller
+                name="calendar_id"
+                control={control}
+                render={({ field }) => (
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Choose a calendar" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {calendars.map((c) => (
+                        <SelectItem key={c.id} value={c.id}>
+                          <span
+                            className="size-2.5 rounded-full"
+                            style={{ backgroundColor: c.color }}
+                          />
+                          {c.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              />
+              {errors.calendar_id && (
+                <p className="text-xs text-destructive">
+                  {errors.calendar_id.message}
+                </p>
+              )}
+            </div>
 
-          {/* Times */}
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="text-xs text-muted-foreground">Start</label>
-              <input
-                type="datetime-local"
-                {...register("start_dt")}
-                className="border-input bg-background w-full rounded-lg border px-2 py-1.5 text-sm"
+            {/* All day */}
+            <div className="flex items-center justify-between rounded-2xl bg-muted/40 px-3.5 py-2.5">
+              <Label htmlFor="all_day" className="cursor-pointer">
+                All day
+              </Label>
+              <Controller
+                name="all_day"
+                control={control}
+                render={({ field }) => (
+                  <Switch
+                    id="all_day"
+                    checked={field.value}
+                    onCheckedChange={field.onChange}
+                  />
+                )}
               />
             </div>
-            <div>
-              <label className="text-xs text-muted-foreground">End</label>
-              <input
-                type="datetime-local"
-                {...register("end_dt")}
-                className="border-input bg-background w-full rounded-lg border px-2 py-1.5 text-sm"
-              />
-            </div>
-          </div>
 
-          {/* All-day + Countdown row */}
-          <div className="flex gap-4 text-sm">
-            <label className="flex items-center gap-2">
-              <input type="checkbox" {...register("all_day")} className="h-4 w-4" />
-              All day
-            </label>
-            <label className="flex items-center gap-2">
-              <input type="checkbox" {...register("is_countdown")} className="h-4 w-4" />
-              Countdown
-            </label>
-          </div>
-
-          {/* Recurrence */}
-          <select
-            {...register("rrule")}
-            className="border-input bg-background rounded-lg border px-3 py-2 text-sm"
-          >
-            {RRULE_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>{o.label}</option>
-            ))}
-          </select>
-
-          {/* Location */}
-          <input
-            {...register("location")}
-            placeholder="Location (optional)"
-            className="border-input bg-background rounded-lg border px-3 py-2 text-sm"
-          />
-
-          {/* Members */}
-          {members.length > 0 && (
-            <div>
-              <p className="mb-1 text-xs text-muted-foreground">Assign members</p>
-              <div className="flex flex-wrap gap-2">
-                {members.map((m) => (
-                  <button
-                    key={m.id}
-                    type="button"
-                    onClick={() => toggleMember(m.id)}
-                    className="flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-sm transition-colors"
-                    style={{
-                      backgroundColor: selectedMemberIds.includes(m.id) ? m.color : "transparent",
-                      borderColor: m.color,
-                      color: selectedMemberIds.includes(m.id) ? "#fff" : "inherit",
-                    }}
-                  >
-                    {m.name}
-                  </button>
-                ))}
+            {/* Times */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="start_dt">Starts</Label>
+                <Input
+                  id="start_dt"
+                  type={allDay ? "date" : "datetime-local"}
+                  {...register("start_dt")}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="end_dt">Ends</Label>
+                <Input
+                  id="end_dt"
+                  type={allDay ? "date" : "datetime-local"}
+                  {...register("end_dt")}
+                />
               </div>
             </div>
-          )}
 
-          <div className="flex gap-2 pt-2">
-            <Button type="button" variant="outline" className="flex-1" onClick={onClose}>
+            {/* Repeat */}
+            <div className="space-y-1.5">
+              <Label>Repeat</Label>
+              <Controller
+                name="rrule"
+                control={control}
+                render={({ field }) => (
+                  <Select
+                    value={field.value || "none"}
+                    onValueChange={field.onChange}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {RRULE_OPTIONS.map((o) => (
+                        <SelectItem key={o.value} value={o.value}>
+                          {o.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              />
+            </div>
+
+            {/* Location */}
+            <div className="space-y-1.5">
+              <Label htmlFor="location">Location</Label>
+              <Input
+                id="location"
+                {...register("location")}
+                placeholder="Add a location"
+              />
+            </div>
+
+            {/* Description */}
+            <div className="space-y-1.5">
+              <Label htmlFor="description">Notes</Label>
+              <Textarea
+                id="description"
+                {...register("description")}
+                placeholder="Add notes"
+              />
+            </div>
+
+            {/* Members */}
+            {members.length > 0 && (
+              <div className="space-y-2">
+                <Label>Assign to</Label>
+                <Controller
+                  name="member_ids"
+                  control={control}
+                  render={({ field }) => (
+                    <ToggleGroup
+                      type="multiple"
+                      variant="outline"
+                      value={field.value}
+                      onValueChange={field.onChange}
+                      className="flex flex-wrap justify-start"
+                    >
+                      {members.map((m) => {
+                        const selected = field.value.includes(m.id)
+                        return (
+                          <ToggleGroupItem
+                            key={m.id}
+                            value={m.id}
+                            className="gap-1.5 rounded-full"
+                            style={
+                              selected
+                                ? {
+                                    backgroundColor: m.color,
+                                    borderColor: m.color,
+                                    color: "#fff",
+                                  }
+                                : { borderColor: m.color }
+                            }
+                          >
+                            <span
+                              className="size-2 rounded-full"
+                              style={{
+                                backgroundColor: selected ? "#fff" : m.color,
+                              }}
+                            />
+                            {m.name}
+                          </ToggleGroupItem>
+                        )
+                      })}
+                    </ToggleGroup>
+                  )}
+                />
+              </div>
+            )}
+
+            {/* Countdown */}
+            <div className="flex items-center justify-between rounded-2xl bg-muted/40 px-3.5 py-2.5">
+              <div>
+                <Label htmlFor="is_countdown" className="cursor-pointer">
+                  Countdown
+                </Label>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  Show a days-remaining tile up top.
+                </p>
+              </div>
+              <Controller
+                name="is_countdown"
+                control={control}
+                render={({ field }) => (
+                  <Switch
+                    id="is_countdown"
+                    checked={field.value}
+                    onCheckedChange={field.onChange}
+                  />
+                )}
+              />
+            </div>
+          </div>
+
+          {/* Footer */}
+          <SheetFooter className="flex-row items-center gap-2 border-t">
+            {onDelete && (
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    size="icon"
+                    aria-label="Delete event"
+                  >
+                    <Trash2Icon />
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Delete this event?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      This permanently removes the event for everyone in the
+                      family. This can&apos;t be undone.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel disabled={isDeleting}>
+                      Cancel
+                    </AlertDialogCancel>
+                    <AlertDialogAction
+                      variant="destructive"
+                      onClick={onDelete}
+                      disabled={isDeleting}
+                    >
+                      {isDeleting ? "Deleting…" : "Delete"}
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            )}
+            <Button
+              type="button"
+              variant="outline"
+              className="flex-1"
+              onClick={onClose}
+            >
               Cancel
             </Button>
             <Button type="submit" className="flex-1" disabled={isPending}>
-              {isPending ? "Saving…" : editing ? "Update" : "Create"}
+              {isPending
+                ? "Saving…"
+                : editing
+                  ? "Save changes"
+                  : "Create event"}
             </Button>
-          </div>
+          </SheetFooter>
         </form>
-      </div>
-    </div>
+      </SheetContent>
+    </Sheet>
   )
 }

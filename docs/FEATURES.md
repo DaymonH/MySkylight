@@ -14,7 +14,7 @@ frontend (FE) pieces, and **acceptance criteria** (AC) that define "done".
 - **Approach:** **Clerk** authenticates individual users (email/social/MFA/sessions). The backend is a
   resource server: it verifies the Clerk JWT (JWKS, networkless) and maps `clerk_user_id` → our `User`.
   Family = tenant; users join families via Membership with a role (`owner`/`adult`/`child`/`viewer`),
-  all stored in **our DB** (not Clerk Organizations). Child profiles can be PIN-gated.
+  all stored in **our DB** (not Clerk Organizations).
 - **BE:** `User` (keyed by `clerk_user_id`, no password), `Family`, `Membership`, `Member` models;
   Clerk JWT-verification dependency; `GET /me`; `/webhooks/clerk` (Svix-verified `user.*`) + JIT
   provisioning; `/families`, `/members`; per-family authz dependency.
@@ -31,10 +31,14 @@ frontend (FE) pieces, and **acceptance criteria** (AC) that define "done".
 - **AC:** Create/edit/delete single + recurring events; "edit this occurrence only" works; reminders persist.
 
 ### F24 — Realtime live-update
-- **Approach:** Server pushes typed change events per family; clients reconcile cache.
-- **BE:** SSE/WebSocket endpoint + in-process broadcast bus; emit on every mutating route.
-- **FE:** Subscription hook that invalidates/patches TanStack Query cache.
-- **AC:** An edit on the phone reflects on the device within ~1s without manual refresh.
+- **Approach:** Server pushes typed change events per family via **SSE**; clients reconcile TanStack Query cache.
+- **BE:** `GET /api/v1/stream` SSE endpoint + in-process broadcast bus; emit on every mutating route.
+- **FE:** Subscription hook (`useSSE`) that invalidates/patches the TanStack Query cache on each event.
+  - **iOS caveat**: SSE connections drop when the PWA is backgrounded. The hook must reconnect on
+    `visibilitychange` (document becomes visible). TanStack Query's `refetchOnWindowFocus` covers the
+    data gap until the SSE reconnects.
+- **AC:** An edit on the phone reflects on the device within ~1s without manual refresh; updates resume after backgrounding.
+- *Phase 0 (scaffold) → Phase 2 (full)*
 
 ---
 
@@ -61,10 +65,15 @@ frontend (FE) pieces, and **acceptance criteria** (AC) that define "done".
 
 ### F03 — Mobile App
 > *"Manage and access everything on your Skylight from anywhere…"*
-- **Approach:** Responsive `/app` surface + installable **PWA** (D1). Same API as device.
+- **Approach:** Responsive `/app` surface — the same PWA used for the wall screen, just a different
+  route optimised for portrait/mobile. Installable to the home screen; works offline for the cached shell.
 - **BE:** n/a (shared API).
-- **FE:** Mobile layouts, PWA manifest + service worker, install prompt, "add to home screen".
-- **AC:** Installable on a phone; full create/edit from mobile; offline shell loads.
+- **FE:** Mobile layouts; PWA manifest + service worker already in place.
+  - **Android**: `beforeinstallprompt` → show native "Install app" banner/button.
+  - **iOS**: no install prompt API — show an in-app tooltip ("Tap Share → Add to Home Screen") when
+    `navigator.standalone === false` and the user-agent is iOS Safari. Detect install via `navigator.standalone`.
+  - Offline shell loads without network; last-fetched data visible from TanStack Query cache.
+- **AC:** Installable on Android (prompted) and iOS (manual); full create/edit from mobile; offline shell loads.
 - *Phase 0 (shell) → all phases*
 
 ### F04 — Custom Lists
@@ -111,46 +120,51 @@ frontend (FE) pieces, and **acceptance criteria** (AC) that define "done".
 
 ### F09 — Sleep Mode
 > *"Ensure your Skylight screen sleeps and wakes at the same time each day."*
-- **Approach:** Per-device on/off schedule; device dims/blanks (or shows clock) during sleep window.
-- **BE:** Sleep schedule on `Device` settings; scheduler emits sleep/wake; `/devices/{id}/settings`.
-- **FE:** Sleep overlay on `/device`; settings UI; screen wake-lock handling.
-- **AC:** Device blanks at the set time and wakes on schedule; configurable per device.
-- *Phase 8*
-
-### F10 — Parental Lock
-> *"Prevent editing, adding, or deletion of your events and chores."*
-- **Approach:** A family/device lock that gates mutating actions behind a parent PIN/role.
-- **BE:** Lock state + PIN; authz checks reject mutations when locked unless elevated; `AuditLog`.
-- **FE:** Lock toggle; PIN prompt before edit/add/delete on device; locked affordances hidden/disabled.
-- **AC:** With lock on, a child cannot add/edit/delete; a correct PIN/parent role can.
-- *Phase 1*
-
-### F11 — Software Updates
-> *"New features automatically download to your device."*
-- **Approach:** PWA service-worker update channel: new build detected → cached → applied (with a
-  subtle "updated" nudge). Backend exposes `/version`.
-- **BE:** `/version` endpoint; optional release-notes feed.
-- **FE:** SW update lifecycle (skipWaiting/clientsClaim), "update ready" toast, auto-apply on idle.
-- **AC:** Deploying a new build updates the device without a manual reinstall.
+- **Approach:** Per-device on/off schedule stored on the backend; the `/device` PWA polls the
+  schedule and toggles sleep state client-side.
+- **BE:** Sleep schedule on `Device` settings; scheduler emits `device.sleep`/`device.wake` SSE events;
+  `/devices/{id}/settings`.
+- **FE:** 
+  - **Active hours**: acquire **Web Wake Lock API** (`navigator.wakeLock.request("screen")`) so the
+    screen stays on without OS timeout.
+  - **Sleep time**: release the wake lock + show a sleep overlay (black screen or clock).
+  - **Wake time**: dismiss the overlay + re-acquire the wake lock.
+  - Settings UI in `/app` to configure the schedule.
+  - Note: wake lock is released automatically by the browser when the PWA is backgrounded; re-acquire it
+    on `visibilitychange` when the app returns to foreground during active hours.
+- **AC:** Device screen stays on during active hours; goes to sleep overlay at the set time; wakes on schedule; configurable per device.
 - *Phase 8*
 
 ### F12 — Device Linking
 > *"Connect multiple Calendars across rooms (or even households!) so they share information."*
-- **Approach:** Pair a screen to a family via a short code; multiple devices share family data;
-  a device can be linked to more than one family (cross-household).
-- **BE:** `Device`, pairing-code issue/redeem, device-scoped token; `/devices/pair`.
-- **FE:** Pairing screen (enter/generate code); device list + management in `/app`.
+- **Approach:** A "device" is the MySkylight PWA running at `/device` in **standalone mode** on any
+  hardware — a wall-mounted tablet, an old laptop, a Raspberry Pi with a touch display. No special OS
+  or hardware required. Pair it to a family via a short code; the device receives a long-lived device
+  token (not a Clerk session) so it stays logged in without a personal user account. Multiple screens
+  can be paired to one family; a screen can be linked to multiple families (co-parenting).
+- **BE:** `Device` model + device-scoped token; pairing-code issue/redeem; `/devices/pair`.
+- **FE:** Pairing screen at `/device/pair` (display or enter code); device list + management in `/app`.
 - **AC:** Two screens paired to one family stay in sync; unpair works; cross-household link supported.
 - *Phase 8*
 
 ### F13 — Share Access
 > *"Invite your spouse, co-parenting partner, kids, and close friends to access your Calendar."*
-- **Approach:** Our own email/link invitations to join a family with a chosen role; the invitee
-  authenticates with **Clerk**, then the accept flow creates a Membership. Co-parenting = same user in
-  two families.
-- **BE:** `Invitation` model, `/invitations` (create/accept/revoke), role assignment.
-- **FE:** Invite UI (role picker), pending invites, accept-invite landing.
-- **AC:** An invited person joins with the right role and sees shared data; revoke removes access.
+- **Approach:** Our own email/link invitations to join a family with a chosen role. The invitee
+  authenticates with **Clerk**, then the accept flow creates a `Membership` linking their `User` to the
+  `Family` **and auto-creates their `Member` persona**, seeded from their Clerk profile (name, avatar,
+  and the next distinct colour in the palette) so they appear on the shared calendar immediately. An
+  optional onboarding step lets them rename/recolour that persona. Co-parenting is supported: a `User`
+  can belong to multiple families via separate `Membership` rows, with a family switcher in the app.
+- **Key concept:** A `User` (Clerk login / credentials) is distinct from a `Member` (calendar persona).
+  Each `User` in a Family has exactly one `Member` representing them on the calendar. Kids can be
+  `Member`s without having a `User` login at all.
+- **BE:** `Invitation` model, `/invitations` (create/accept/revoke), role assignment; `Member` auto-created
+  on invite accept (idempotent; `ensure_member_for_user` — the owner's persona is created on family-create
+  the same way); family-switcher support on `/me`.
+- **FE:** Invite UI (role picker + optional pre-fill name), pending invites list, accept-invite landing →
+  member onboarding step (name/color/avatar); family switcher in app header.
+- **AC:** An invited person signs in, creates their member profile, and immediately sees the shared family
+  calendar; their events/tasks are color-coded to them; revoke removes both Membership and access.
 - *Phase 1*
 
 ---
@@ -235,14 +249,14 @@ frontend (FE) pieces, and **acceptance criteria** (AC) that define "done".
 | Phase | Features |
 |------:|----------|
 | 0 | F00*, F03 (shell), F24 (scaffold) |
-| 1 | F00, F02, F10, F13 |
+| 1 | F00, F02, F13 |
 | 2 | F23, F24, F06, F07, F08, F02 |
 | 3 | F01 |
 | 4 | F04, F05 |
 | 5 | F14, F15, F16 |
 | 6 | F17, F15 (AI recipes) |
 | 7 | F18, F19, F20, F21, F22, F25 |
-| 8 | F09, F11, F12 |
+| 8 | F09, F12 |
 | 9 | notifications, offline, a11y, deploy (cross-cutting) |
 
 *\* foundational scaffolding begins in Phase 0, completed in Phase 1.*

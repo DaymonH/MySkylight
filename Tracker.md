@@ -1,48 +1,12 @@
-# MySkylight — Build Tracker
+# MySkylight — Build Tracker (moved)
 
-## Phase 1 — App Shell
-- [ ] Root layout (`app/layout.tsx`) — ClerkProvider, ThemeProvider, font
-- [ ] Sign-in page (`app/(auth)/sign-in/page.tsx`)
-- [ ] Sign-up page (`app/(auth)/sign-up/page.tsx`)
-- [ ] Protected app layout (`app/(app)/layout.tsx`) — auth guard + family guard
-- [ ] Clerk webhook route (`app/api/webhooks/clerk/route.ts`)
+This granular frontend checklist has been **folded into the canonical tracker** to avoid two diverging
+sources of truth.
 
-## Phase 2 — Onboarding
-- [ ] Onboarding page (`app/(app)/onboarding/page.tsx`)
-- [ ] Create family form
-- [ ] Invite accept page (`app/invite/accept/page.tsx`)
+➡️ **See [`docs/TRACKER.md`](./docs/TRACKER.md)** — the FE items that used to live here are now
+**Appendix A — Frontend granular checklist** (and FE conventions in **Appendix B**).
 
-## Phase 3 — Family Dashboard
-- [ ] App nav/sidebar layout
-- [ ] Family overview page (`app/(app)/page.tsx`)
-- [ ] Edit family name
-
-## Phase 4 — Members
-- [ ] Members page (`app/(app)/members/page.tsx`)
-- [ ] Member card component
-- [ ] Add member form/drawer
-- [ ] Edit member form/drawer
-- [ ] Delete member with confirmation
-
-## Phase 5 — Invitations
-- [ ] Invitations page (`app/(app)/invitations/page.tsx`)
-- [ ] Send invite form
-- [ ] Revoke invite action
-
-## Phase 6 — PIN Lock
-- [ ] Enable lock / set PIN flow
-- [ ] PIN verify screen
-
-## Phase 7 — Realtime
-- [ ] `lib/use-family-stream.ts` SSE hook
-- [ ] Wire stream into member list
-- [ ] Wire stream into family header
-
-## Infrastructure
-- [x] Proxy route (`app/api/backend/[...path]/route.ts`)
-- [x] `lib/api.ts` — `apiRequest<T>()`
-- [x] `lib/use-api-query.ts` — `useApiQuery<T>()`
-- [x] `.env.local` configured
-- [x] `skylight-api` Clerk JWT template created
-- [ ] Netlify deploy configured
-- [ ] `app/api/webhooks/clerk` registered in Clerk dashboard
+The single source of truth for what's done/next is the `docs/` set:
+- [`docs/PLAN.md`](./docs/PLAN.md) — architecture & roadmap
+- [`docs/FEATURES.md`](./docs/FEATURES.md) — per-feature specs (`Fxx` IDs) + acceptance criteria
+- [`docs/TRACKER.md`](./docs/TRACKER.md) — phase-by-phase checklist (incl. the FE detail formerly here)

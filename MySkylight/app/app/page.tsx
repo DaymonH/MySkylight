@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query"
 import { useApi } from "@/hooks/use-api"
 import { useRouter } from "next/navigation"
 import { useEffect } from "react"
+import { Loader2Icon } from "lucide-react"
 import { CalendarView } from "@/components/calendar/calendar-view"
 
 interface MeResponse {
@@ -48,12 +49,17 @@ export default function AppHomePage() {
   }, [me, memberships, membershipsPending, router])
 
   if (!isLoaded || !familyId) {
-    return <div className="flex flex-1 items-center justify-center text-muted-foreground text-sm">Loading…</div>
+    return (
+      <div className="text-muted-foreground flex flex-1 items-center justify-center gap-2 text-sm">
+        <Loader2Icon className="size-4 animate-spin" />
+        Loading your calendar…
+      </div>
+    )
   }
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
-      <CalendarView familyId={familyId} defaultView="month" storageKey="skylight:view:app" />
+      <CalendarView familyId={familyId} defaultView="month" storageKey="skylight:view:app" surface="app" />
     </div>
   )
 }
