@@ -48,6 +48,12 @@ frontend (FE) pieces, and **acceptance criteria** (AC) that define "done".
     `visibilitychange` (document becomes visible). TanStack Query's `refetchOnWindowFocus` covers the
     data gap until the SSE reconnects.
 - **AC:** An edit on the phone reflects on the device within ~1s without manual refresh; updates resume after backgrounding.
+- **Status (2026-06-14):** ✅ Phase 2 closed. `hooks/use-realtime.ts` now reconnects on `visibilitychange`
+  (foreground) and `online` — addressing the iOS-background drop above — and resyncs every family-scoped
+  query (`occurrences`/`calendars`/`members`/`family`/`me·memberships`) on each *re*connect to catch up on
+  events missed while disconnected. The first connect skips the resync (page data is already fresh). A
+  transient drop is left to the browser's own retry; only a `CLOSED` stream triggers a manual reconnect.
+  Remaining: a live two-device latency smoke is the final AC sign-off.
 - _Phase 0 (scaffold) → Phase 2 (full)_
 
 ---
@@ -64,6 +70,16 @@ frontend (FE) pieces, and **acceptance criteria** (AC) that define "done".
   `/tasks/{id}/complete`. Recurrence reuses the RRULE engine.
 - **FE:** Per-member checklist cards on device + management in `/app`; completion animation.
 - **AC:** Assign a recurring chore; child checks it off on device; resets next day; streak counts.
+- **Status (2026-06-14):** ◐ Phase 3 **backend complete & tested** (8 tests in `tests/test_tasks.py`, suite
+  39 green). Models `Task`/`Routine`/`TaskAssignment`/`TaskCompletion` (migration `003`); date-based
+  recurrence anchored at `start_date` (reuses dateutil RRULE; one-off = no rrule); endpoints under
+  `/families/{id}/routines` + `/families/{id}/tasks` incl. `…/tasks/occurrences?from&to`,
+  idempotent `POST/DELETE …/{task_id}/complete`, and `GET …/{task_id}/streak?member_id`. Roles: owner/adult
+  manage definitions; **children may check off, viewers may not**. Realtime emits `task.*`/`routine.*`.
+  Completions key on `(task, member, occurrence_date)` so each new day resets naturally; streak lets a
+  still-pending "today" slide without breaking the run. **Not pushed yet** (HomeServerAPI auto-deploys on
+  push). Remaining: the FE — device checklist cards, `/app` task/routine management, routine builder,
+  streak indicator, and `task.*` SSE wiring.
 - _Phase 3_
 
 ### F02 — Color Coding

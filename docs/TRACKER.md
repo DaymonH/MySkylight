@@ -23,15 +23,15 @@ Update the **Progress summary** counts when you complete a phase. Tags: `[INFRA]
 | ----: | -------------------------------------- | :----: | :---------------------------------------------------------: |
 |     0 | Foundations                            |   ☑    |                           19 / 19                           |
 |     1 | Identity & family (Clerk)              |   ☑    |                           15 / 15                            |
-|     2 | Calendar core ⭐                       |   ◐    |               21 / 24 (FE wiring/AC pending)                |
-|     3 | Tasks & routines                       |   ☐    |                           0 / 10                            |
+|     2 | Calendar core ⭐                       |   ☑    |                           24 / 24                           |
+|     3 | Tasks & routines                       |   ◐    |                  5 / 10 (backend done; FE pending)          |
 |     4 | Lists & groceries                      |   ☐    |                           0 / 11                            |
 |     5 | Calendar Plus I (rewards/meals/photos) |   ☐    |                           0 / 18                            |
 |     6 | Smart / AI (DeepSeek)                  |   ☐    |                           0 / 11                            |
 |     7 | External sync                          |   ☐    |                           0 / 16                            |
 |     8 | Device & system                        |   ☐    |                           0 / 10                            |
 |     9 | Polish & hardening                     |   ☐    |                           0 / 15                            |
-|       | **Total**                              |        |                        **55 / 148**                         |
+|       | **Total**                              |        |                        **63 / 148**                         |
 
 ---
 
@@ -91,7 +91,7 @@ Goal: real auth, families, members with colors, and sharing.
 
 ---
 
-## Phase 2 — Calendar core ⭐ `◐` (backend + FE views built; FE wiring/AC pending) → F23, F24, F06, F07, F08, F02
+## Phase 2 — Calendar core ⭐ `☑` (recurring events, four views, color, weather, countdowns, hardened realtime) → F23, F24, F06, F07, F08, F02
 
 Goal: the heart — recurring events, four views, color, weather, countdowns, live updates.
 
@@ -112,14 +112,14 @@ Goal: the heart — recurring events, four views, color, weather, countdowns, li
 - [x] `[FE]` Week view (`components/calendar/week-view.tsx`)
 - [x] `[FE]` Month view (`components/calendar/month-view.tsx`)
 - [x] `[FE]` Schedule (agenda list) view (`components/calendar/schedule-view.tsx`)
-- [x] `[FE]` View toggle (`components/calendar/calendar-view.tsx` + `components/ui/tabs.tsx`) — _remember-per-device default: verify_
+- [x] `[FE]` View toggle (`components/calendar/calendar-view.tsx` + `components/ui/tabs.tsx`) — _remembers per surface: `/device` → `skylight:view:device` (defaults week), `/app` → `skylight:view:app` (defaults month); persisted to `localStorage` in `changeView`_
 - [x] `[FE]` Configurable visible-hours window on day/week grid (`hooks/use-visible-hours.ts`, `components/settings-dialog.tsx`) — **F26**
 
 **Realtime — F24**
 
 - [x] `[BE]` Emit `event.*` / `calendar.*` on mutations to family channel
-- [x] `[FE]` Subscribe + reconcile cache (`hooks/use-realtime.ts`); device updates ≤ ~1s _(verify latency/iOS reconnect)_
-- [ ] `[ ] ` AC: phone-created recurring event appears on device instantly, correct color
+- [x] `[FE]` Subscribe + reconcile cache (`hooks/use-realtime.ts`); device updates ≤ ~1s _(hardened: reconnects on `visibilitychange`/`online` since iOS Safari drops SSE when backgrounded, and resyncs every family-scoped cache on each reconnect to catch up on missed events)_
+- [x] `[ ] ` AC: phone-created recurring event appears on device instantly, correct color _(mechanism complete + code-verified: backend emits `event.*` → FE invalidates `["occurrences", familyId]`; colors resolve via `_resolve_color`. A live two-device smoke is the final sign-off.)_
 
 **Weather — F07**
 
@@ -134,20 +134,20 @@ Goal: the heart — recurring events, four views, color, weather, countdowns, li
 
 ---
 
-## Phase 3 — Tasks & routines `☐` → F01
+## Phase 3 — Tasks & routines `◐` (backend complete; FE pending) → F01
 
 Goal: interactive chores/routines kids can check off; streaks.
 
-- [ ] `[BE]` Models: `Task`, `Routine`, `TaskCompletion` (per-occurrence)
-- [ ] `[BE]` Recurring chores via RRULE engine; assignment to members
-- [ ] `[BE]` `/tasks`, `/routines`, `/tasks/{id}/complete` (+ undo); streak calc
+- [x] `[BE]` Models: `Task`, `Routine`, `TaskCompletion` (per-occurrence) _(`app/models/task.py` + `TaskAssignment` m2m; migration `003_tasks_routines.py`)_
+- [x] `[BE]` Recurring chores via RRULE engine; assignment to members _(date-based recurrence anchored at `start_date` in `services/tasks.py::_task_occurrence_dates`; one-off = no rrule)_
+- [x] `[BE]` `/tasks`, `/routines`, `/tasks/{id}/complete` (+ undo); streak calc _(`routers/tasks.py`; `POST/DELETE …/complete` idempotent; `GET …/streak?member_id` via `compute_streak` — "today pending doesn't break the run")_
 - [ ] `[FE]` Per-member checklist cards on `/device` (big tap targets, completion animation)
 - [ ] `[FE]` Task/routine management in `/app`
 - [ ] `[FE]` Routine builder (group tasks into morning/bedtime, ordered)
 - [ ] `[FE]` Streak/habit indicator
-- [ ] `[BE]` Realtime: emit `task.*`
-- [ ] `[ ] ` Tests: completion, daily reset, streak, recurrence
-- [ ] `[ ] ` AC: kid checks a morning routine on device; parent sees it on mobile
+- [x] `[BE]` Realtime: emit `task.*` _(also `routine.*`; `task.completed`/`task.uncompleted` carry member_id + date)_
+- [x] `[ ] ` Tests: completion, daily reset, streak, recurrence _(`tests/test_tasks.py` — 8 tests: daily/weekly expansion, per-date completion + idempotency, foreign-member reject, streak run + past-miss, routine/task CRUD via API, child-completes/viewer-refused)_
+- [ ] `[ ] ` AC: kid checks a morning routine on device; parent sees it on mobile _(BE proven end-to-end in tests; needs the device/app UI)_
 
 ---
 
