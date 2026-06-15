@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query"
 import {
   CalendarDaysIcon,
   ListChecksIcon,
+  ListTodoIcon,
   MailPlusIcon,
   UsersIcon,
   UsersRoundIcon,
@@ -54,6 +55,11 @@ export function FamilyMenu() {
         <DropdownMenuItem asChild>
           <Link href={`/app/family/${familyId}/tasks`}>
             <ListChecksIcon /> Tasks &amp; chores
+          </Link>
+        </DropdownMenuItem>
+        <DropdownMenuItem asChild>
+          <Link href={`/app/family/${familyId}/lists`}>
+            <ListTodoIcon /> Lists &amp; groceries
           </Link>
         </DropdownMenuItem>
         <DropdownMenuItem asChild>

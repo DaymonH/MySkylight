@@ -37,6 +37,7 @@ export function useRealtime(familyId: string) {
       qc.invalidateQueries({ queryKey: ["task-occurrences", familyId] })
       qc.invalidateQueries({ queryKey: ["tasks", familyId] })
       qc.invalidateQueries({ queryKey: ["routines", familyId] })
+      qc.invalidateQueries({ queryKey: ["lists", familyId] })
     }
 
     function handle(msg: { type: string }) {
@@ -72,6 +73,11 @@ export function useRealtime(familyId: string) {
         qc.invalidateQueries({ queryKey: ["routines", familyId] })
         qc.invalidateQueries({ queryKey: ["tasks", familyId] })
         qc.invalidateQueries({ queryKey: ["task-occurrences", familyId] })
+      }
+      if (msg.type.startsWith("list.")) {
+        // list.created/updated/deleted/reordered + list.item_* — refresh the
+        // shared lists on the companion app and the device board.
+        qc.invalidateQueries({ queryKey: ["lists", familyId] })
       }
     }
 

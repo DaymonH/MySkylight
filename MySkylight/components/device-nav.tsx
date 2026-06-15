@@ -2,13 +2,14 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { CalendarDaysIcon, ListChecksIcon } from "lucide-react"
+import { CalendarDaysIcon, ListChecksIcon, ListTodoIcon } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 
 const TABS = [
   { href: "/device", label: "Calendar", icon: CalendarDaysIcon },
   { href: "/device/chores", label: "Chores", icon: ListChecksIcon },
+  { href: "/device/lists", label: "Lists", icon: ListTodoIcon },
 ]
 
 /** Slim top nav for the wall-display kiosk — switches between device surfaces. */

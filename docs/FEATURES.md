@@ -122,6 +122,19 @@ frontend (FE) pieces, and **acceptance criteria** (AC) that define "done".
 - **BE:** `List`, `ListItem` (text, qty, category, checked, assignee); `/lists`, `/list-items`.
 - **FE:** List screens on device + mobile; quick-add; swipe/tap to check; reorder.
 - **AC:** Create a grocery list; both surfaces see live edits; checked items move/strike.
+- **Status (2026-06-15):** ☑ Full-stack done. **BE** (`app/models/list.py`, `schemas/list.py`,
+  `services/lists.py`, `routers/lists.py`, migration `005`): `List` (todo/grocery) + `ListItem`
+  (free-text `quantity`, `category`, `is_checked`/`checked_at`, optional `assignee` member). Endpoints
+  are **family-scoped & nested** — `/families/{id}/lists` and `…/lists/{id}/items` (+ `…/reorder` on
+  both, setting `sort_order` by index) — matching the events/tasks pattern rather than a top-level
+  `/list-items`. Roles: owner/adult manage lists; **owner/adult/child** add/check/edit items, viewers
+  read-only. Emits `list.*` (list- and item-level). Tested in `tests/test_lists.py` (7 tests; suite 62
+  green). **FE:** mobile management at `app/app/family/[familyId]/lists` (list chips + create, quick-add,
+  check/uncheck with optimistic cache patch, category grouping, completed section, per-item edit sheet
+  for qty/category/assignee) and a glanceable device board `components/lists/list-board.tsx` at
+  `/device/lists`; `list.*` wired into `hooks/use-realtime.ts`; linked from `FamilyMenu` + `DeviceNav`.
+  `tsc` + `next build` clean. **Deferred:** FE drag-reorder (backend reorder endpoints exist); live
+  two-device smoke is the final sign-off.
 - _Phase 4_
 
 ### F05 — Grocery Shopping (Instacart) 🔌

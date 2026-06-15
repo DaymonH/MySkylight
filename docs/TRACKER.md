@@ -25,13 +25,13 @@ Update the **Progress summary** counts when you complete a phase. Tags: `[INFRA]
 |     1 | Identity & family (Clerk)              |   ☑    |                           15 / 15                            |
 |     2 | Calendar core ⭐                       |   ☑    |                           24 / 24                           |
 |     3 | Tasks & routines                       |   ☑    |                           10 / 10                           |
-|     4 | Lists & groceries                      |   ☐    |                           0 / 11                            |
+|     4 | Lists & groceries                      |   ◐    |                           6 / 11                            |
 |     5 | Calendar Plus I (rewards/chores/meals/grocery/photos) |   ☐    |               0 / 26                |
 |     6 | Smart / AI (DeepSeek)                  |   ☐    |                           0 / 11                            |
 |     7 | External sync                          |   ☐    |                           0 / 16                            |
 |     8 | Device & system                        |   ☐    |                           0 / 10                            |
 |     9 | Polish & hardening                     |   ☐    |                           0 / 15                            |
-|       | **Total**                              |        |                        **68 / 156**                         |
+|       | **Total**                              |        |                        **74 / 156**                         |
 
 ---
 
@@ -155,21 +155,26 @@ Goal: interactive chores/routines kids can check off; streaks.
 
 ---
 
-## Phase 4 — Lists & groceries `☐` → F04, F05
+## Phase 4 — Lists & groceries `◐` (F04 full-stack done; F05 Instacart pending) → F04, F05
 
 Goal: shared lists + Instacart hand-off.
 
-- [ ] `[BE]` Models: `List`, `ListItem` (text, qty, category, checked, assignee)
-- [ ] `[BE]` `/lists`, `/list-items` CRUD + reorder; list types (todo/grocery)
-- [ ] `[BE]` Realtime: emit `list.*`
-- [ ] `[FE]` List screens (device + mobile): quick-add, check/uncheck, categories, reorder
-- [ ] `[FE]` Shared live edits across surfaces
+> **F04 status (2026-06-15):** built full-stack and verified — backend `tests/test_lists.py`
+> (7 tests; suite **62 green**), FE `tsc --noEmit` + `next build` both clean (new routes
+> `/app/family/[familyId]/lists` and `/device/lists` compile). A live two-device smoke is the final
+> sign-off. **F05 (Instacart) is the remaining Phase-4 work** — see the unchecked items below.
+
+- [x] `[BE]` Models: `List`, `ListItem` (text, qty, category, checked, assignee) _(`app/models/list.py`; `ListType` enum todo/grocery; `quantity` is free-text — "2 lbs"/"a dozen" — F28 adds structured qty on recipes; migration `005_lists.py`)_
+- [x] `[BE]` `/lists`, `/list-items` CRUD + reorder; list types (todo/grocery) _(`app/routers/lists.py` — items are **nested** under `/families/{id}/lists/{id}/items` to match the family-scoped events/tasks pattern, not a top-level `/list-items`. `POST …/lists/reorder` + `POST …/lists/{id}/items/reorder` set `sort_order` by index. Roles: owner/adult manage lists; **owner/adult/child** add/check/edit items, viewers read-only)_
+- [x] `[BE]` Realtime: emit `list.*` _(`list.created/updated/deleted/reordered` + `list.item_added/item_updated/item_deleted/items_reordered`)_
+- [x] `[FE]` List screens (device + mobile): quick-add, check/uncheck, categories, reorder _(mobile mgmt at `app/app/family/[familyId]/lists` — list chips + create, quick-add, check/uncheck, category grouping, completed section, per-item edit sheet `components/lists/list-item-sheet.tsx` for qty/category/assignee; device board `components/lists/list-board.tsx` at `/device/lists` with big tap targets + optimistic check. **Reorder: backend done, FE drag deferred** like task drag-reorder)_
+- [x] `[FE]` Shared live edits across surfaces _(`list.*` wired into `hooks/use-realtime.ts` → invalidates `["lists", familyId]`; both surfaces mount `useRealtime`. Linked from `FamilyMenu` + the device `DeviceNav`)_
 - [ ] `[BE]` `[🔌]` Instacart: API integration **or** deep-link/affiliate fallback; region flag — **F05**
 - [ ] `[FE]` `[🔌]` "Send to Instacart" on grocery lists; disabled/explained outside US — **F05**
-- [ ] `[ ] ` Tests: list CRUD, concurrent check sync
-- [ ] `[ ] ` AC: grocery edits sync live across device + mobile
-- [ ] `[ ] ` AC: Instacart hand-off works or degrades gracefully
-- [ ] `[ ] ` Research: confirm Instacart API access / fallback approach (spike)
+- [x] `[ ] ` Tests: list CRUD, concurrent check sync _(`tests/test_lists.py` — 7 tests: list+item CRUD via service & API, check/uncheck stamps `checked_at`, assignee-must-be-family-member, item reorder, list reorder via API, child-adds/viewer-refused. Concurrent check sync = idempotent BE toggle + optimistic FE cache patch)_
+- [ ] `[ ] ` AC: grocery edits sync live across device + mobile _(mechanism complete + code-verified: `list.*` SSE invalidates `["lists", familyId]`; optimistic check on both surfaces. A live two-device smoke is the final sign-off)_
+- [ ] `[ ] ` AC: Instacart hand-off works or degrades gracefully — **F05**
+- [ ] `[ ] ` Research: confirm Instacart API access / fallback approach (spike) — **F05**
 
 ---
 
