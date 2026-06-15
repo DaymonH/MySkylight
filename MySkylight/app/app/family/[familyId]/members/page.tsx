@@ -6,9 +6,12 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
-import { CheckIcon, Trash2Icon, UserPlusIcon, UsersIcon, XIcon } from "lucide-react"
+import { CheckIcon, PencilIcon, Trash2Icon, UserPlusIcon, UsersIcon, XIcon } from "lucide-react"
 
 import { useApi } from "@/hooks/use-api"
+import { useRealtime } from "@/hooks/use-realtime"
+import { FamilyNameEditor } from "@/components/family-name-editor"
+import { MemberEditSheet } from "@/components/member-edit-sheet"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -45,6 +48,10 @@ export default function MembersPage({ params }: { params: Promise<{ familyId: st
   const api = useApi()
   const qc = useQueryClient()
   const [adding, setAdding] = useState(false)
+  const [editingMember, setEditingMember] = useState<MemberOut | null>(null)
+
+  // Live-update the list (and the family name) when another device changes them.
+  useRealtime(familyId)
 
   const { data: members = [], isLoading } = useQuery({
     queryKey: ["members", familyId],
@@ -92,9 +99,14 @@ export default function MembersPage({ params }: { params: Promise<{ familyId: st
 
   return (
     <div className="thin-scrollbar mx-auto flex w-full max-w-xl flex-col gap-6 overflow-y-auto p-4 sm:p-6">
+      <header className="flex flex-col gap-1">
+        <FamilyNameEditor familyId={familyId} />
+        <p className="text-muted-foreground text-sm">Manage members and sharing for your family.</p>
+      </header>
+
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="font-heading text-xl font-bold tracking-tight">Family members</h1>
+          <h2 className="font-heading text-base font-semibold tracking-tight">Family members</h2>
           <p className="text-muted-foreground text-sm">Everyone who shares this calendar.</p>
         </div>
         <Button size="sm" variant={adding ? "outline" : "default"} onClick={() => setAdding((v) => !v)}>
@@ -207,6 +219,15 @@ export default function MembersPage({ params }: { params: Promise<{ familyId: st
                 <p className="font-medium leading-tight">{m.name}</p>
                 {m.is_child && <Badge variant="secondary" className="mt-1">Child</Badge>}
               </div>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                aria-label={`Edit ${m.name}`}
+                onClick={() => setEditingMember(m)}
+                className="text-muted-foreground hover:text-foreground"
+              >
+                <PencilIcon />
+              </Button>
               <AlertDialog>
                 <AlertDialogTrigger asChild>
                   <Button
@@ -237,6 +258,15 @@ export default function MembersPage({ params }: { params: Promise<{ familyId: st
           ))}
         </ul>
       )}
+
+      <MemberEditSheet
+        familyId={familyId}
+        member={editingMember}
+        open={!!editingMember}
+        onOpenChange={(o) => {
+          if (!o) setEditingMember(null)
+        }}
+      />
     </div>
   )
 }

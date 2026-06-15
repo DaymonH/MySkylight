@@ -22,7 +22,7 @@ Update the **Progress summary** counts when you complete a phase. Tags: `[INFRA]
 | Phase | Theme                                  | Status |                        Done / Total                         |
 | ----: | -------------------------------------- | :----: | :---------------------------------------------------------: |
 |     0 | Foundations                            |   ☑    |                           19 / 19                           |
-|     1 | Identity & family (Clerk)              |   ◐    | 13 / 15 (profile switcher + JWT/webhook/authz tests pending) |
+|     1 | Identity & family (Clerk)              |   ☑    |                           15 / 15                            |
 |     2 | Calendar core ⭐                       |   ◐    |               21 / 24 (FE wiring/AC pending)                |
 |     3 | Tasks & routines                       |   ☐    |                           0 / 10                            |
 |     4 | Lists & groceries                      |   ☐    |                           0 / 11                            |
@@ -31,7 +31,7 @@ Update the **Progress summary** counts when you complete a phase. Tags: `[INFRA]
 |     7 | External sync                          |   ☐    |                           0 / 16                            |
 |     8 | Device & system                        |   ☐    |                           0 / 10                            |
 |     9 | Polish & hardening                     |   ☐    |                           0 / 15                            |
-|       | **Total**                              |        |                        **53 / 148**                         |
+|       | **Total**                              |        |                        **55 / 148**                         |
 
 ---
 
@@ -69,7 +69,7 @@ Goal: both apps boot, talk to each other, and the data/auth/realtime plumbing ex
 
 ---
 
-## Phase 1 — Identity & family `◐` (backend + core FE done; invite-accept FE, profile switcher, tests pending) → F00, F02, F13
+## Phase 1 — Identity & family `☑` (auth, families, members, invites, profile switcher, and security tests all done) → F00, F02, F13
 
 Goal: real auth, families, members with colors, and sharing.
 
@@ -82,10 +82,10 @@ Goal: real auth, families, members with colors, and sharing.
 - [x] `[FE]` Clerk `<SignIn>`/`<SignUp>` + route protection + `<UserButton>`; Clerk token attached via the proxy (`app/sign-in`, `app/sign-up`, `app/app/layout.tsx`)
 - [x] `[FE]` Create-family wizard (post sign-in onboarding) (`app/app/onboarding/page.tsx`)
 - [x] `[FE]` Member management UI: add member, color picker, avatar (`app/app/family/[familyId]/members/page.tsx`) — **F02** _(edit-member drawer still TODO — see Appendix A)_
-- [ ] `[FE]` Profile switcher (device + mobile)
+- [x] `[FE]` Profile switcher (device + mobile) _(member avatar filter in `components/calendar/member-filter.tsx`, state in `hooks/use-active-member.ts`; wired into `CalendarView` so both `/device` and `/app` get it. Scopes the calendar to one member; "All" clears. Strict filter — unassigned family-wide events show under "All". **Distinct from** the deferred multi-**family** switcher for co-parents.)_
 - [x] `[FE]` Invite flow: send invite (role picker), pending list, revoke, copy-link, accept-invite landing — **F13** _(link-based: `InvitationOut` exposes `token`; reached via new `FamilyMenu` header menu. Optional rename/recolour on accept deferred — BE auto-creates the persona)_
 - [x] `[BE]` Color-resolution helper (event→member→calendar) — **F02** _(`_resolve_color` in `services/calendar.py`)_
-- [ ] `[ ] ` Tests: Clerk JWT verification, webhook user-sync, cross-family authz rejection, invite accept _(invite create/list/revoke/accept covered in `tests/test_invitations.py`; JWT/webhook/cross-family authz still pending)_
+- [x] `[ ] ` Tests: Clerk JWT verification, webhook user-sync, cross-family authz rejection, invite accept _(JWT verify in `tests/test_security.py`; webhook user-sync in `tests/test_webhooks.py`; cross-family + role rejection in `tests/test_authz.py`; invite create/list/revoke/accept in `tests/test_invitations.py` — 31 backend tests green)_
 - [x] `[ ] ` AC: two Clerk users share one family with correct roles _(proven end-to-end at the API in `tests/test_invitations.py::test_accept_invitation_adds_member_and_persona`)_
 - [x] `[BE]` Realtime: emit member/family changes _(members + families routers publish `member._`/`family.updated`)\*
 
@@ -309,13 +309,13 @@ reconciled against the actual `SkylightClone/MySkylight/` tree.
 **Family dashboard** _(→ Phase 1)_
 
 - [x] App home (`app/app/page.tsx`) — fetches `/me` + `/me/memberships`; redirects to onboarding if no family
-- [ ] Edit family name (owner/adult) → `PATCH /families/{id}`
+- [x] Edit family name (owner/adult) → `PATCH /families/{id}` _(inline rename in `components/family-name-editor.tsx`, shown as the members-page title; gated to owner/adult)_
 
 **Members** _(→ Phase 1 / F02)_
 
 - [x] Members page (`app/app/family/[familyId]/members/page.tsx`) — list, add, delete
 - [x] Navigation to members from dashboard
-- [ ] Edit-member drawer (name, color, avatar URL, PIN reset) → `PATCH /members/{id}`
+- [x] Edit-member drawer (name, color, avatar URL) → `PATCH /members/{id}` _(`components/member-edit-sheet.tsx`, opened by a per-row pencil on the members page. **PIN reset deferred** with the family PIN-lock — no per-member PIN-verify flow consumes it yet)_
 
 **Invitations** _(→ Phase 1 / F13)_
 
@@ -330,8 +330,8 @@ reconciled against the actual `SkylightClone/MySkylight/` tree.
 
 **Realtime wiring** _(→ Phase 2 / F24; `hooks/use-realtime.ts` exists)_
 
-- [ ] Wire the SSE stream into the member list (member.created/updated/deleted)
-- [ ] Wire the SSE stream into the family header (family.updated)
+- [x] Wire the SSE stream into the member list (member.created/updated/deleted) _(`use-realtime.ts` invalidates `["members", familyId]`; members page now mounts `useRealtime`, and the calendar's profile switcher refreshes too)_
+- [x] Wire the SSE stream into the family header (family.updated) _(`use-realtime.ts` invalidates `["family", familyId]` + `["me","memberships"]`; surfaced on the members-page family-name header via `FamilyNameEditor`)_
 
 **Infra / deploy**
 

@@ -23,6 +23,13 @@ frontend (FE) pieces, and **acceptance criteria** (AC) that define "done".
   wizard (post sign-in); profile switcher; Clerk session token attached to the API client.
 - **AC:** A Clerk user signs in, creates a family, and is `owner`; the backend rejects any request with a
   missing/invalid Clerk JWT and any cross-family access.
+- **Status (2026-06-14):** ✅ Phase 1 complete. The AC is now covered by automated tests —
+  JWT verification (`tests/test_security.py`), webhook user-sync (`tests/test_webhooks.py`), and
+  cross-family + role rejection (`tests/test_authz.py`); a hardening pass also made the Clerk webhook
+  reject malformed (non-base64) signatures with 400 instead of 500. **Profile switcher** shipped as a
+  member-avatar filter (`components/calendar/member-filter.tsx` + `hooks/use-active-member.ts`) on both
+  `/device` and `/app`. The multi-**family** switcher for co-parents (User in >1 family) stays deferred —
+  the app still uses `memberships[0]`.
 
 ### F23 — Calendar & Events Engine
 

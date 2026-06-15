@@ -16,6 +16,8 @@ import {
 import { useRealtime } from "@/hooks/use-realtime"
 import { useGeolocation, useWeatherDays } from "@/hooks/use-weather"
 import { useVisibleHours } from "@/hooks/use-visible-hours"
+import { useActiveMember } from "@/hooks/use-active-member"
+import { MemberFilter } from "./member-filter"
 import { MonthView } from "./month-view"
 import { WeekView } from "./week-view"
 import { DayView } from "./day-view"
@@ -158,11 +160,27 @@ export function CalendarView({
     enabled: !!familyId,
   })
 
+  // Profile switcher: focus the calendar on a single member. Guard against a
+  // stale selection (e.g. the member was deleted) by falling back to "Everyone".
+  const { activeMemberId, setActiveMember } = useActiveMember(familyId, surface)
+  const effectiveMemberId =
+    activeMemberId && members.some((m) => m.id === activeMemberId) ? activeMemberId : null
+
   const { from, to } = rangeForView(view, anchor)
   const { data: occurrences = [], isLoading } = useOccurrences(
     familyId,
     from,
     to
+  )
+
+  // Occurrences shown after applying the profile filter. Strict: only events that
+  // include the focused member (unassigned family-wide events show under "All").
+  const visibleOccurrences = useMemo(
+    () =>
+      effectiveMemberId
+        ? occurrences.filter((o) => o.members.some((m) => m.id === effectiveMemberId))
+        : occurrences,
+    [occurrences, effectiveMemberId]
   )
 
   // Collect dates needing weather (day + week views only)
@@ -351,9 +369,17 @@ export function CalendarView({
         </div>
       </div>
 
+      {/* Profile switcher — filter the calendar to one member (device + app) */}
+      <MemberFilter
+        members={members}
+        activeMemberId={effectiveMemberId}
+        onSelect={setActiveMember}
+        large={isDevice}
+      />
+
       {/* Countdown strip — shown on all views */}
       <CountdownStrip
-        occurrences={occurrences}
+        occurrences={visibleOccurrences}
         onEventClick={openEdit}
         large={isDevice}
       />
@@ -367,7 +393,7 @@ export function CalendarView({
             <MonthView
               year={anchor.getFullYear()}
               month={anchor.getMonth()}
-              occurrences={occurrences}
+              occurrences={visibleOccurrences}
               onDayClick={(date) => openNew(date)}
               onEventClick={openEdit}
               large={isDevice}
@@ -376,7 +402,7 @@ export function CalendarView({
         ) : view === "week" ? (
           <WeekView
             startDate={weekStart(anchor)}
-            occurrences={occurrences}
+            occurrences={visibleOccurrences}
             onEventClick={openEdit}
             weatherByDate={weatherByDate}
             large={isDevice}
@@ -386,7 +412,7 @@ export function CalendarView({
         ) : view === "day" ? (
           <DayView
             date={anchor}
-            occurrences={occurrences}
+            occurrences={visibleOccurrences}
             onEventClick={openEdit}
             weather={weatherByDate[toYMD(anchor)]}
             large={isDevice}
@@ -396,7 +422,7 @@ export function CalendarView({
         ) : (
           <div className="thin-scrollbar h-full overflow-auto">
             <ScheduleView
-              occurrences={occurrences}
+              occurrences={visibleOccurrences}
               onEventClick={openEdit}
               onAdd={() => openNew()}
             />

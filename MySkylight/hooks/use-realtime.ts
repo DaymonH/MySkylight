@@ -22,6 +22,15 @@ export function useRealtime(familyId: string) {
           qc.invalidateQueries({ queryKey: ["calendars", familyId] })
           qc.invalidateQueries({ queryKey: ["occurrences", familyId] })
         }
+        if (msg.type.startsWith("member.")) {
+          // Refreshes the members page list and the calendar's profile switcher.
+          qc.invalidateQueries({ queryKey: ["members", familyId] })
+        }
+        if (msg.type.startsWith("family.")) {
+          // family.updated — keep the family header (name) and membership cache fresh.
+          qc.invalidateQueries({ queryKey: ["family", familyId] })
+          qc.invalidateQueries({ queryKey: ["me", "memberships"] })
+        }
       } catch {
         // ignore malformed messages
       }
