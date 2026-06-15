@@ -124,7 +124,7 @@ Both talk to one **FastAPI + SQLite** backend. Changes on a phone appear on the 
             └───────────────────────────────────────────────────────────────────────────┘
                          │ external (Phase 6/7)        │
                          ▼                             ▼
-     Clerk (identity·JWT·webhooks) · DeepSeek/OCR · Google·Outlook·Apple·Yahoo·Cozi · Weather · Instacart
+     Clerk (identity·JWT·webhooks) · DeepSeek/OCR · Google·Outlook·Apple·Yahoo·Cozi · Weather
 ```
 
 ### Multi-tenancy & auth model
@@ -185,7 +185,7 @@ Key design points:
 (+`/occurrences`) · `reminders` · `tasks` (+rotating assignment, F27) · `routines` · `lists` · `list-items` · `rewards`
 (+`/redemptions`) · `mealplans` · `recipes` (+`recipe-ingredients`) · `grocery/from-mealplan` · `grocery/from-recipes` *(F28)* ·
 `albums` · `photos` · `weather` · `settings` ·
-`magic-import` *(Phase 6)* · `sync` *(Phase 7)* · `instacart` *(Phase 4, US)*.
+`magic-import` *(Phase 6)* · `sync` *(Phase 7)*. _(`instacart` was planned for Phase 4 but is **descoped**.)_
 
 Realtime: `GET /api/v1/stream` (SSE) or `WS /api/v1/ws` — authenticated, scoped to a family,
 emits typed change events for live device updates.
@@ -203,15 +203,15 @@ Each phase is independently shippable and has an **exit criteria**. Detailed tas
 | **1** | Identity & family | **Clerk** sign-in + JWT verification + user-sync webhooks, Family setup, Members + colors + avatars, **Share Access** (invites) | Two Clerk users share one family with correct roles. |
 | **2** | Calendar core ⭐ | Calendars, Events CRUD, **recurrence**, reminders, member assignment (**color coding**), **Day/Week/Month/Schedule views**, realtime live-update, **Weather**, **Event Countdowns** | Create a recurring event on phone → appears on device instantly with correct color + weather; countdown ticks. |
 | **3** | Tasks & routines | **Tasks Manager**: chores/tasks, assignment, recurring chores, **Routines** (morning/bedtime checklists), completion + streaks | A kid checks off a morning routine on the device; parent sees it on mobile. |
-| **4** | Lists & groceries | **Custom Lists** (to-dos/groceries), items, check/categorize/assign, **Grocery → Instacart** (US, with deep-link fallback) | Shared grocery list edits sync across surfaces; "send to Instacart" works or degrades gracefully. |
+| **4** | Lists & groceries | **Custom Lists** (to-dos/groceries), items, check/categorize/assign. _(Grocery → Instacart **descoped**.)_ | Shared grocery list edits sync across surfaces. |
 | **5** | Calendar Plus I | **Rewards** (star economy), **Rotating Chores** (F27, auto-rotate assignee), **Meal Planning** (slots → calendar), **Recipes** (manual/upload, structured ingredients), **Recipe → Grocery** (F28, aggregated list), **Photo Screensaver** (albums, idle slideshow) | Stars awarded on chore completion + redeemed; a rotating chore cycles members daily; meals show on calendar; a meal plan builds an aggregated grocery list; idle device shows album slideshow. |
 | **6** | Smart / AI | **Magic Import** (email/PDF/photo → OCR → DeepSeek → draft events → confirm), **Smart recipe** generation | Forwarded flyer becomes a reviewed, saved event; recipe generated from a prompt. |
 | **7** | External sync | **Google** → **Outlook** → **Apple/Yahoo (CalDAV)** → **Cozi** (best-effort ICS). Two-way where possible. | A Google event appears in MySkylight and vice-versa; others import read-only. |
 | **8** | Device & system | **Device Linking** (pairing, multi-screen), **Sleep Mode**, orientation, default views | Two paired screens share data; screen sleeps/wakes on schedule. |
 | **9** | Polish & hardening | Web **push notifications** + reminder delivery, offline/PWA caching, a11y, kiosk wake-lock, perf, backups, deploy | Reminder fires as a push; app usable offline; Lighthouse PWA passes; one-command deploy. |
 
-> Weather and Countdowns ride with Phase 2 because they attach to events. Instacart is isolated in
-> Phase 4 (partner-gated; we ship a graceful fallback). Sync is deliberately late (Phase 7).
+> Weather and Countdowns ride with Phase 2 because they attach to events. Instacart (the Phase-4
+> Grocery hand-off) is **descoped** — not used. Sync is deliberately late (Phase 7).
 
 ---
 
@@ -238,7 +238,7 @@ Each phase is independently shippable and has an **exit criteria**. Detailed tas
 |---|---|---|
 | **Cozi has no public API** | Can't truly two-way sync | Best-effort `.ics` feed/import only; set expectations in UI. |
 | **DeepSeek has no public vision API** | Magic Import on photos | OCR pre-stage; keep AI layer swappable; revalidate at Phase 6. |
-| **Instacart API is partner-gated (US-only)** | Grocery 1-tap order | Implement official API if approved; else deep-link/affiliate export fallback. |
+| ~~Instacart API is partner-gated (US-only)~~ | ~~Grocery 1-tap order~~ | **Descoped** — feature dropped (owner doesn't use Instacart), so the risk no longer applies. |
 | **CalDAV quirks (Apple/Yahoo)** | Flaky sync | Use a battle-tested CalDAV client lib; read-only first. |
 | **Next.js 16 is pre-GA-ish / breaking** | FE churn | Follow bundled docs in `node_modules/next/dist/docs/`; pin versions. |
 | **Clerk dependency / pricing / outage** | Auth is third-party | Verify JWTs networklessly (cached JWKS) so brief Clerk outages don't break verified sessions; webhook + JIT user sync; keep identity isolated so it's swappable. |

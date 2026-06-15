@@ -137,16 +137,17 @@ frontend (FE) pieces, and **acceptance criteria** (AC) that define "done".
   two-device smoke is the final sign-off.
 - _Phase 4_
 
-### F05 — Grocery Shopping (Instacart) 🔌
+### F05 — Grocery Shopping (Instacart) 🔌 — ❌ DESCOPED
 
 > _"Add all items from your Grocery List to an Instacart order in just 2 taps. (US only)"_
 
-- **Approach:** "Send to Instacart" from a grocery list. Use Instacart's official API if approved;
-  otherwise a deep-link/affiliate "create cart" fallback. US-gated in UI.
-- **BE:** `/instacart` action that maps list items → Instacart payload; feature flag + region check.
-- **FE:** "Send to Instacart" button on grocery lists; graceful disabled state outside US.
-- **AC:** Tapping sends current grocery items to Instacart (API or deep-link); clear messaging if unavailable.
-- _Phase 4_
+- **Status (2026-06-15):** ❌ **Descoped — will not be built.** The owner doesn't use Instacart, so the
+  hand-off (and its research spike) is dropped, not deferred. F04 grocery lists are the end of the
+  grocery flow; **F28** (recipe → grocery aggregation) still writes into an F04 grocery `List`, it just
+  no longer pushes anywhere external. Kept here for traceability against Skylight's feature list. If ever
+  revived: Instacart's API is partner-gated/US-only, so the realistic path is a deep-link/affiliate
+  "create cart" URL behind a region flag.
+- _~~Phase 4~~ — removed from scope._
 
 ### F06 — Customized Views
 
@@ -302,25 +303,26 @@ frontend (FE) pieces, and **acceptance criteria** (AC) that define "done".
   advances the cycle without crashing; non-rotating chores are unchanged.
 - _Depends on **F01** (Tasks). Phase 5._
 
-### F28 — Recipe → Grocery List (ingredient aggregation) ⭐🔌
+### F28 — Recipe → Grocery List (ingredient aggregation) ⭐
 
 > _Inspired by **Skylight**'s "advanced grocery integration" (auto-calculates ingredient quantities for
 > meal plans) and **Cozyla**'s recipe-to-grocery list: build a grocery list from selected recipes or a
-> week's meal plan, **summing duplicate ingredients**. Pairs with F05 to push the result to Instacart._
+> week's meal plan, **summing duplicate ingredients**._ _(The original F05 Instacart hand-off is
+> descoped, so the aggregated list is the end of the flow.)_
 
 - **Approach:** Recipes carry **structured ingredients** (quantity, unit, name). A "build grocery list"
   action takes selected recipes **or** a meal-plan date range, **aggregates like ingredients** (2 + 3
   eggs → 5 eggs; merges compatible units, lists incompatible ones separately), and writes them as
-  `ListItem`s on a grocery `List` — which F05 can then send to Instacart. (Cozyla skips quantities; we
-  do the Skylight-style quantity math, with a review step so users can adjust.)
+  `ListItem`s on a grocery `List`. (Cozyla skips quantities; we do the Skylight-style quantity math, with
+  a review step so users can adjust.)
 - **BE:** `RecipeIngredient` (qty `float|null`, unit `str|null`, name) on `Recipe`; an aggregation
   service (unit-normalization + name canonicalization); `POST /families/{id}/grocery/from-mealplan?from&to`
   and `…/grocery/from-recipes` → creates/updates a grocery `List`.
 - **FE:** "Add to grocery list" on a recipe and on the weekly meal-planner; a **review step** showing the
-  aggregated, editable quantities before committing; then the existing F04 list + F05 "Send to Instacart".
+  aggregated, editable quantities before committing → writes into the existing F04 grocery list.
 - **AC:** Two recipes sharing an ingredient produce one combined line with the summed quantity; a week's
   meal plan generates a complete grocery list; quantities are editable before save.
-- _Depends on **F04** (lists) + **F15** (recipes/meal plan); feeds **F05** (Instacart). Phase 5._
+- _Depends on **F04** (lists) + **F15** (recipes/meal plan). Phase 5._
 
 ### F17 — Magic Import 🤖⭐
 
@@ -413,7 +415,7 @@ frontend (FE) pieces, and **acceptance criteria** (AC) that define "done".
 |     1 | F00, F02, F13                                        |
 |     2 | F23, F24, F06, F07, F08, F02, F26                    |
 |     3 | F01                                                  |
-|     4 | F04, F05                                             |
+|     4 | F04 _(F05 Instacart descoped)_                       |
 |     5 | F14, F15, F16, F27, F28                              |
 |     6 | F17, F15 (AI recipes + URL/photo recipe import)      |
 |     7 | F18, F19, F20, F21, F22, F25                         |
