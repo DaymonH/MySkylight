@@ -1,4 +1,3 @@
-import { UserButton } from "@clerk/nextjs"
 import { CalendarDaysIcon } from "lucide-react"
 
 import { SettingsButton } from "@/components/settings-dialog"
@@ -21,10 +20,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         <div className="flex items-center gap-1">
           <FamilyMenu />
           <SettingsButton />
-          <UserButton appearance={{ elements: { avatarBox: "size-8" } }} />
         </div>
       </header>
-      <main className="flex flex-1 flex-col">{children}</main>
+      <main className="flex min-h-0 flex-1 flex-col">{children}</main>
     </div>
   )
 }

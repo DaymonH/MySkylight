@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect } from "react"
+import { useEffect, useState } from "react"
 import { useForm, Controller } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
@@ -180,9 +180,27 @@ export function EventSheet({
 
   const allDay = watch("all_day")
 
+  // Editing touches a shared family event, so confirm before persisting. New
+  // events submit straight away — there's nothing to clobber yet. handleSubmit
+  // only calls this once the form validates, so the confirm never fires on an
+  // invalid form.
+  const [confirmOpen, setConfirmOpen] = useState(false)
+  const [pendingValues, setPendingValues] = useState<FormValues | null>(null)
+
   // Map the sentinel "none" back to "" so the parent's payload logic is unchanged.
   function submit(values: FormValues) {
-    onSubmit({ ...values, rrule: values.rrule === "none" ? "" : values.rrule })
+    const mapped = { ...values, rrule: values.rrule === "none" ? "" : values.rrule }
+    if (editing) {
+      setPendingValues(mapped)
+      setConfirmOpen(true)
+    } else {
+      onSubmit(mapped)
+    }
+  }
+
+  function confirmSave() {
+    if (pendingValues) onSubmit(pendingValues)
+    setConfirmOpen(false)
   }
 
   return (
@@ -456,6 +474,24 @@ export function EventSheet({
             </Button>
           </SheetFooter>
         </form>
+
+        {/* Confirm before saving edits to an existing (shared) event. */}
+        <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Save changes to this event?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This updates the event for everyone in the family.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={isPending}>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={confirmSave} disabled={isPending}>
+                {isPending ? "Saving…" : "Save changes"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </SheetContent>
     </Sheet>
   )

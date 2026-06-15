@@ -21,8 +21,22 @@ export function packDayEvents(evts: OccurrenceOut[]): PositionedEvent[] {
       const start = new Date(occ.start_dt)
       const end = new Date(occ.end_dt)
       const startMin = start.getHours() * 60 + start.getMinutes()
-      let endMin = end.getHours() * 60 + end.getMinutes()
-      // Same-day clamp + guarantee a visible minimum slot.
+      // An event ending on a later calendar day (overnight / multi-day) should
+      // run to the bottom of this day's grid, not wrap back to an earlier
+      // minute-of-day (e.g. 10pm–1am must not collapse to a 30-min sliver).
+      const startDay = new Date(
+        start.getFullYear(),
+        start.getMonth(),
+        start.getDate()
+      ).getTime()
+      const endDay = new Date(
+        end.getFullYear(),
+        end.getMonth(),
+        end.getDate()
+      ).getTime()
+      let endMin =
+        endDay > startDay ? 24 * 60 : end.getHours() * 60 + end.getMinutes()
+      // Guarantee a visible minimum slot for zero/negative-length same-day events.
       if (!Number.isFinite(endMin) || endMin <= startMin) endMin = startMin + 30
       return { occ, startMin, endMin, col: 0, cols: 1 }
     })

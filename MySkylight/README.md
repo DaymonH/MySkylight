@@ -8,6 +8,9 @@ Backend: [HomeServerAPI](https://github.com/DaymonH/HomeServerAPI) (FastAPI on R
 
 Run both the frontend and backend locally so you can see changes instantly without deploying.
 
+**Prerequisites:** Node.js 20+ and npm (works the same on macOS, Linux, and Windows). On macOS,
+install with `brew install node`.
+
 ### 1. Start the backend
 
 Follow the **Local Development** section in the [HomeServerAPI README](https://github.com/DaymonH/HomeServerAPI). The backend must be running on `http://localhost:8001` before starting the frontend.

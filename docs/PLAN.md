@@ -152,10 +152,11 @@ Event  1───* Reminder
 Event  1───0..1 Countdown
 Calendar 0..1─ ExternalAccount (provider tokens/sync state)         [Phase 7]
 Family 1───* Task 1───* TaskCompletion
+Task   *───* Member            (chore assignment; fixed or rotating roster — F27)  [TaskAssignment(order)]
 Member 1───* Routine 1───* Task        (named checklist: "morning", "bedtime")
 Family 1───* List 1───* ListItem       (groceries / to-dos)
 Family 1───* Reward ;  Member 1─ StarBalance ;  Reward 1───* Redemption
-Family 1───* MealPlan *───0..1 Recipe ;  Family 1───* Recipe
+Family 1───* MealPlan *───0..1 Recipe ;  Family 1───* Recipe 1───* RecipeIngredient  (qty/unit/name → grocery aggregation, F28)
 Family 1───* Album 1───* Photo
 Family 1───* WeatherCache              (by location)
 Family 1───* MagicImportJob            (AI ingestion + extracted drafts)  [Phase 6]
@@ -168,6 +169,11 @@ Key design points:
 - **Recurrence** stored as **RRULE** on `Event` with per-occurrence **overrides/exceptions**
   (edit-this / edit-following / edit-all). `TaskCompletion` is logged **per occurrence** so chores
   and routines track streaks without exploding rows.
+- **Rotating chores (F27):** a recurring `Task` can rotate through an ordered member roster; the
+  per-occurrence assignee is computed deterministically from the occurrence index (`roster[i % n]`),
+  so no per-day assignee rows are stored and every device agrees.
+- **Recipe → grocery (F28):** `Recipe` ingredients are **structured** (qty/unit/name) so a meal plan
+  or a set of recipes can be aggregated (summing/merging like items) into grocery `ListItem`s.
 - **Color** resolves in priority order: event override → assigned member color → calendar color.
 - **Soft delete + AuditLog** so shared-household edits are traceable.
 
@@ -176,8 +182,9 @@ Key design points:
 ## 6. API surface (REST `/api/v1`, + realtime channel)
 
 `me` · `webhooks/clerk` · `families` · `memberships` · `members` · `invitations` · `devices` (pairing) · `calendars` · `events`
-(+`/occurrences`) · `reminders` · `tasks` · `routines` · `lists` · `list-items` · `rewards`
-(+`/redemptions`) · `mealplans` · `recipes` · `albums` · `photos` · `weather` · `settings` ·
+(+`/occurrences`) · `reminders` · `tasks` (+rotating assignment, F27) · `routines` · `lists` · `list-items` · `rewards`
+(+`/redemptions`) · `mealplans` · `recipes` (+`recipe-ingredients`) · `grocery/from-mealplan` · `grocery/from-recipes` *(F28)* ·
+`albums` · `photos` · `weather` · `settings` ·
 `magic-import` *(Phase 6)* · `sync` *(Phase 7)* · `instacart` *(Phase 4, US)*.
 
 Realtime: `GET /api/v1/stream` (SSE) or `WS /api/v1/ws` — authenticated, scoped to a family,
@@ -197,7 +204,7 @@ Each phase is independently shippable and has an **exit criteria**. Detailed tas
 | **2** | Calendar core ⭐ | Calendars, Events CRUD, **recurrence**, reminders, member assignment (**color coding**), **Day/Week/Month/Schedule views**, realtime live-update, **Weather**, **Event Countdowns** | Create a recurring event on phone → appears on device instantly with correct color + weather; countdown ticks. |
 | **3** | Tasks & routines | **Tasks Manager**: chores/tasks, assignment, recurring chores, **Routines** (morning/bedtime checklists), completion + streaks | A kid checks off a morning routine on the device; parent sees it on mobile. |
 | **4** | Lists & groceries | **Custom Lists** (to-dos/groceries), items, check/categorize/assign, **Grocery → Instacart** (US, with deep-link fallback) | Shared grocery list edits sync across surfaces; "send to Instacart" works or degrades gracefully. |
-| **5** | Calendar Plus I | **Rewards** (star economy), **Meal Planning** (slots → calendar), **Recipes** (manual/upload), **Photo Screensaver** (albums, idle slideshow) | Stars awarded on chore completion + redeemed; meals show on calendar; idle device shows album slideshow. |
+| **5** | Calendar Plus I | **Rewards** (star economy), **Rotating Chores** (F27, auto-rotate assignee), **Meal Planning** (slots → calendar), **Recipes** (manual/upload, structured ingredients), **Recipe → Grocery** (F28, aggregated list), **Photo Screensaver** (albums, idle slideshow) | Stars awarded on chore completion + redeemed; a rotating chore cycles members daily; meals show on calendar; a meal plan builds an aggregated grocery list; idle device shows album slideshow. |
 | **6** | Smart / AI | **Magic Import** (email/PDF/photo → OCR → DeepSeek → draft events → confirm), **Smart recipe** generation | Forwarded flyer becomes a reviewed, saved event; recipe generated from a prompt. |
 | **7** | External sync | **Google** → **Outlook** → **Apple/Yahoo (CalDAV)** → **Cozi** (best-effort ICS). Two-way where possible. | A Google event appears in MySkylight and vice-versa; others import read-only. |
 | **8** | Device & system | **Device Linking** (pairing, multi-screen), **Sleep Mode**, orientation, default views | Two paired screens share data; screen sleeps/wakes on schedule. |

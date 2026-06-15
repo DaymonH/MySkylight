@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { useTheme } from "next-themes"
 import { SettingsIcon } from "lucide-react"
+import { UserButton } from "@clerk/nextjs"
 
 import { Button } from "@/components/ui/button"
 import {
@@ -66,6 +67,17 @@ export function SettingsButton({ className }: { className?: string }) {
         </DialogHeader>
 
         <div className="grid gap-6 py-2">
+          {/* Account — the Clerk user menu (manage account / sign out) */}
+          <section className="grid gap-3">
+            <h3 className="text-sm font-medium">Account</h3>
+            <div className="flex items-center justify-between rounded-md border bg-background px-3 py-2.5">
+              <span className="text-sm text-muted-foreground">
+                Manage your account or sign out
+              </span>
+              <UserButton appearance={{ elements: { avatarBox: "size-8" } }} />
+            </div>
+          </section>
+
           {/* Theme */}
           <section className="grid gap-3">
             <h3 className="text-sm font-medium">Theme</h3>

@@ -11,6 +11,7 @@ import { CheckIcon, PencilIcon, Trash2Icon, UserPlusIcon, UsersIcon, XIcon } fro
 import { useApi } from "@/hooks/use-api"
 import { useRealtime } from "@/hooks/use-realtime"
 import { FamilyNameEditor } from "@/components/family-name-editor"
+import { FamilyTimezoneSelect } from "@/components/family-timezone-select"
 import { MemberEditSheet } from "@/components/member-edit-sheet"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -103,6 +104,12 @@ export default function MembersPage({ params }: { params: Promise<{ familyId: st
         <FamilyNameEditor familyId={familyId} />
         <p className="text-muted-foreground text-sm">Manage members and sharing for your family.</p>
       </header>
+
+      <Card>
+        <CardContent>
+          <FamilyTimezoneSelect familyId={familyId} />
+        </CardContent>
+      </Card>
 
       <div className="flex items-center justify-between">
         <div>

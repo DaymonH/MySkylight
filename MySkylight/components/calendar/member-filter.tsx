@@ -13,6 +13,8 @@ interface MemberFilterProps {
   onSelect: (memberId: string | null) => void
   /** Device (wall-display) treatment — larger avatars. */
   large?: boolean
+  /** Extra classes from the caller (borders/flex when sharing a band). */
+  className?: string
 }
 
 function initials(name: string) {
@@ -25,17 +27,24 @@ function initials(name: string) {
  * calendar to one person. Tapping the active member (or "All") clears the filter.
  * Shared by `/device` and `/app` via `CalendarView`.
  */
-export function MemberFilter({ members, activeMemberId, onSelect, large = false }: MemberFilterProps) {
+export function MemberFilter({
+  members,
+  activeMemberId,
+  onSelect,
+  large = false,
+  className,
+}: MemberFilterProps) {
   if (members.length === 0) return null
 
-  const avatarSize = large ? "size-12 text-base" : "size-9 text-xs"
+  const avatarSize = large ? "size-11 text-base" : "size-9 text-xs"
   const labelSize = large ? "text-xs" : "text-[10px]"
 
   return (
     <div
       className={cn(
-        "thin-scrollbar flex items-center gap-2 overflow-x-auto border-b px-3 py-2",
-        large && "gap-3 px-5 py-3",
+        "thin-scrollbar flex items-center gap-2 overflow-x-auto px-3 py-2",
+        large && "gap-3 px-5 py-2.5",
+        className,
       )}
       role="group"
       aria-label="Filter calendar by member"
@@ -45,14 +54,14 @@ export function MemberFilter({ members, activeMemberId, onSelect, large = false 
         type="button"
         onClick={() => onSelect(null)}
         aria-pressed={activeMemberId === null}
-        className="flex flex-shrink-0 flex-col items-center gap-1 focus-visible:outline-none"
+        className="group flex flex-shrink-0 flex-col items-center gap-1 focus-visible:outline-none"
       >
         <span
           className={cn(
-            "bg-muted text-muted-foreground flex items-center justify-center rounded-full font-medium transition",
+            "bg-muted text-muted-foreground ring-offset-background flex items-center justify-center rounded-full font-medium transition group-focus-visible:ring-2 group-focus-visible:ring-ring group-focus-visible:ring-offset-2",
             avatarSize,
             activeMemberId === null
-              ? "ring-primary ring-offset-background ring-2 ring-offset-2"
+              ? "ring-primary ring-2 ring-offset-2"
               : "opacity-60 hover:opacity-100",
           )}
         >
@@ -74,11 +83,11 @@ export function MemberFilter({ members, activeMemberId, onSelect, large = false 
             onClick={() => onSelect(active ? null : m.id)}
             aria-pressed={active}
             title={m.name}
-            className="flex flex-shrink-0 flex-col items-center gap-1 focus-visible:outline-none"
+            className="group flex flex-shrink-0 flex-col items-center gap-1 focus-visible:outline-none"
           >
             <span
               className={cn(
-                "ring-offset-background flex items-center justify-center rounded-full font-semibold text-white transition",
+                "ring-offset-background flex items-center justify-center rounded-full font-semibold text-white transition group-focus-visible:ring-2 group-focus-visible:ring-ring group-focus-visible:ring-offset-2",
                 avatarSize,
                 active ? "ring-2 ring-offset-2" : "opacity-60 hover:opacity-100",
               )}

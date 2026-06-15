@@ -5,7 +5,8 @@ import { useQueryClient } from "@tanstack/react-query"
 
 /**
  * Subscribes to the family's SSE stream and reconciles the TanStack Query cache
- * as `event.*` / `calendar.*` / `member.*` / `family.*` events arrive.
+ * as `event.*` / `calendar.*` / `member.*` / `family.*` / `task.*` / `routine.*`
+ * events arrive.
  *
  * Resilience: a plain `EventSource` auto-retries transient drops, but iOS Safari
  * tears the stream down when the tab is backgrounded and never resumes it — the
@@ -33,6 +34,9 @@ export function useRealtime(familyId: string) {
       qc.invalidateQueries({ queryKey: ["members", familyId] })
       qc.invalidateQueries({ queryKey: ["family", familyId] })
       qc.invalidateQueries({ queryKey: ["me", "memberships"] })
+      qc.invalidateQueries({ queryKey: ["task-occurrences", familyId] })
+      qc.invalidateQueries({ queryKey: ["tasks", familyId] })
+      qc.invalidateQueries({ queryKey: ["routines", familyId] })
     }
 
     function handle(msg: { type: string }) {
@@ -56,6 +60,18 @@ export function useRealtime(familyId: string) {
         // family.updated — keep the family header (name) and membership cache fresh.
         qc.invalidateQueries({ queryKey: ["family", familyId] })
         qc.invalidateQueries({ queryKey: ["me", "memberships"] })
+      }
+      if (msg.type.startsWith("task.")) {
+        // task.created/updated/deleted + task.completed/uncompleted — refresh the
+        // device chore board, the management list, and any streak badges.
+        qc.invalidateQueries({ queryKey: ["task-occurrences", familyId] })
+        qc.invalidateQueries({ queryKey: ["tasks", familyId] })
+        qc.invalidateQueries({ queryKey: ["task-streak", familyId] })
+      }
+      if (msg.type.startsWith("routine.")) {
+        qc.invalidateQueries({ queryKey: ["routines", familyId] })
+        qc.invalidateQueries({ queryKey: ["tasks", familyId] })
+        qc.invalidateQueries({ queryKey: ["task-occurrences", familyId] })
       }
     }
 

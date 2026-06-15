@@ -65,21 +65,27 @@ frontend (FE) pieces, and **acceptance criteria** (AC) that define "done".
 > _"Encourage kids' independence and healthy habits with a fun, interactive checklist for daily routines and chores."_
 
 - **Approach:** Tasks/chores assignable to members, optionally recurring, grouped into **Routines**
-  (e.g. "morning", "bedtime"). Big, satisfying checkable UI on the device.
+  (e.g. "morning", "bedtime"). Big, satisfying checkable UI on the device. The device board shows
+  **daily habits (routines) and one-off chores together** in one per-member view so nothing is missed
+  (parity with Skylight's "unified Task/Routine view"). _Auto-rotating assignment is **F27**._
 - **BE:** `Task`, `Routine`, `TaskCompletion` (per-occurrence); `/tasks`, `/routines`,
   `/tasks/{id}/complete`. Recurrence reuses the RRULE engine.
 - **FE:** Per-member checklist cards on device + management in `/app`; completion animation.
 - **AC:** Assign a recurring chore; child checks it off on device; resets next day; streak counts.
-- **Status (2026-06-14):** ◐ Phase 3 **backend complete & tested** (8 tests in `tests/test_tasks.py`, suite
+- **Status (2026-06-14):** ☑ Phase 3 complete (full stack). Backend **complete & tested** (8 tests in `tests/test_tasks.py`, suite
   39 green). Models `Task`/`Routine`/`TaskAssignment`/`TaskCompletion` (migration `003`); date-based
   recurrence anchored at `start_date` (reuses dateutil RRULE; one-off = no rrule); endpoints under
   `/families/{id}/routines` + `/families/{id}/tasks` incl. `…/tasks/occurrences?from&to`,
   idempotent `POST/DELETE …/{task_id}/complete`, and `GET …/{task_id}/streak?member_id`. Roles: owner/adult
   manage definitions; **children may check off, viewers may not**. Realtime emits `task.*`/`routine.*`.
   Completions key on `(task, member, occurrence_date)` so each new day resets naturally; streak lets a
-  still-pending "today" slide without breaking the run. **Not pushed yet** (HomeServerAPI auto-deploys on
-  push). Remaining: the FE — device checklist cards, `/app` task/routine management, routine builder,
-  streak indicator, and `task.*` SSE wiring.
+  still-pending "today" slide without breaking the run.
+  **FE now built:** device chore board at `/device/chores` (per-member cards, routine grouping, optimistic
+  completion + check-pop/strikethrough, plus a Calendar/Chores kiosk nav), `/app` task & routine management
+  (`app/app/family/[familyId]/tasks`) with a routine builder and per-member streak badges, and
+  `task.*`/`routine.*` SSE wiring (`hooks/use-realtime.ts`). Build + typecheck + 39 backend tests green;
+  live two-device smoke pending. One backend tweak: `update_task` now honours explicit nulls so a task can
+  be moved out of a routine or have its rrule/notes cleared. **Not pushed yet** (HomeServerAPI auto-deploys on push).
 - _Phase 3_
 
 ### F02 — Color Coding
@@ -245,8 +251,10 @@ frontend (FE) pieces, and **acceptance criteria** (AC) that define "done".
 > _"Plan breakfast, lunch, dinner, snacks and add them to the calendar… upload/input recipes, create new ones with Smart tech."_
 
 - **Approach:** Weekly meal grid (4 slots/day) referencing recipes or free text; planned meals can
-  surface on the calendar. Recipe library with manual entry/upload; AI generation in F17/Phase 6.
-- **BE:** `MealPlan`, `Recipe`; `/mealplans`, `/recipes`; option to project meals as calendar items.
+  surface on the calendar. Recipe library with manual entry/upload; **AI generation + import from a
+  URL or photo** in F17/Phase 6. Recipes carry **structured ingredients (qty/unit/name)** so a meal
+  plan can be turned into an aggregated grocery list — see **F28**.
+- **BE:** `MealPlan`, `Recipe` (+ `RecipeIngredient`); `/mealplans`, `/recipes`; option to project meals as calendar items.
 - **FE:** Weekly meal planner board, recipe library + detail, "add to calendar".
 - **AC:** Assign dinner for a week; recipes saved/edited; meals optionally show on the calendar.
 - _Phase 5 (AI recipe gen lands with Phase 6)_
@@ -262,13 +270,54 @@ frontend (FE) pieces, and **acceptance criteria** (AC) that define "done".
 - **AC:** Upload to an album, mark featured; device idle → smooth slideshow of those photos.
 - _Phase 5_
 
+### F27 — Rotating Chore Assignment ⭐
+
+> _Inspired by **Hearth**'s rotating chores: a recurring chore automatically rotates between family
+> members each occurrence (e.g. dishes — Mon→Alex, Tue→Sam, Wed→Jordan, then back to Alex)._
+
+- **Approach:** A recurring `Task` can use a **rotating** assignment strategy over an ordered roster of
+  members instead of a fixed assignee. The assignee for each occurrence is resolved **deterministically
+  from the occurrence's index** in the series (`roster[index % len(roster)]`), so every device computes
+  the same person and it stays stable across reschedules — no stored per-day assignee needed. Default
+  stays **fixed** assignment (current F01 behavior).
+- **BE:** `assignment_strategy` (`fixed` | `rotating`) + an **ordered** rotation roster on `Task` (an
+  order column on `TaskAssignment`, or a `rotation_order` list); occurrence→assignee resolver that skips
+  soft-deleted members; the resolved assignee is returned with each `…/tasks/occurrences` row.
+- **FE:** A "Rotate between members" toggle + drag-orderable member list in the task editor; the device
+  chore board shows **today's** rotated assignee per task (with an optional "up next" hint).
+- **AC:** A rotating dishes chore shows a different, correctly-cycling member each day; removing a member
+  advances the cycle without crashing; non-rotating chores are unchanged.
+- _Depends on **F01** (Tasks). Phase 5._
+
+### F28 — Recipe → Grocery List (ingredient aggregation) ⭐🔌
+
+> _Inspired by **Skylight**'s "advanced grocery integration" (auto-calculates ingredient quantities for
+> meal plans) and **Cozyla**'s recipe-to-grocery list: build a grocery list from selected recipes or a
+> week's meal plan, **summing duplicate ingredients**. Pairs with F05 to push the result to Instacart._
+
+- **Approach:** Recipes carry **structured ingredients** (quantity, unit, name). A "build grocery list"
+  action takes selected recipes **or** a meal-plan date range, **aggregates like ingredients** (2 + 3
+  eggs → 5 eggs; merges compatible units, lists incompatible ones separately), and writes them as
+  `ListItem`s on a grocery `List` — which F05 can then send to Instacart. (Cozyla skips quantities; we
+  do the Skylight-style quantity math, with a review step so users can adjust.)
+- **BE:** `RecipeIngredient` (qty `float|null`, unit `str|null`, name) on `Recipe`; an aggregation
+  service (unit-normalization + name canonicalization); `POST /families/{id}/grocery/from-mealplan?from&to`
+  and `…/grocery/from-recipes` → creates/updates a grocery `List`.
+- **FE:** "Add to grocery list" on a recipe and on the weekly meal-planner; a **review step** showing the
+  aggregated, editable quantities before committing; then the existing F04 list + F05 "Send to Instacart".
+- **AC:** Two recipes sharing an ingredient produce one combined line with the summed quantity; a week's
+  meal plan generates a complete grocery list; quantities are editable before save.
+- _Depends on **F04** (lists) + **F15** (recipes/meal plan); feeds **F05** (Instacart). Phase 5._
+
 ### F17 — Magic Import 🤖⭐
 
 > _"Forward emails and PDFs, or upload photos of lists/flyers to automatically add dates and details."_
 
 - **Approach:** Ingest via email-forwarding address / PDF / image upload → **OCR/text extraction** →
   **DeepSeek** structured extraction → **draft events/list items** the user reviews & confirms.
-  (DeepSeek is text-first, so OCR feeds it text — see PLAN §2.)
+  (DeepSeek is text-first, so OCR feeds it text — see PLAN §2.) The **same ingest pipeline also drafts
+  recipes** from a URL or photo (Hearth-style "Smart Companion") feeding the F15 recipe library / F28
+  grocery aggregation.
 - **BE:** `MagicImportJob`; ingest endpoints (`/magic-import` upload + inbound-email webhook);
   OCR stage (PDF text/Tesseract); `ai/provider.py` (DeepSeek) → strict JSON drafts; confirm → create.
 - **FE:** Upload/forward UI; "review extracted events" screen with edit-before-save.
@@ -352,8 +401,8 @@ frontend (FE) pieces, and **acceptance criteria** (AC) that define "done".
 |     2 | F23, F24, F06, F07, F08, F02, F26                    |
 |     3 | F01                                                  |
 |     4 | F04, F05                                             |
-|     5 | F14, F15, F16                                        |
-|     6 | F17, F15 (AI recipes)                                |
+|     5 | F14, F15, F16, F27, F28                              |
+|     6 | F17, F15 (AI recipes + URL/photo recipe import)      |
 |     7 | F18, F19, F20, F21, F22, F25                         |
 |     8 | F09, F12                                             |
 |     9 | notifications, offline, a11y, deploy (cross-cutting) |

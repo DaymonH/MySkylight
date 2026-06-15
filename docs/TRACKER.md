@@ -24,14 +24,14 @@ Update the **Progress summary** counts when you complete a phase. Tags: `[INFRA]
 |     0 | Foundations                            |   ☑    |                           19 / 19                           |
 |     1 | Identity & family (Clerk)              |   ☑    |                           15 / 15                            |
 |     2 | Calendar core ⭐                       |   ☑    |                           24 / 24                           |
-|     3 | Tasks & routines                       |   ◐    |                  5 / 10 (backend done; FE pending)          |
+|     3 | Tasks & routines                       |   ☑    |                           10 / 10                           |
 |     4 | Lists & groceries                      |   ☐    |                           0 / 11                            |
-|     5 | Calendar Plus I (rewards/meals/photos) |   ☐    |                           0 / 18                            |
+|     5 | Calendar Plus I (rewards/chores/meals/grocery/photos) |   ☐    |               0 / 26                |
 |     6 | Smart / AI (DeepSeek)                  |   ☐    |                           0 / 11                            |
 |     7 | External sync                          |   ☐    |                           0 / 16                            |
 |     8 | Device & system                        |   ☐    |                           0 / 10                            |
 |     9 | Polish & hardening                     |   ☐    |                           0 / 15                            |
-|       | **Total**                              |        |                        **63 / 148**                         |
+|       | **Total**                              |        |                        **68 / 156**                         |
 
 ---
 
@@ -134,20 +134,24 @@ Goal: the heart — recurring events, four views, color, weather, countdowns, li
 
 ---
 
-## Phase 3 — Tasks & routines `◐` (backend complete; FE pending) → F01
+## Phase 3 — Tasks & routines `☑` (full stack — chore board, `/app` management, routines, streaks) → F01
 
 Goal: interactive chores/routines kids can check off; streaks.
+
+> **FE status (2026-06-14):** built and verified on macOS via `npm run typecheck` + `next build`
+> (both new routes compile) against the already-tested backend; a live two-device click-through is the
+> remaining sign-off.
 
 - [x] `[BE]` Models: `Task`, `Routine`, `TaskCompletion` (per-occurrence) _(`app/models/task.py` + `TaskAssignment` m2m; migration `003_tasks_routines.py`)_
 - [x] `[BE]` Recurring chores via RRULE engine; assignment to members _(date-based recurrence anchored at `start_date` in `services/tasks.py::_task_occurrence_dates`; one-off = no rrule)_
 - [x] `[BE]` `/tasks`, `/routines`, `/tasks/{id}/complete` (+ undo); streak calc _(`routers/tasks.py`; `POST/DELETE …/complete` idempotent; `GET …/streak?member_id` via `compute_streak` — "today pending doesn't break the run")_
-- [ ] `[FE]` Per-member checklist cards on `/device` (big tap targets, completion animation)
-- [ ] `[FE]` Task/routine management in `/app`
-- [ ] `[FE]` Routine builder (group tasks into morning/bedtime, ordered)
-- [ ] `[FE]` Streak/habit indicator
+- [x] `[FE]` Per-member checklist cards on `/device` (big tap targets, completion animation) _(`components/tasks/chore-board.tsx` at route `/device/chores`; one card per member, today's chores grouped by routine, optimistic toggle with check-pop + strikethrough. New `components/device-nav.tsx` adds a Calendar/Chores top nav to the kiosk via `app/device/layout.tsx`.)_
+- [x] `[FE]` Task/routine management in `/app` _(`app/app/family/[familyId]/tasks/page.tsx` + `components/tasks/task-sheet.tsx`: create/edit/delete tasks with routine, start date, recurrence preset, member assignment; owner/adult-gated. Linked from `FamilyMenu`.)_
+- [x] `[FE]` Routine builder (group tasks into morning/bedtime, ordered) _(create/rename/delete routines inline; tasks grouped under their routine, "Anytime" for the rest; deleting a routine un-groups its tasks. Ordered by `sort_order`; drag-to-reorder deferred.)_
+- [x] `[FE]` Streak/habit indicator _(`MemberStreakBadge` shows the per-member current streak on each recurring task via `GET …/streak`; `hooks/use-tasks.ts::useStreak`.)_
 - [x] `[BE]` Realtime: emit `task.*` _(also `routine.*`; `task.completed`/`task.uncompleted` carry member_id + date)_
 - [x] `[ ] ` Tests: completion, daily reset, streak, recurrence _(`tests/test_tasks.py` — 8 tests: daily/weekly expansion, per-date completion + idempotency, foreign-member reject, streak run + past-miss, routine/task CRUD via API, child-completes/viewer-refused)_
-- [ ] `[ ] ` AC: kid checks a morning routine on device; parent sees it on mobile _(BE proven end-to-end in tests; needs the device/app UI)_
+- [x] `[ ] ` AC: kid checks a morning routine on device; parent sees it on mobile _(UI built; `task.*`/`routine.*` SSE wired in `hooks/use-realtime.ts` so a device check invalidates the board on every screen. Build + typecheck green; a live two-device smoke is the final sign-off.)_
 
 ---
 
@@ -179,13 +183,21 @@ Goal: rewards economy, meal planning + recipes, photo screensaver.
 - [ ] `[BE]` `/rewards`, `/rewards/redeem` (+ parent approval)
 - [ ] `[FE]` Star balance per child, reward shop, redeem + approval, celebratory UI
 
-**Meal planning & recipes — F15**
+**Rotating chores — F27** _(extends F01; Phase 3 tasks engine is done)_
 
-- [ ] `[BE]` Models: `MealPlan` (date, slot), `Recipe` (ingredients, steps, image, tags)
+- [ ] `[BE]` Task `assignment_strategy` (fixed/rotating) + ordered rotation roster; per-occurrence assignee = `roster[occurrence_index % n]` (skips removed members); returned with `…/tasks/occurrences` — **F27**
+- [ ] `[FE]` "Rotate between members" toggle + drag-orderable roster in the task editor; chore board shows today's rotated assignee (+ optional "up next") — **F27**
+- [ ] `[ ] ` Tests: rotation cycles correctly across occurrences; member removal advances the cycle; fixed assignment unchanged — **F27**
+
+**Meal planning & recipes — F15 / F28**
+
+- [ ] `[BE]` Models: `MealPlan` (date, slot), `Recipe` (steps, image, tags) + structured `RecipeIngredient` (qty/unit/name) — **F15/F28**
 - [ ] `[BE]` `/mealplans`, `/recipes`; project meals onto calendar (optional)
 - [ ] `[FE]` Weekly meal planner board (breakfast/lunch/dinner/snack)
 - [ ] `[FE]` Recipe library + detail + manual entry/upload
 - [ ] `[FE]` "Add meal to calendar"
+- [ ] `[BE]` Grocery aggregation: unit-normalize + merge like ingredients → `ListItem`s; `POST …/grocery/from-mealplan?from&to` + `…/grocery/from-recipes` — **F28**
+- [ ] `[FE]` "Add to grocery list" from a recipe + the weekly meal planner; editable review step before commit (then F05 "Send to Instacart") — **F28**
 
 **Photo screensaver — F16**
 
@@ -195,8 +207,11 @@ Goal: rewards economy, meal planning + recipes, photo screensaver.
 - [ ] `[FE]` Idle detection + slideshow on `/device` from featured albums
 - [ ] `[BE]` Realtime: emit `reward.*`, `mealplan.*`, `photo.*`
 - [ ] `[ ] ` Tests: star award/redeem math, meal→calendar, upload pipeline
+- [ ] `[ ] ` Tests: rotation cycle (F27); ingredient aggregation + unit-merge, meal-plan → list (F28)
 - [ ] `[ ] ` AC: chore completion awards stars; redeem needs approval
 - [ ] `[ ] ` AC: idle device shows album slideshow; meals appear on calendar
+- [ ] `[ ] ` AC: a rotating chore shows a different, correctly-cycling member each day — **F27**
+- [ ] `[ ] ` AC: a week's meal plan / selected recipes build an aggregated grocery list (summed quantities) — **F28**
 
 ---
 

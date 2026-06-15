@@ -183,6 +183,42 @@ export function CalendarView({
     [occurrences, effectiveMemberId]
   )
 
+  // Countdowns are anchored to "today", not the viewed range. Querying only the
+  // visible month meant a countdown tile vanished the moment you navigated away
+  // from its event's month — so fetch a forward window (next year) independently
+  // and feed that to the strip. Shares the ["occurrences", familyId, …] cache, so
+  // realtime/mutation invalidations refresh it too.
+  const countdownRange = useMemo(() => {
+    const start = new Date()
+    const end = new Date()
+    end.setDate(end.getDate() + 365)
+    return { from: toYMD(start), to: toYMD(end) }
+  }, [])
+  const { data: countdownOccurrences = [] } = useOccurrences(
+    familyId,
+    countdownRange.from,
+    countdownRange.to
+  )
+  const visibleCountdowns = useMemo(
+    () =>
+      effectiveMemberId
+        ? countdownOccurrences.filter((o) =>
+            o.members.some((m) => m.id === effectiveMemberId)
+          )
+        : countdownOccurrences,
+    [countdownOccurrences, effectiveMemberId]
+  )
+
+  // Mirrors CountdownStrip's own filter so we know whether the strip will render
+  // anything — used to decide the shared filter/countdown band's borders.
+  const hasCountdowns = useMemo(
+    () =>
+      visibleCountdowns.some(
+        (o) => o.is_countdown && o.days_until !== null && o.days_until >= 0
+      ),
+    [visibleCountdowns]
+  )
+
   // Collect dates needing weather (day + week views only)
   const weatherDates = useMemo(() => {
     if (view === "day") return [toYMD(anchor)]
@@ -369,20 +405,32 @@ export function CalendarView({
         </div>
       </div>
 
-      {/* Profile switcher — filter the calendar to one member (device + app) */}
-      <MemberFilter
-        members={members}
-        activeMemberId={effectiveMemberId}
-        onSelect={setActiveMember}
-        large={isDevice}
-      />
+      {/* Member filter + countdowns share one horizontal band so they don't eat
+          two full rows of vertical space on the wide wall display; they stack
+          only on narrow phone screens. */}
+      {(members.length > 0 || hasCountdowns) && (
+        <div className="flex flex-col border-b lg:flex-row lg:items-stretch">
+          {/* Profile switcher — filter the calendar to one member (device + app) */}
+          <MemberFilter
+            members={members}
+            activeMemberId={effectiveMemberId}
+            onSelect={setActiveMember}
+            large={isDevice}
+            className={cn(
+              "lg:flex-shrink-0",
+              hasCountdowns && "border-b lg:border-r lg:border-b-0"
+            )}
+          />
 
-      {/* Countdown strip — shown on all views */}
-      <CountdownStrip
-        occurrences={visibleOccurrences}
-        onEventClick={openEdit}
-        large={isDevice}
-      />
+          {/* Countdown strip — anchored to today, independent of the viewed month */}
+          <CountdownStrip
+            occurrences={visibleCountdowns}
+            onEventClick={openEdit}
+            large={isDevice}
+            className="min-w-0 lg:flex-1"
+          />
+        </div>
+      )}
 
       {/* View content */}
       <div className="thin-scrollbar flex-1 overflow-hidden">

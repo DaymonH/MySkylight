@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 import { MapPinIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { OccurrenceOut } from "@/lib/types/calendar"
@@ -47,8 +47,28 @@ export function DayView({
       Array.from({ length: endHour - startHour + 1 }, (_, i) => startHour + i),
     [startHour, endHour]
   )
-  const hourHeight = large ? 72 : 56
-  const totalHeight = (endHour - startHour) * hourHeight
+
+  // Fit the whole configured hour range into the available height instead of a
+  // fixed per-hour size, so the day fills the pane without scrolling. Only when
+  // the range is too tall to stay legible do we clamp to a minimum row height
+  // (and let it scroll).
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const [availH, setAvailH] = useState<number | null>(null)
+  useLayoutEffect(() => {
+    const el = scrollRef.current
+    if (!el) return
+    const update = () => setAvailH(el.clientHeight)
+    update()
+    const ro = new ResizeObserver(update)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+
+  const spanHours = endHour - startHour
+  const minHour = large ? 48 : 36
+  const fitHour = availH ? Math.floor(availH / spanHours) : large ? 72 : 56
+  const hourHeight = Math.max(minHour, fitHour)
+  const totalHeight = spanHours * hourHeight
   const startMinClamp = startHour * 60
   const endMinClamp = endHour * 60
 
@@ -91,8 +111,8 @@ export function DayView({
         )}
       </div>
 
-      {/* Scrollable hourly grid */}
-      <div className="thin-scrollbar flex-1 overflow-auto">
+      {/* Hourly grid — fits the available height, scrolls only if clamped */}
+      <div ref={scrollRef} className="thin-scrollbar min-h-0 flex-1 overflow-auto">
         <div className="flex" style={{ height: totalHeight }}>
           {/* Time gutter */}
           <div className="relative w-16 flex-shrink-0 border-r">

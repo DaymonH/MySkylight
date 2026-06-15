@@ -1,6 +1,10 @@
 import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 
+// This proxy forwards live SSE streams (the realtime feed) as well as JSON, so it
+// must never be statically optimized or cached — force per-request dynamic execution.
+export const dynamic = "force-dynamic";
+
 const API_BASE_URL = process.env.API_BASE_URL ?? "";
 const PROXY_TIMEOUT_MS = 20_000;
 
@@ -76,11 +80,17 @@ async function proxyRequest(
 
   const targetUrl = buildTargetUrl(pathSegments, new URL(req.url));
 
-  const init: RequestInit & { duplex?: "half" } = {
+  // Buffer the request body up front. `req.body` is a one-shot stream, so the
+  // transient-error retry loop below would fail to resend it on POST/PATCH/PUT
+  // (the stream is already drained after the first attempt). An ArrayBuffer can
+  // be reused across attempts and needs no `duplex` flag.
+  const hasBody = req.method !== "GET" && req.method !== "HEAD";
+  const bodyBuffer = hasBody ? await req.arrayBuffer() : undefined;
+
+  const init: RequestInit = {
     method: req.method,
     headers,
-    body: req.method === "GET" || req.method === "HEAD" ? undefined : req.body,
-    duplex: req.method === "GET" || req.method === "HEAD" ? undefined : "half",
+    body: bodyBuffer && bodyBuffer.byteLength > 0 ? bodyBuffer : undefined,
     redirect: "manual",
   };
 
@@ -125,9 +135,22 @@ async function proxyRequest(
     );
   }
 
+  // undici may have transparently decompressed the upstream body, which leaves
+  // `content-encoding`/`content-length` describing bytes we no longer forward —
+  // the browser would then fail to decode. Drop those plus hop-by-hop headers.
+  const responseHeaders = new Headers(response.headers);
+  for (const h of [
+    "content-encoding",
+    "content-length",
+    "transfer-encoding",
+    "connection",
+  ]) {
+    responseHeaders.delete(h);
+  }
+
   return new NextResponse(response.body, {
     status: response.status,
-    headers: response.headers,
+    headers: responseHeaders,
   });
 }
 
@@ -142,6 +165,10 @@ export async function POST(req: Request, context: RouteContext) {
 }
 
 export async function PUT(req: Request, context: RouteContext) {
+  return proxyRequest(req, context);
+}
+
+export async function PATCH(req: Request, context: RouteContext) {
   return proxyRequest(req, context);
 }
 

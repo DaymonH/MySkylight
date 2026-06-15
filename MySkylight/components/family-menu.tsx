@@ -2,7 +2,13 @@
 
 import Link from "next/link"
 import { useQuery } from "@tanstack/react-query"
-import { CalendarDaysIcon, MailPlusIcon, UsersIcon, UsersRoundIcon } from "lucide-react"
+import {
+  CalendarDaysIcon,
+  ListChecksIcon,
+  MailPlusIcon,
+  UsersIcon,
+  UsersRoundIcon,
+} from "lucide-react"
 
 import { useApi } from "@/hooks/use-api"
 import { Button } from "@/components/ui/button"
@@ -43,6 +49,11 @@ export function FamilyMenu() {
         <DropdownMenuItem asChild>
           <Link href="/app">
             <CalendarDaysIcon /> Calendar
+          </Link>
+        </DropdownMenuItem>
+        <DropdownMenuItem asChild>
+          <Link href={`/app/family/${familyId}/tasks`}>
+            <ListChecksIcon /> Tasks &amp; chores
           </Link>
         </DropdownMenuItem>
         <DropdownMenuItem asChild>

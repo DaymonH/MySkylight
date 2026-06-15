@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useEffect, useState } from "react"
+import { useMemo, useEffect, useLayoutEffect, useRef, useState } from "react"
 import { cn } from "@/lib/utils"
 import type { OccurrenceOut } from "@/lib/types/calendar"
 import type { WeatherDay } from "@/hooks/use-weather"
@@ -48,8 +48,27 @@ export function WeekView({
       Array.from({ length: endHour - startHour + 1 }, (_, i) => startHour + i),
     [startHour, endHour]
   )
-  const hourHeight = large ? 64 : 48
-  const totalHeight = (endHour - startHour) * hourHeight
+  // Fit the whole configured hour range into the available height instead of a
+  // fixed per-hour size, so the week fills the pane without scrolling. Only when
+  // the range is too tall to stay legible do we clamp to a minimum row height
+  // (and let it scroll).
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const [availH, setAvailH] = useState<number | null>(null)
+  useLayoutEffect(() => {
+    const el = scrollRef.current
+    if (!el) return
+    const update = () => setAvailH(el.clientHeight)
+    update()
+    const ro = new ResizeObserver(update)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+
+  const spanHours = endHour - startHour
+  const minHour = large ? 40 : 28
+  const fitHour = availH ? Math.floor(availH / spanHours) : large ? 64 : 48
+  const hourHeight = Math.max(minHour, fitHour)
+  const totalHeight = spanHours * hourHeight
   const startMinClamp = startHour * 60
   const endMinClamp = endHour * 60
 
@@ -163,8 +182,8 @@ export function WeekView({
         </div>
       )}
 
-      {/* Scrollable time grid */}
-      <div className="thin-scrollbar flex-1 overflow-auto">
+      {/* Time grid — fits the available height, scrolls only if clamped */}
+      <div ref={scrollRef} className="thin-scrollbar min-h-0 flex-1 overflow-auto">
         <div className="flex" style={{ height: totalHeight }}>
           {/* Time gutter */}
           <div className="relative w-14 flex-shrink-0 border-r">
