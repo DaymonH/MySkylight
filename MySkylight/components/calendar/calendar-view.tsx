@@ -15,6 +15,7 @@ import {
 } from "@/hooks/use-calendars"
 import { useRealtime } from "@/hooks/use-realtime"
 import { useGeolocation, useWeatherDays } from "@/hooks/use-weather"
+import { useVisibleHours } from "@/hooks/use-visible-hours"
 import { MonthView } from "./month-view"
 import { WeekView } from "./week-view"
 import { DayView } from "./day-view"
@@ -137,6 +138,7 @@ export function CalendarView({
     }
     return defaultView
   })
+  const { start: dayStartHour, end: dayEndHour } = useVisibleHours()
   const [anchor, setAnchor] = useState(new Date())
   const [sheetOpen, setSheetOpen] = useState(false)
   const [defaultDate, setDefaultDate] = useState<string | undefined>()
@@ -378,6 +380,8 @@ export function CalendarView({
             onEventClick={openEdit}
             weatherByDate={weatherByDate}
             large={isDevice}
+            dayStartHour={dayStartHour}
+            dayEndHour={dayEndHour}
           />
         ) : view === "day" ? (
           <DayView
@@ -386,6 +390,8 @@ export function CalendarView({
             onEventClick={openEdit}
             weather={weatherByDate[toYMD(anchor)]}
             large={isDevice}
+            dayStartHour={dayStartHour}
+            dayEndHour={dayEndHour}
           />
         ) : (
           <div className="thin-scrollbar h-full overflow-auto">

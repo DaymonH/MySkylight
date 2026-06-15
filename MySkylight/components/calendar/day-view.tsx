@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { MapPinIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { OccurrenceOut } from "@/lib/types/calendar"
@@ -14,10 +14,11 @@ interface DayViewProps {
   onEventClick: (occ: OccurrenceOut) => void
   weather?: WeatherDay
   large?: boolean
+  /** First hour shown in the time grid (0–23). Default 7 (7 AM). */
+  dayStartHour?: number
+  /** Last hour shown — bottom edge of grid (1–24). Default 23 (11 PM). */
+  dayEndHour?: number
 }
-
-const HOURS = Array.from({ length: 24 }, (_, i) => i)
-const SCROLL_TO_HOUR = 7
 
 function toYMD(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`
@@ -29,22 +30,33 @@ function fmt12(h: number) {
   return h < 12 ? `${h} AM` : `${h - 12} PM`
 }
 
-export function DayView({ date, occurrences, onEventClick, weather, large = false }: DayViewProps) {
-  const scrollRef = useRef<HTMLDivElement>(null)
+export function DayView({
+  date,
+  occurrences,
+  onEventClick,
+  weather,
+  large = false,
+  dayStartHour = 7,
+  dayEndHour = 23,
+}: DayViewProps) {
+  // Visible time window. Events outside are hidden; events overlapping are clipped.
+  const startHour = Math.max(0, Math.min(23, dayStartHour))
+  const endHour = Math.max(startHour + 1, Math.min(24, dayEndHour))
+  const hours = useMemo(
+    () =>
+      Array.from({ length: endHour - startHour + 1 }, (_, i) => startHour + i),
+    [startHour, endHour]
+  )
   const hourHeight = large ? 72 : 56
-  const totalHeight = 24 * hourHeight
+  const totalHeight = (endHour - startHour) * hourHeight
+  const startMinClamp = startHour * 60
+  const endMinClamp = endHour * 60
 
   const [now, setNow] = useState(() => minutesNow())
   useEffect(() => {
     const id = setInterval(() => setNow(minutesNow()), 60_000)
     return () => clearInterval(id)
   }, [])
-
-  useEffect(() => {
-    requestAnimationFrame(() => {
-      if (scrollRef.current) scrollRef.current.scrollTop = SCROLL_TO_HOUR * hourHeight
-    })
-  }, [hourHeight])
 
   const isToday = toYMD(date) === toYMD(new Date())
   const allDay = occurrences.filter((o) => o.all_day)
@@ -62,7 +74,9 @@ export function DayView({ date, occurrences, onEventClick, weather, large = fals
         )}
         {allDay.length > 0 && (
           <div className="flex flex-wrap items-center gap-1.5 border-b px-4 py-2">
-            <span className="text-muted-foreground mr-1 text-[10px] uppercase">All day</span>
+            <span className="mr-1 text-[10px] text-muted-foreground uppercase">
+              All day
+            </span>
             {allDay.map((occ, i) => (
               <button
                 key={i}
@@ -78,17 +92,17 @@ export function DayView({ date, occurrences, onEventClick, weather, large = fals
       </div>
 
       {/* Scrollable hourly grid */}
-      <div ref={scrollRef} className="thin-scrollbar flex-1 overflow-auto">
+      <div className="thin-scrollbar flex-1 overflow-auto">
         <div className="flex" style={{ height: totalHeight }}>
           {/* Time gutter */}
           <div className="relative w-16 flex-shrink-0 border-r">
-            {HOURS.map((h) => (
+            {hours.map((h) => (
               <div
                 key={h}
-                className="text-muted-foreground absolute right-2 -translate-y-1/2 text-[11px] tabular-nums"
-                style={{ top: h * hourHeight }}
+                className="absolute right-2 -translate-y-1/2 text-[11px] text-muted-foreground tabular-nums"
+                style={{ top: (h - startHour) * hourHeight }}
               >
-                {h === 0 ? "" : fmt12(h)}
+                {h === startHour || h === endHour ? "" : fmt12(h)}
               </div>
             ))}
           </div>
@@ -101,8 +115,12 @@ export function DayView({ date, occurrences, onEventClick, weather, large = fals
             }}
           >
             {positioned.map((p, i) => {
-              const top = (p.startMin / 60) * hourHeight
-              const height = Math.max(((p.endMin - p.startMin) / 60) * hourHeight - 2, 22)
+              if (p.endMin <= startMinClamp || p.startMin >= endMinClamp)
+                return null
+              const sMin = Math.max(p.startMin, startMinClamp)
+              const eMin = Math.min(p.endMin, endMinClamp)
+              const top = ((sMin - startMinClamp) / 60) * hourHeight
+              const height = Math.max(((eMin - sMin) / 60) * hourHeight - 2, 22)
               const widthPct = 100 / p.cols
               const start = new Date(p.occ.start_dt)
               const end = new Date(p.occ.end_dt)
@@ -119,13 +137,25 @@ export function DayView({ date, occurrences, onEventClick, weather, large = fals
                     backgroundColor: p.occ.effective_color,
                   }}
                 >
-                  <span className={cn("truncate font-medium leading-tight", large ? "text-base" : "text-sm")}>
+                  <span
+                    className={cn(
+                      "truncate leading-tight font-medium",
+                      large ? "text-base" : "text-sm"
+                    )}
+                  >
                     {p.occ.title}
                   </span>
                   {height > 34 && (
                     <span className="truncate text-xs opacity-90">
-                      {start.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })} –{" "}
-                      {end.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
+                      {start.toLocaleTimeString([], {
+                        hour: "numeric",
+                        minute: "2-digit",
+                      })}{" "}
+                      –{" "}
+                      {end.toLocaleTimeString([], {
+                        hour: "numeric",
+                        minute: "2-digit",
+                      })}
                     </span>
                   )}
                   {height > 54 && p.occ.location && (
@@ -139,8 +169,11 @@ export function DayView({ date, occurrences, onEventClick, weather, large = fals
             })}
 
             {/* Now indicator */}
-            {isToday && (
-              <div className="pointer-events-none absolute inset-x-0 z-30" style={{ top: (now / 60) * hourHeight }}>
+            {isToday && now >= startMinClamp && now <= endMinClamp && (
+              <div
+                className="pointer-events-none absolute inset-x-0 z-30"
+                style={{ top: ((now - startMinClamp) / 60) * hourHeight }}
+              >
                 <div className="relative h-px bg-red-500">
                   <span className="absolute -top-1 -left-1 size-2 rounded-full bg-red-500" />
                 </div>

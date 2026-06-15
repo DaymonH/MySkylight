@@ -1,7 +1,8 @@
 import { UserButton } from "@clerk/nextjs"
 import { CalendarDaysIcon } from "lucide-react"
 
-import { ThemeToggle } from "@/components/theme-toggle"
+import { SettingsButton } from "@/components/settings-dialog"
+import { FamilyMenu } from "@/components/family-menu"
 
 export const metadata = { title: "MySkylight" }
 
@@ -18,7 +19,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           </span>
         </div>
         <div className="flex items-center gap-1">
-          <ThemeToggle />
+          <FamilyMenu />
+          <SettingsButton />
           <UserButton appearance={{ elements: { avatarBox: "size-8" } }} />
         </div>
       </header>
