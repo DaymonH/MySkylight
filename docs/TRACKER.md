@@ -26,12 +26,12 @@ Update the **Progress summary** counts when you complete a phase. Tags: `[INFRA]
 |     2 | Calendar core ⭐                       |   ☑    |                           24 / 24                           |
 |     3 | Tasks & routines                       |   ☑    |                           10 / 10                           |
 |     4 | Lists (groceries; Instacart descoped)  |   ☑    |                           7 / 7                             |
-|     5 | Calendar Plus I (rewards/chores/meals/grocery/photos) |   ◐    |               4 / 26                |
+|     5 | Calendar Plus I (rewards/chores/meals/grocery/photos) |   ◐    |               8 / 26                |
 |     6 | Smart / AI (DeepSeek)                  |   ☐    |                           0 / 11                            |
 |     7 | External sync                          |   ☐    |                           0 / 16                            |
 |     8 | Device & system                        |   ☐    |                           0 / 10                            |
 |     9 | Polish & hardening (+ F29 Walmart hand-off) |   ☐    |                      0 / 17                            |
-|       | **Total**                              |        |                        **79 / 154**                         |
+|       | **Total**                              |        |                        **83 / 154**                         |
 
 ---
 
@@ -180,15 +180,15 @@ Goal: shared lists. _(Instacart hand-off dropped — see below.)_
 
 ---
 
-## Phase 5 — Calendar Plus I `☐` → F14, F15, F16
+## Phase 5 — Calendar Plus I `◐` (F27 ☑, F14 ☑) → F14, F15, F16
 
 Goal: rewards economy, meal planning + recipes, photo screensaver.
 
-**Rewards — F14**
+**Rewards — F14 `☑`**
 
-- [ ] `[BE]` Models: `Reward`, `StarBalance`, `Redemption`; award hook on `TaskCompletion`
-- [ ] `[BE]` `/rewards`, `/rewards/redeem` (+ parent approval)
-- [ ] `[FE]` Star balance per child, reward shop, redeem + approval, celebratory UI
+- [x] `[BE]` Models: `Reward`, `StarBalance`, `Redemption`; award hook on `TaskCompletion` _(`app/models/reward.py`: `Reward` + `Redemption` (status pending/approved/rejected, `star_cost` snapshot); **`StarBalance` is computed, not stored** — earned = Σ `TaskCompletion.stars_awarded` (snapshot of `Task.star_value` at completion, set in `complete_task`), spent = approved redemptions, pending reserves; migration `007` adds `tasks.star_value` + `task_completions.stars_awarded`)_
+- [x] `[BE]` `/rewards`, `/rewards/redeem` (+ parent approval) _(`routers/rewards.py`: rewards CRUD (owner/adult), `…/rewards/{id}/redeem` (owner/adult/child, validates available ≥ cost), `…/star-balances`, `…/redemptions?status=`, `…/redemptions/{id}/approve|reject` (owner/adult). Emits `reward.*`)_
+- [x] `[FE]` Star balance per child, reward shop, redeem + approval, celebratory UI _(`app/app/family/[familyId]/rewards`: per-member balance chips, parent approval queue, reward shop with a redeem member-picker dialog + celebratory toast, catalog mgmt via `components/rewards/reward-sheet.tsx`. Device board `components/rewards/reward-board.tsx` at `/device/rewards`. Task editor gains a "Stars for completing" input; chore board + task list show a ⭐ value. `reward.*`/`task.*` wired into `use-realtime.ts` → balances refresh)_
 
 **Rotating chores — F27 `☑`** _(extends F01; Phase 3 tasks engine is done)_
 
@@ -212,10 +212,10 @@ Goal: rewards economy, meal planning + recipes, photo screensaver.
 - [ ] `[BE]` `/albums`, `/photos` (upload, featured flag)
 - [ ] `[FE]` Album manager + uploader in `/app`
 - [ ] `[FE]` Idle detection + slideshow on `/device` from featured albums
-- [ ] `[BE]` Realtime: emit `reward.*`, `mealplan.*`, `photo.*`
-- [ ] `[ ] ` Tests: star award/redeem math, meal→calendar, upload pipeline
-- [ ] `[ ] ` Tests: rotation cycle (F27); ingredient aggregation + unit-merge, meal-plan → list (F28)
-- [ ] `[ ] ` AC: chore completion awards stars; redeem needs approval
+- [ ] `[BE]` Realtime: emit `reward.*`, `mealplan.*`, `photo.*` _(**`reward.*` ✓ done**; `mealplan.*`/`photo.*` pending with F15/F16)_
+- [ ] `[ ] ` Tests: star award/redeem math, meal→calendar, upload pipeline _(**star award/redeem math ✓** — `tests/test_rewards.py`, 6 tests, suite **72 green**; meal→calendar + upload pending)_
+- [ ] `[ ] ` Tests: rotation cycle (F27); ingredient aggregation + unit-merge, meal-plan → list (F28) _(rotation cycle ✓ in `tests/test_tasks.py`; F28 pending)_
+- [x] `[ ] ` AC: chore completion awards stars; redeem needs approval _(`tests/test_rewards.py::test_earn_redeem_approve_balance_math` + `::test_reward_roles_via_api` — completing a chore earns stars, redeem reserves then a parent approves/rejects)_
 - [ ] `[ ] ` AC: idle device shows album slideshow; meals appear on calendar
 - [x] `[ ] ` AC: a rotating chore shows a different, correctly-cycling member each day — **F27** _(proven in `tests/test_tasks.py::test_rotating_assignment_cycles_across_occurrences`; device board surfaces today's assignee + "up next")_
 - [ ] `[ ] ` AC: a week's meal plan / selected recipes build an aggregated grocery list (summed quantities) — **F28**

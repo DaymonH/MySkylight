@@ -43,6 +43,7 @@ const schema = z.object({
   routine_id: z.string(),
   start_date: z.string().min(1, "Pick a start date"),
   rrule: z.string(),
+  star_value: z.number().int().min(0).max(999),
   member_ids: z.array(z.string()),
   rotate: z.boolean(),
 })
@@ -94,6 +95,7 @@ export function TaskSheet({
       routine_id: defaultRoutineId ?? NO_ROUTINE,
       start_date: todayYMD(),
       rrule: "none",
+      star_value: 1,
       member_ids: [],
       rotate: false,
     },
@@ -108,6 +110,7 @@ export function TaskSheet({
         routine_id: editing.routine_id ?? NO_ROUTINE,
         start_date: editing.start_date,
         rrule: editing.rrule ?? "none",
+        star_value: editing.star_value,
         member_ids: editing.members.map((m) => m.id),
         rotate: editing.assignment_strategy === "rotating",
       })
@@ -118,6 +121,7 @@ export function TaskSheet({
         routine_id: defaultRoutineId ?? NO_ROUTINE,
         start_date: todayYMD(),
         rrule: "none",
+        star_value: 1,
         member_ids: [],
         rotate: false,
       })
@@ -196,6 +200,21 @@ export function TaskSheet({
                   </Select>
                 )}
               />
+            </div>
+
+            {/* Stars (F14 rewards) */}
+            <div className="space-y-1.5">
+              <Label htmlFor="task-stars">Stars for completing ⭐</Label>
+              <Input
+                id="task-stars"
+                type="number"
+                min={0}
+                max={999}
+                {...register("star_value", { valueAsNumber: true })}
+              />
+              <p className="text-muted-foreground text-xs">
+                Stars the member earns each time they check this off. Set 0 for no reward.
+              </p>
             </div>
 
             {/* Notes */}

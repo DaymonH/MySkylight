@@ -38,6 +38,9 @@ export function useRealtime(familyId: string) {
       qc.invalidateQueries({ queryKey: ["tasks", familyId] })
       qc.invalidateQueries({ queryKey: ["routines", familyId] })
       qc.invalidateQueries({ queryKey: ["lists", familyId] })
+      qc.invalidateQueries({ queryKey: ["rewards", familyId] })
+      qc.invalidateQueries({ queryKey: ["star-balances", familyId] })
+      qc.invalidateQueries({ queryKey: ["redemptions", familyId] })
     }
 
     function handle(msg: { type: string }) {
@@ -64,10 +67,12 @@ export function useRealtime(familyId: string) {
       }
       if (msg.type.startsWith("task.")) {
         // task.created/updated/deleted + task.completed/uncompleted — refresh the
-        // device chore board, the management list, and any streak badges.
+        // device chore board, the management list, streak badges, and (since
+        // completing a chore earns stars) the reward star balances.
         qc.invalidateQueries({ queryKey: ["task-occurrences", familyId] })
         qc.invalidateQueries({ queryKey: ["tasks", familyId] })
         qc.invalidateQueries({ queryKey: ["task-streak", familyId] })
+        qc.invalidateQueries({ queryKey: ["star-balances", familyId] })
       }
       if (msg.type.startsWith("routine.")) {
         qc.invalidateQueries({ queryKey: ["routines", familyId] })
@@ -78,6 +83,13 @@ export function useRealtime(familyId: string) {
         // list.created/updated/deleted/reordered + list.item_* — refresh the
         // shared lists on the companion app and the device board.
         qc.invalidateQueries({ queryKey: ["lists", familyId] })
+      }
+      if (msg.type.startsWith("reward.")) {
+        // reward.created/updated/deleted + reward.redeemed/approved/rejected —
+        // refresh the catalog, balances, and the approval queue.
+        qc.invalidateQueries({ queryKey: ["rewards", familyId] })
+        qc.invalidateQueries({ queryKey: ["star-balances", familyId] })
+        qc.invalidateQueries({ queryKey: ["redemptions", familyId] })
       }
     }
 

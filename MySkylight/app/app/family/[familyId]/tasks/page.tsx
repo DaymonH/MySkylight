@@ -10,6 +10,7 @@ import {
   PencilIcon,
   PlusIcon,
   RepeatIcon,
+  StarIcon,
   Trash2Icon,
   XIcon,
 } from "lucide-react"
@@ -115,6 +116,7 @@ export default function TasksPage({ params }: { params: Promise<{ familyId: stri
       // Rotation needs at least two members; otherwise it's just a fixed assignee.
       assignment_strategy:
         values.rotate && values.member_ids.length >= 2 ? "rotating" : "fixed",
+      star_value: values.star_value,
       member_ids: values.member_ids,
     }
     try {
@@ -437,6 +439,11 @@ function TaskRow({
           {task.assignment_strategy === "rotating" && (
             <Badge variant="secondary" className="gap-1">
               <RepeatIcon className="size-3" /> Rotating
+            </Badge>
+          )}
+          {task.star_value > 0 && (
+            <Badge variant="secondary" className="gap-1">
+              <StarIcon className="size-3 fill-amber-400 text-amber-400" /> {task.star_value}
             </Badge>
           )}
           {isRecurring &&

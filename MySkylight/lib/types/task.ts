@@ -13,6 +13,7 @@ export interface TaskOut {
   rrule: string | null
   sort_order: number
   assignment_strategy: AssignmentStrategy
+  star_value: number
   created_at: string
   updated_at: string
   // The full roster, in rotation order (matters when rotating).
@@ -40,6 +41,7 @@ export interface TaskOccurrenceOut {
   occurrence_date: string // YYYY-MM-DD
   effective_color: string
   is_recurring: boolean
+  star_value: number
   members: MemberBrief[]
   completed_member_ids: string[]
   up_next: MemberBrief | null
@@ -63,6 +65,7 @@ export interface TaskCreatePayload {
   rrule?: string | null
   sort_order?: number
   assignment_strategy?: AssignmentStrategy
+  star_value?: number
   // Order is the rotation roster order when rotating.
   member_ids?: string[]
 }

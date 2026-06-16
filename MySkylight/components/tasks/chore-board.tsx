@@ -3,7 +3,14 @@
 import { useMemo } from "react"
 import type { CSSProperties } from "react"
 import { useQuery } from "@tanstack/react-query"
-import { CheckIcon, ListChecksIcon, Loader2Icon, PartyPopperIcon, RepeatIcon } from "lucide-react"
+import {
+  CheckIcon,
+  ListChecksIcon,
+  Loader2Icon,
+  PartyPopperIcon,
+  RepeatIcon,
+  StarIcon,
+} from "lucide-react"
 
 import { useApi } from "@/hooks/use-api"
 import { useRealtime } from "@/hooks/use-realtime"
@@ -199,6 +206,7 @@ export function ChoreBoard({ familyId }: { familyId: string }) {
                                   color={o.effective_color}
                                   done={done}
                                   upNext={o.up_next?.name}
+                                  stars={o.star_value}
                                   onToggle={() => toggle(o, member.id, done)}
                                 />
                               </li>
@@ -246,12 +254,14 @@ function ChoreRow({
   color,
   done,
   upNext,
+  stars,
   onToggle,
 }: {
   title: string
   color: string
   done: boolean
   upNext?: string
+  stars?: number
   onToggle: () => void
 }) {
   const style: CSSProperties = done
@@ -292,6 +302,17 @@ function ChoreRow({
           </span>
         )}
       </span>
+      {!!stars && stars > 0 && (
+        <span
+          className={cn(
+            "flex shrink-0 items-center gap-1 text-sm font-semibold text-amber-500",
+            done && "opacity-40",
+          )}
+        >
+          <StarIcon className="size-4 fill-amber-400 text-amber-400" />
+          {stars}
+        </span>
+      )}
     </button>
   )
 }

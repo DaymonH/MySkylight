@@ -258,6 +258,20 @@ frontend (FE) pieces, and **acceptance criteria** (AC) that define "done".
   `/rewards/redeem`.
 - **FE:** Star balance per child, reward shop, redeem + approve flow, celebratory UI.
 - **AC:** Finishing a chore adds stars; redeeming deducts them and notifies a parent for approval.
+- **Status (2026-06-15):** ☑ Full-stack done. **BE** (`models/reward.py`, `schemas/reward.py`,
+  `services/rewards.py`, `routers/rewards.py`, migration `007`): `Reward` catalog + `Redemption`
+  (pending→approved/rejected, `star_cost` snapshot). **Star balance is computed, not stored** —
+  `earned` sums `TaskCompletion.stars_awarded` (a snapshot of `Task.star_value` taken in
+  `complete_task`, so undo removes the stars and later edits don't rewrite history); `spent` =
+  approved redemptions; **pending reserves** stars so they can't be double-spent
+  (`available = earned − spent − pending`). Endpoints: `/rewards` CRUD (owner/adult),
+  `…/rewards/{id}/redeem` (owner/adult/**child**, validates available ≥ cost), `…/star-balances`,
+  `…/redemptions?status=`, `…/redemptions/{id}/approve|reject` (owner/adult). Emits `reward.*`. 6 tests
+  in `tests/test_rewards.py` (suite 72 green). **FE:** `/app/family/[id]/rewards` (balance chips,
+  parent approval queue, reward shop with a redeem member-picker + celebratory toast, catalog editor
+  `reward-sheet.tsx`) and a device board `reward-board.tsx` at `/device/rewards`; task editor gains a
+  "Stars for completing" field and the chore board/task list show ⭐ values; `reward.*`/`task.*` wired
+  into `use-realtime.ts`. `tsc` + `next build` clean. **Deferred:** live two-device smoke.
 - _Phase 5_
 
 ### F15 — Meal Planning ⭐
