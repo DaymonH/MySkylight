@@ -1,15 +1,16 @@
 "use client"
 
 import { useEffect } from "react"
-import { useForm, Controller } from "react-hook-form"
+import { useForm, useWatch, Controller } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
-import { Trash2Icon } from "lucide-react"
+import { ChevronDownIcon, ChevronUpIcon, Trash2Icon } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
+import { Switch } from "@/components/ui/switch"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import {
   Select,
@@ -43,6 +44,7 @@ const schema = z.object({
   start_date: z.string().min(1, "Pick a start date"),
   rrule: z.string(),
   member_ids: z.array(z.string()),
+  rotate: z.boolean(),
 })
 export type TaskFormValues = z.infer<typeof schema>
 
@@ -93,6 +95,7 @@ export function TaskSheet({
       start_date: todayYMD(),
       rrule: "none",
       member_ids: [],
+      rotate: false,
     },
   })
 
@@ -106,6 +109,7 @@ export function TaskSheet({
         start_date: editing.start_date,
         rrule: editing.rrule ?? "none",
         member_ids: editing.members.map((m) => m.id),
+        rotate: editing.assignment_strategy === "rotating",
       })
     } else {
       reset({
@@ -115,9 +119,12 @@ export function TaskSheet({
         start_date: todayYMD(),
         rrule: "none",
         member_ids: [],
+        rotate: false,
       })
     }
   }, [open, editing, defaultRoutineId]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const rotate = useWatch({ control, name: "rotate" })
 
   return (
     <Sheet open={open} onOpenChange={(o) => !o && onClose()}>
@@ -204,37 +211,126 @@ export function TaskSheet({
                 <Controller
                   name="member_ids"
                   control={control}
-                  render={({ field }) => (
-                    <ToggleGroup
-                      type="multiple"
-                      variant="outline"
-                      value={field.value}
-                      onValueChange={field.onChange}
-                      className="flex flex-wrap justify-start"
-                    >
-                      {members.map((m) => {
-                        const selected = field.value.includes(m.id)
-                        return (
-                          <ToggleGroupItem
-                            key={m.id}
-                            value={m.id}
-                            className="gap-1.5 rounded-full"
-                            style={
-                              selected
-                                ? { backgroundColor: m.color, borderColor: m.color, color: "#fff" }
-                                : { borderColor: m.color }
-                            }
-                          >
-                            <span
-                              className="size-2 rounded-full"
-                              style={{ backgroundColor: selected ? "#fff" : m.color }}
-                            />
-                            {m.name}
-                          </ToggleGroupItem>
-                        )
-                      })}
-                    </ToggleGroup>
-                  )}
+                  render={({ field }) => {
+                    // Preserve rotation order: keep existing ids in place, append new
+                    // selections to the end. (Radix toggle-group reports DOM order.)
+                    const onToggle = (next: string[]) => {
+                      const kept = field.value.filter((id) => next.includes(id))
+                      const added = next.filter((id) => !field.value.includes(id))
+                      field.onChange([...kept, ...added])
+                    }
+                    const move = (idx: number, dir: -1 | 1) => {
+                      const arr = [...field.value]
+                      const j = idx + dir
+                      if (j < 0 || j >= arr.length) return
+                      ;[arr[idx], arr[j]] = [arr[j], arr[idx]]
+                      field.onChange(arr)
+                    }
+                    return (
+                      <>
+                        <ToggleGroup
+                          type="multiple"
+                          variant="outline"
+                          value={field.value}
+                          onValueChange={onToggle}
+                          className="flex flex-wrap justify-start"
+                        >
+                          {members.map((m) => {
+                            const selected = field.value.includes(m.id)
+                            return (
+                              <ToggleGroupItem
+                                key={m.id}
+                                value={m.id}
+                                className="gap-1.5 rounded-full"
+                                style={
+                                  selected
+                                    ? { backgroundColor: m.color, borderColor: m.color, color: "#fff" }
+                                    : { borderColor: m.color }
+                                }
+                              >
+                                <span
+                                  className="size-2 rounded-full"
+                                  style={{ backgroundColor: selected ? "#fff" : m.color }}
+                                />
+                                {m.name}
+                              </ToggleGroupItem>
+                            )
+                          })}
+                        </ToggleGroup>
+
+                        {/* Rotation (F27) */}
+                        <div className="flex items-center justify-between gap-3 rounded-xl border p-3">
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium">Rotate between members</p>
+                            <p className="text-muted-foreground text-xs">
+                              Each time the chore repeats, it moves to the next person in order.
+                            </p>
+                          </div>
+                          <Controller
+                            name="rotate"
+                            control={control}
+                            render={({ field: rf }) => (
+                              <Switch
+                                checked={rf.value}
+                                onCheckedChange={rf.onChange}
+                                disabled={field.value.length < 2}
+                                aria-label="Rotate between members"
+                              />
+                            )}
+                          />
+                        </div>
+
+                        {rotate && field.value.length >= 2 && (
+                          <div className="space-y-1.5">
+                            <p className="text-muted-foreground text-xs font-medium uppercase tracking-wide">
+                              Rotation order
+                            </p>
+                            <ul className="flex flex-col gap-1.5">
+                              {field.value.map((id, idx) => {
+                                const m = members.find((mm) => mm.id === id)
+                                if (!m) return null
+                                return (
+                                  <li
+                                    key={id}
+                                    className="flex items-center gap-2 rounded-xl border px-3 py-2"
+                                  >
+                                    <span className="text-muted-foreground w-4 text-sm tabular-nums">
+                                      {idx + 1}
+                                    </span>
+                                    <span
+                                      className="size-2.5 rounded-full"
+                                      style={{ backgroundColor: m.color }}
+                                    />
+                                    <span className="flex-1 truncate text-sm">{m.name}</span>
+                                    <Button
+                                      type="button"
+                                      size="icon-sm"
+                                      variant="ghost"
+                                      disabled={idx === 0}
+                                      onClick={() => move(idx, -1)}
+                                      aria-label={`Move ${m.name} up`}
+                                    >
+                                      <ChevronUpIcon />
+                                    </Button>
+                                    <Button
+                                      type="button"
+                                      size="icon-sm"
+                                      variant="ghost"
+                                      disabled={idx === field.value.length - 1}
+                                      onClick={() => move(idx, 1)}
+                                      aria-label={`Move ${m.name} down`}
+                                    >
+                                      <ChevronDownIcon />
+                                    </Button>
+                                  </li>
+                                )
+                              })}
+                            </ul>
+                          </div>
+                        )}
+                      </>
+                    )
+                  }}
                 />
               </div>
             )}

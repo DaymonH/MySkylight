@@ -3,7 +3,7 @@
 import { useMemo } from "react"
 import type { CSSProperties } from "react"
 import { useQuery } from "@tanstack/react-query"
-import { CheckIcon, ListChecksIcon, Loader2Icon, PartyPopperIcon } from "lucide-react"
+import { CheckIcon, ListChecksIcon, Loader2Icon, PartyPopperIcon, RepeatIcon } from "lucide-react"
 
 import { useApi } from "@/hooks/use-api"
 import { useRealtime } from "@/hooks/use-realtime"
@@ -198,6 +198,7 @@ export function ChoreBoard({ familyId }: { familyId: string }) {
                                   title={o.title}
                                   color={o.effective_color}
                                   done={done}
+                                  upNext={o.up_next?.name}
                                   onToggle={() => toggle(o, member.id, done)}
                                 />
                               </li>
@@ -244,11 +245,13 @@ function ChoreRow({
   title,
   color,
   done,
+  upNext,
   onToggle,
 }: {
   title: string
   color: string
   done: boolean
+  upNext?: string
   onToggle: () => void
 }) {
   const style: CSSProperties = done
@@ -274,13 +277,20 @@ function ChoreRow({
           <CheckIcon className="size-5 text-white duration-200 animate-in zoom-in-50" />
         )}
       </span>
-      <span
-        className={cn(
-          "flex-1 text-lg font-medium transition-all",
-          done && "text-muted-foreground line-through",
+      <span className="min-w-0 flex-1">
+        <span
+          className={cn(
+            "block text-lg font-medium transition-all",
+            done && "text-muted-foreground line-through",
+          )}
+        >
+          {title}
+        </span>
+        {upNext && !done && (
+          <span className="text-muted-foreground mt-0.5 flex items-center gap-1 text-xs">
+            <RepeatIcon className="size-3" /> Next: {upNext}
+          </span>
         )}
-      >
-        {title}
       </span>
     </button>
   )

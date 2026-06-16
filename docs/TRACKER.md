@@ -26,12 +26,12 @@ Update the **Progress summary** counts when you complete a phase. Tags: `[INFRA]
 |     2 | Calendar core ⭐                       |   ☑    |                           24 / 24                           |
 |     3 | Tasks & routines                       |   ☑    |                           10 / 10                           |
 |     4 | Lists (groceries; Instacart descoped)  |   ☑    |                           7 / 7                             |
-|     5 | Calendar Plus I (rewards/chores/meals/grocery/photos) |   ☐    |               0 / 26                |
+|     5 | Calendar Plus I (rewards/chores/meals/grocery/photos) |   ◐    |               4 / 26                |
 |     6 | Smart / AI (DeepSeek)                  |   ☐    |                           0 / 11                            |
 |     7 | External sync                          |   ☐    |                           0 / 16                            |
 |     8 | Device & system                        |   ☐    |                           0 / 10                            |
 |     9 | Polish & hardening (+ F29 Walmart hand-off) |   ☐    |                      0 / 17                            |
-|       | **Total**                              |        |                        **75 / 154**                         |
+|       | **Total**                              |        |                        **79 / 154**                         |
 
 ---
 
@@ -190,11 +190,11 @@ Goal: rewards economy, meal planning + recipes, photo screensaver.
 - [ ] `[BE]` `/rewards`, `/rewards/redeem` (+ parent approval)
 - [ ] `[FE]` Star balance per child, reward shop, redeem + approval, celebratory UI
 
-**Rotating chores — F27** _(extends F01; Phase 3 tasks engine is done)_
+**Rotating chores — F27 `☑`** _(extends F01; Phase 3 tasks engine is done)_
 
-- [ ] `[BE]` Task `assignment_strategy` (fixed/rotating) + ordered rotation roster; per-occurrence assignee = `roster[occurrence_index % n]` (skips removed members); returned with `…/tasks/occurrences` — **F27**
-- [ ] `[FE]` "Rotate between members" toggle + drag-orderable roster in the task editor; chore board shows today's rotated assignee (+ optional "up next") — **F27**
-- [ ] `[ ] ` Tests: rotation cycles correctly across occurrences; member removal advances the cycle; fixed assignment unchanged — **F27**
+- [x] `[BE]` Task `assignment_strategy` (fixed/rotating) + ordered rotation roster; per-occurrence assignee = `roster[occurrence_index % n]` (skips removed members); returned with `…/tasks/occurrences` — **F27** _(`AssignmentStrategy` enum + `TaskAssignment.sort_order` for roster order — `member_ids` order = roster order; migration `006`. Resolver in `services/tasks.py::get_task_occurrences` expands from `start_date` for the absolute occurrence index; rotating occurrence carries the single resolved assignee in `members` + an `up_next` member; soft-deleted members drop out of the live roster)_
+- [x] `[FE]` "Rotate between members" toggle + drag-orderable roster in the task editor; chore board shows today's rotated assignee (+ optional "up next") — **F27** _(`task-sheet.tsx`: Switch (gated to ≥2 members) + ordered roster with ↑/↓ reorder — **drag deferred**; chip selection preserves rotation order. `tasks/page.tsx` shows a "Rotating" badge; `chore-board.tsx` shows "Next: <name>" via `up_next`. Rotating occurrence resolves to one assignee so it lands on the right member card)_
+- [x] `[ ] ` Tests: rotation cycles correctly across occurrences; member removal advances the cycle; fixed assignment unchanged — **F27** _(`tests/test_tasks.py` — 4 new: cycle across 7 days, window uses absolute index, soft-deleted member skipped without crash, fixed shows all members. Suite **66 green**)_
 
 **Meal planning & recipes — F15 / F28**
 
@@ -217,7 +217,7 @@ Goal: rewards economy, meal planning + recipes, photo screensaver.
 - [ ] `[ ] ` Tests: rotation cycle (F27); ingredient aggregation + unit-merge, meal-plan → list (F28)
 - [ ] `[ ] ` AC: chore completion awards stars; redeem needs approval
 - [ ] `[ ] ` AC: idle device shows album slideshow; meals appear on calendar
-- [ ] `[ ] ` AC: a rotating chore shows a different, correctly-cycling member each day — **F27**
+- [x] `[ ] ` AC: a rotating chore shows a different, correctly-cycling member each day — **F27** _(proven in `tests/test_tasks.py::test_rotating_assignment_cycles_across_occurrences`; device board surfaces today's assignee + "up next")_
 - [ ] `[ ] ` AC: a week's meal plan / selected recipes build an aggregated grocery list (summed quantities) — **F28**
 
 ---

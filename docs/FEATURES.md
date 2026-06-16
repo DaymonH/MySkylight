@@ -301,6 +301,14 @@ frontend (FE) pieces, and **acceptance criteria** (AC) that define "done".
   chore board shows **today's** rotated assignee per task (with an optional "up next" hint).
 - **AC:** A rotating dishes chore shows a different, correctly-cycling member each day; removing a member
   advances the cycle without crashing; non-rotating chores are unchanged.
+- **Status (2026-06-15):** ☑ Full-stack done. **BE:** `AssignmentStrategy` (`fixed`|`rotating`) on `Task`
+  + `sort_order` on `TaskAssignment` for roster order (migration `006`); `get_task_occurrences` resolves
+  the per-occurrence assignee from the **absolute occurrence index** (`roster[i % n]`), returns it as the
+  single `members` entry plus an `up_next` member, and drops soft-deleted members from the live roster.
+  `member_ids` order is the roster order. 4 tests in `tests/test_tasks.py` (suite 66 green). **FE:**
+  "Rotate between members" Switch (≥2 members) + ordered roster with ↑/↓ in `task-sheet.tsx`, a "Rotating"
+  badge on the task list, and a "Next: <name>" hint on the device chore board. `tsc` + `next build` clean.
+  **Deferred:** drag-to-reorder the roster (↑/↓ ships now); live two-device smoke.
 - _Depends on **F01** (Tasks). Phase 5._
 
 ### F28 — Recipe → Grocery List (ingredient aggregation) ⭐

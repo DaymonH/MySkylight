@@ -9,6 +9,7 @@ import {
   ListChecksIcon,
   PencilIcon,
   PlusIcon,
+  RepeatIcon,
   Trash2Icon,
   XIcon,
 } from "lucide-react"
@@ -111,6 +112,9 @@ export default function TasksPage({ params }: { params: Promise<{ familyId: stri
       routine_id: values.routine_id === NO_ROUTINE ? null : values.routine_id,
       start_date: values.start_date,
       rrule: values.rrule === "none" ? null : values.rrule,
+      // Rotation needs at least two members; otherwise it's just a fixed assignee.
+      assignment_strategy:
+        values.rotate && values.member_ids.length >= 2 ? "rotating" : "fixed",
       member_ids: values.member_ids,
     }
     try {
@@ -430,6 +434,11 @@ function TaskRow({
         <p className="truncate font-medium leading-tight">{task.title}</p>
         <div className="mt-1 flex flex-wrap items-center gap-1.5">
           <Badge variant="secondary">{describeTaskRrule(task.rrule)}</Badge>
+          {task.assignment_strategy === "rotating" && (
+            <Badge variant="secondary" className="gap-1">
+              <RepeatIcon className="size-3" /> Rotating
+            </Badge>
+          )}
           {isRecurring &&
             task.members.map((m) => (
               <MemberStreakBadge key={m.id} familyId={familyId} taskId={task.id} member={m} />

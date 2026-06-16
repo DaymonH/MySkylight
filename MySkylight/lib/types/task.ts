@@ -1,5 +1,7 @@
 import type { MemberBrief } from "@/lib/types/calendar"
 
+export type AssignmentStrategy = "fixed" | "rotating"
+
 export interface TaskOut {
   id: string
   family_id: string
@@ -10,8 +12,10 @@ export interface TaskOut {
   start_date: string // YYYY-MM-DD
   rrule: string | null
   sort_order: number
+  assignment_strategy: AssignmentStrategy
   created_at: string
   updated_at: string
+  // The full roster, in rotation order (matters when rotating).
   members: MemberBrief[]
 }
 
@@ -25,7 +29,9 @@ export interface RoutineOut {
   tasks: TaskOut[]
 }
 
-/** A single dated instance of a task with its per-member completion state. */
+/** A single dated instance of a task with its per-member completion state.
+ * For a rotating task, `members` is the single resolved assignee for this date and
+ * `up_next` is who gets it next occurrence; for fixed tasks `up_next` is null. */
 export interface TaskOccurrenceOut {
   task_id: string
   routine_id: string | null
@@ -36,6 +42,7 @@ export interface TaskOccurrenceOut {
   is_recurring: boolean
   members: MemberBrief[]
   completed_member_ids: string[]
+  up_next: MemberBrief | null
 }
 
 export interface StreakOut {
@@ -55,6 +62,8 @@ export interface TaskCreatePayload {
   start_date?: string // YYYY-MM-DD
   rrule?: string | null
   sort_order?: number
+  assignment_strategy?: AssignmentStrategy
+  // Order is the rotation roster order when rotating.
   member_ids?: string[]
 }
 
