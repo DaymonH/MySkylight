@@ -10,6 +10,7 @@ import {
   MailPlusIcon,
   UsersIcon,
   UsersRoundIcon,
+  UtensilsCrossedIcon,
 } from "lucide-react"
 
 import { useApi } from "@/hooks/use-api"
@@ -61,6 +62,11 @@ export function FamilyMenu() {
         <DropdownMenuItem asChild>
           <Link href={`/app/family/${familyId}/lists`}>
             <ListTodoIcon /> Lists &amp; groceries
+          </Link>
+        </DropdownMenuItem>
+        <DropdownMenuItem asChild>
+          <Link href={`/app/family/${familyId}/meals`}>
+            <UtensilsCrossedIcon /> Meals &amp; recipes
           </Link>
         </DropdownMenuItem>
         <DropdownMenuItem asChild>

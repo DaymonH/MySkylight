@@ -5,8 +5,8 @@ import { useQueryClient } from "@tanstack/react-query"
 
 /**
  * Subscribes to the family's SSE stream and reconciles the TanStack Query cache
- * as `event.*` / `calendar.*` / `member.*` / `family.*` / `task.*` / `routine.*`
- * events arrive.
+ * as `event.*` / `calendar.*` / `member.*` / `family.*` / `task.*` / `routine.*` /
+ * `list.*` / `reward.*` / `recipe.*` / `mealplan.*` events arrive.
  *
  * Resilience: a plain `EventSource` auto-retries transient drops, but iOS Safari
  * tears the stream down when the tab is backgrounded and never resumes it — the
@@ -41,6 +41,8 @@ export function useRealtime(familyId: string) {
       qc.invalidateQueries({ queryKey: ["rewards", familyId] })
       qc.invalidateQueries({ queryKey: ["star-balances", familyId] })
       qc.invalidateQueries({ queryKey: ["redemptions", familyId] })
+      qc.invalidateQueries({ queryKey: ["recipes", familyId] })
+      qc.invalidateQueries({ queryKey: ["mealplans", familyId] })
     }
 
     function handle(msg: { type: string }) {
@@ -90,6 +92,14 @@ export function useRealtime(familyId: string) {
         qc.invalidateQueries({ queryKey: ["rewards", familyId] })
         qc.invalidateQueries({ queryKey: ["star-balances", familyId] })
         qc.invalidateQueries({ queryKey: ["redemptions", familyId] })
+      }
+      if (msg.type.startsWith("recipe.")) {
+        // recipe.created/updated/deleted — refresh the recipe library.
+        qc.invalidateQueries({ queryKey: ["recipes", familyId] })
+      }
+      if (msg.type.startsWith("mealplan.")) {
+        // mealplan.created/updated/deleted — refresh the weekly meal board.
+        qc.invalidateQueries({ queryKey: ["mealplans", familyId] })
       }
     }
 

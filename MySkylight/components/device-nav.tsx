@@ -2,7 +2,13 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { CalendarDaysIcon, GiftIcon, ListChecksIcon, ListTodoIcon } from "lucide-react"
+import {
+  CalendarDaysIcon,
+  GiftIcon,
+  ListChecksIcon,
+  ListTodoIcon,
+  UtensilsCrossedIcon,
+} from "lucide-react"
 
 import { cn } from "@/lib/utils"
 
@@ -10,6 +16,7 @@ const TABS = [
   { href: "/device", label: "Calendar", icon: CalendarDaysIcon },
   { href: "/device/chores", label: "Chores", icon: ListChecksIcon },
   { href: "/device/lists", label: "Lists", icon: ListTodoIcon },
+  { href: "/device/meals", label: "Meals", icon: UtensilsCrossedIcon },
   { href: "/device/rewards", label: "Rewards", icon: GiftIcon },
 ]
 

@@ -285,9 +285,25 @@ frontend (FE) pieces, and **acceptance criteria** (AC) that define "done".
 - **BE:** `MealPlan`, `Recipe` (+ `RecipeIngredient`); `/mealplans`, `/recipes`; option to project meals as calendar items.
 - **FE:** Weekly meal planner board, recipe library + detail, "add to calendar".
 - **AC:** Assign dinner for a week; recipes saved/edited; meals optionally show on the calendar.
+- **Status (2026-06-15):** ☑ Full-stack done (with **F28**). **BE** (`app/models/meal.py`,
+  `schemas/meal.py`, `services/meals.py`, `routers/meals.py`, migration `008`): `Recipe` +
+  structured `RecipeIngredient` (qty `float|null`, unit, name), and `MealPlan` (date + `MealSlot`
+  enum breakfast/lunch/dinner/snack, referencing a recipe **or** free-text `title`). Endpoints are
+  family-scoped: `/families/{id}/recipes` (CRUD; an update replaces the whole ingredient set),
+  `/families/{id}/mealplans?from&to`, and `…/mealplans/{id}/to-calendar` which **projects a meal onto
+  the calendar** (per-slot default time; re-projecting updates the same event via a soft
+  `calendar_event_id` link instead of duplicating). Roles: owner/adult manage; viewers read-only.
+  Emits `recipe.*` / `mealplan.*`. **FE:** `app/app/family/[familyId]/meals` — a tabbed surface with a
+  **weekly planner board** (prev/next week, per-day breakfast/lunch/dinner/snack rows, add-meal dialog
+  picking a recipe or free text, per-meal "add to calendar"/remove) and a **recipe library** (cards +
+  `components/meals/recipe-sheet.tsx` editor with dynamic qty·unit·name ingredient rows). A glanceable
+  device board `components/meals/meal-board.tsx` at `/device/meals`. `recipe.*`/`mealplan.*` wired into
+  `use-realtime.ts`; linked from `FamilyMenu` + `DeviceNav`. 9 backend tests (`tests/test_meals.py`,
+  suite **81 green**); `tsc` + `next build` clean. **Deferred:** AI recipe gen + URL/photo import land
+  with Phase 6 (F17); live two-device smoke.
 - _Phase 5 (AI recipe gen lands with Phase 6)_
 
-### F16 — Photo Screensaver ⭐
+### F16 — Photo Screensaver ⭐ — ⏸ PARKED (kept for later)
 
 > _"Display favorite photos when idle… organize into albums to choose what's featured."_
 
@@ -296,7 +312,13 @@ frontend (FE) pieces, and **acceptance criteria** (AC) that define "done".
 - **BE:** `Album`, `Photo`, file storage + thumbnails; `/albums`, `/photos` (upload).
 - **FE:** Album manager + uploader in `/app`; idle-detection slideshow on `/device`.
 - **AC:** Upload to an album, mark featured; device idle → smooth slideshow of those photos.
-- _Phase 5_
+- **Status (2026-06-15):** ⏸ **Parked — not in the current build.** The owner chose to defer it;
+  the spec is kept here in case it's added much later. It's the **only feature that needs file
+  uploads/storage** (where blobs live on the Pi, size limits, thumbnail generation, serving static
+  media) — a new infrastructure concern not yet present anywhere else in the app — so deferring it
+  keeps Phase 5 free of that. Removed from the active Phase 5 counts (like F05 was); not deleted.
+  When revived, it'd most naturally land alongside the Phase 9 storage/deploy hardening.
+- _~~Phase 5~~ — parked; revisit later (see Phase 9 infra)._
 
 ### F27 — Rotating Chore Assignment ⭐
 
@@ -344,6 +366,19 @@ frontend (FE) pieces, and **acceptance criteria** (AC) that define "done".
   aggregated, editable quantities before committing → writes into the existing F04 grocery list.
 - **AC:** Two recipes sharing an ingredient produce one combined line with the summed quantity; a week's
   meal plan generates a complete grocery list; quantities are editable before save.
+- **Status (2026-06-15):** ☑ Full-stack done (shipped with F15). **BE** (`services/meals.py`):
+  `aggregate_ingredients` lightly canonicalizes names (lowercase, drop a single trailing plural-`s`,
+  not `ss`) and maps units through a synonym table (tsp/tbsp/cup/oz/lb/g/kg/ml/l/clove/can/pinch…);
+  quantities **sum only within an identical (name, canonical-unit) group**, so the same ingredient in
+  incompatible units stays on separate lines (no cross-unit conversion). `POST …/grocery/aggregate`
+  previews the merged lines from explicit `recipe_ids` **and/or** a meal-plan `from_date`+`to_date`
+  range (meal-plan repeats count); `POST …/grocery/build` writes reviewed lines into a new or existing
+  grocery `List` (reuses `services/lists.py`). **FE:** `components/meals/grocery-build-dialog.tsx` is the
+  **editable review step** (per-line qty/name edits + removals, "from recipes" provenance, target a new
+  or existing grocery list) reached via "Build grocery list" on the weekly board and "Add to groceries"
+  on a recipe card. Covered by `tests/test_meals.py` (sum + unit-separation, meal-plan repeats, build
+  into new/existing list). **The F05 Instacart push is gone — the aggregated F04 list is the end of the
+  flow** (F29 Walmart export remains the optional Phase 9 hand-off).
 - _Depends on **F04** (lists) + **F15** (recipes/meal plan). Phase 5._
 
 ### F29 — Grocery → Walmart hand-off (personal web automation) 🔌
@@ -466,7 +501,7 @@ frontend (FE) pieces, and **acceptance criteria** (AC) that define "done".
 |     2 | F23, F24, F06, F07, F08, F02, F26                    |
 |     3 | F01                                                  |
 |     4 | F04 _(F05 Instacart descoped)_                       |
-|     5 | F14, F15, F16, F27, F28                              |
+|     5 | F14, F15, F27, F28 _(F16 parked → revisit later)_    |
 |     6 | F17, F15 (AI recipes + URL/photo recipe import)      |
 |     7 | F18, F19, F20, F21, F22, F25                         |
 |     8 | F09, F12                                             |

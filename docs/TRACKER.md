@@ -26,12 +26,12 @@ Update the **Progress summary** counts when you complete a phase. Tags: `[INFRA]
 |     2 | Calendar core ⭐                       |   ☑    |                           24 / 24                           |
 |     3 | Tasks & routines                       |   ☑    |                           10 / 10                           |
 |     4 | Lists (groceries; Instacart descoped)  |   ☑    |                           7 / 7                             |
-|     5 | Calendar Plus I (rewards/chores/meals/grocery/photos) |   ◐    |               8 / 26                |
+|     5 | Calendar Plus I (rewards/chores/meals/grocery; F16 photos parked) |   ◐    |       19 / 21                |
 |     6 | Smart / AI (DeepSeek)                  |   ☐    |                           0 / 11                            |
 |     7 | External sync                          |   ☐    |                           0 / 16                            |
 |     8 | Device & system                        |   ☐    |                           0 / 10                            |
 |     9 | Polish & hardening (+ F29 Walmart hand-off) |   ☐    |                      0 / 17                            |
-|       | **Total**                              |        |                        **83 / 154**                         |
+|       | **Total**                              |        |                        **94 / 149**                         |
 
 ---
 
@@ -180,9 +180,10 @@ Goal: shared lists. _(Instacart hand-off dropped — see below.)_
 
 ---
 
-## Phase 5 — Calendar Plus I `◐` (F27 ☑, F14 ☑) → F14, F15, F16
+## Phase 5 — Calendar Plus I `◐` (F14 ☑, F27 ☑, F15+F28 ☑; **F16 photos ⏸ parked**) → F14, F15, F27, F28
 
-Goal: rewards economy, meal planning + recipes, photo screensaver.
+Goal: rewards economy, meal planning + recipes (photo screensaver F16 parked — needs file storage,
+revisit later; see its FEATURES entry).
 
 **Rewards — F14 `☑`**
 
@@ -196,29 +197,32 @@ Goal: rewards economy, meal planning + recipes, photo screensaver.
 - [x] `[FE]` "Rotate between members" toggle + drag-orderable roster in the task editor; chore board shows today's rotated assignee (+ optional "up next") — **F27** _(`task-sheet.tsx`: Switch (gated to ≥2 members) + ordered roster with ↑/↓ reorder — **drag deferred**; chip selection preserves rotation order. `tasks/page.tsx` shows a "Rotating" badge; `chore-board.tsx` shows "Next: <name>" via `up_next`. Rotating occurrence resolves to one assignee so it lands on the right member card)_
 - [x] `[ ] ` Tests: rotation cycles correctly across occurrences; member removal advances the cycle; fixed assignment unchanged — **F27** _(`tests/test_tasks.py` — 4 new: cycle across 7 days, window uses absolute index, soft-deleted member skipped without crash, fixed shows all members. Suite **66 green**)_
 
-**Meal planning & recipes — F15 / F28**
+**Meal planning & recipes — F15 / F28 `☑`**
 
-- [ ] `[BE]` Models: `MealPlan` (date, slot), `Recipe` (steps, image, tags) + structured `RecipeIngredient` (qty/unit/name) — **F15/F28**
-- [ ] `[BE]` `/mealplans`, `/recipes`; project meals onto calendar (optional)
-- [ ] `[FE]` Weekly meal planner board (breakfast/lunch/dinner/snack)
-- [ ] `[FE]` Recipe library + detail + manual entry/upload
-- [ ] `[FE]` "Add meal to calendar"
-- [ ] `[BE]` Grocery aggregation: unit-normalize + merge like ingredients → `ListItem`s; `POST …/grocery/from-mealplan?from&to` + `…/grocery/from-recipes` — **F28**
-- [ ] `[FE]` "Add to grocery list" from a recipe + the weekly meal planner; editable review step before commit (writes to the F04 grocery list; F05 "Send to Instacart" was descoped) — **F28**
+- [x] `[BE]` Models: `MealPlan` (date, slot), `Recipe` (steps, image, tags) + structured `RecipeIngredient` (qty/unit/name) — **F15/F28** _(`app/models/meal.py`: `Recipe` + `RecipeIngredient` (qty `float|null`, unit, name) + `MealPlan` (`MealSlot` enum, recipe **or** free-text title, soft `calendar_event_id` link); migration `008`)_
+- [x] `[BE]` `/mealplans`, `/recipes`; project meals onto calendar (optional) _(`routers/meals.py` — family-scoped recipe CRUD (update replaces the ingredient set), `mealplans?from&to`, and `…/mealplans/{id}/to-calendar` projecting a per-slot-timed event, re-projection updates the same event)_
+- [x] `[FE]` Weekly meal planner board (breakfast/lunch/dinner/snack) _(`app/app/family/[familyId]/meals` "This week" tab — prev/next week, per-day slot rows, add-meal dialog, per-meal calendar/remove menu)_
+- [x] `[FE]` Recipe library + detail + manual entry/upload _("Recipes" tab + `components/meals/recipe-sheet.tsx` with dynamic qty·unit·name ingredient rows, servings, tags)_
+- [x] `[FE]` "Add meal to calendar" _(per-meal dropdown → `useMealToCalendar`; invalidates occurrences so it shows on the calendar live)_
+- [x] `[BE]` Grocery aggregation: unit-normalize + merge like ingredients → `ListItem`s; `POST …/grocery/aggregate` (preview) + `…/grocery/build` (commit) — **F28** _(synonym-table unit canonicalization; sums within identical (name, unit), incompatible units stay separate; source = recipe_ids and/or a meal-plan range, repeats count)_
+- [x] `[FE]` "Add to grocery list" from a recipe + the weekly meal planner; editable review step before commit (writes to the F04 grocery list; F05 "Send to Instacart" was descoped) — **F28** _(`components/meals/grocery-build-dialog.tsx` — editable lines + "from recipes" provenance + new/existing target list)_
 
-**Photo screensaver — F16**
+**Photo screensaver — F16 `⏸` parked (needs file storage; revisit later)**
 
-- [ ] `[BE]` Models: `Album`, `Photo`; storage interface + thumbnail generation
-- [ ] `[BE]` `/albums`, `/photos` (upload, featured flag)
-- [ ] `[FE]` Album manager + uploader in `/app`
-- [ ] `[FE]` Idle detection + slideshow on `/device` from featured albums
-- [ ] `[BE]` Realtime: emit `reward.*`, `mealplan.*`, `photo.*` _(**`reward.*` ✓ done**; `mealplan.*`/`photo.*` pending with F15/F16)_
-- [ ] `[ ] ` Tests: star award/redeem math, meal→calendar, upload pipeline _(**star award/redeem math ✓** — `tests/test_rewards.py`, 6 tests, suite **72 green**; meal→calendar + upload pending)_
-- [ ] `[ ] ` Tests: rotation cycle (F27); ingredient aggregation + unit-merge, meal-plan → list (F28) _(rotation cycle ✓ in `tests/test_tasks.py`; F28 pending)_
-- [x] `[ ] ` AC: chore completion awards stars; redeem needs approval _(`tests/test_rewards.py::test_earn_redeem_approve_balance_math` + `::test_reward_roles_via_api` — completing a chore earns stars, redeem reserves then a parent approves/rejects)_
-- [ ] `[ ] ` AC: idle device shows album slideshow; meals appear on calendar
+- [~] `[BE]` ~~Models: `Album`, `Photo`; storage interface + thumbnail generation~~ — **F16 PARKED**
+- [~] `[BE]` ~~`/albums`, `/photos` (upload, featured flag)~~ — **F16 PARKED**
+- [~] `[FE]` ~~Album manager + uploader in `/app`~~ — **F16 PARKED**
+- [~] `[FE]` ~~Idle detection + slideshow on `/device` from featured albums~~ — **F16 PARKED** _(the only feature needing file uploads/storage — deferred so Phase 5 stays storage-free; kept in FEATURES for later)_
+
+**Cross-cutting (Phase 5) `☑`** _(F16's photo/upload portions parked with F16)_
+
+- [x] `[BE]` Realtime: emit `reward.*`, `mealplan.*` (+ `recipe.*`) _(**`reward.*` ✓**, **`mealplan.*`/`recipe.*` ✓**; `photo.*` parked with F16)_
+- [x] `[ ] ` Tests: star award/redeem math, meal→calendar _(star award/redeem ✓ `tests/test_rewards.py`; meal→calendar ✓ `tests/test_meals.py::test_meal_to_calendar_creates_then_updates_one_event`; upload pipeline parked with F16. Suite **81 green**)_
+- [x] `[ ] ` Tests: rotation cycle (F27); ingredient aggregation + unit-merge, meal-plan → list (F28) _(rotation cycle ✓ `tests/test_tasks.py`; aggregation sum/unit-separation + meal-plan repeats + build ✓ `tests/test_meals.py`)_
+- [x] `[ ] ` AC: chore completion awards stars; redeem needs approval _(`tests/test_rewards.py::test_earn_redeem_approve_balance_math` + `::test_reward_roles_via_api`)_
 - [x] `[ ] ` AC: a rotating chore shows a different, correctly-cycling member each day — **F27** _(proven in `tests/test_tasks.py::test_rotating_assignment_cycles_across_occurrences`; device board surfaces today's assignee + "up next")_
-- [ ] `[ ] ` AC: a week's meal plan / selected recipes build an aggregated grocery list (summed quantities) — **F28**
+- [x] `[ ] ` AC: a week's meal plan / selected recipes build an aggregated grocery list (summed quantities) — **F28** _(`tests/test_meals.py::test_aggregate_from_mealplan_counts_repeats` + `::test_recipe_meal_aggregate_flow_via_api`; FE review step before commit)_
+- [~] `[ ] ` AC: idle device shows album slideshow; meals appear on calendar — _meals-on-calendar ✓ (F15 to-calendar); **slideshow parked with F16**_
 
 ---
 
