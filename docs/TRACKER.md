@@ -28,10 +28,10 @@ Update the **Progress summary** counts when you complete a phase. Tags: `[INFRA]
 |     4 | Lists (groceries; Instacart descoped)  |   ☑    |                           7 / 7                             |
 |     5 | Calendar Plus I (rewards/chores/meals/grocery; F16 photos parked) |   ◐    |       19 / 21                |
 |     6 | Smart / AI (DeepSeek)                  |   ☐    |                           0 / 11                            |
-|     7 | External sync                          |   ☐    |                           0 / 16                            |
+|     7 | External sync (Google + Apple, **read-only**; F19/F21/F22 descoped) |   ◐    |        12 / 15              |
 |     8 | Device & system                        |   ☐    |                           0 / 10                            |
 |     9 | Polish & hardening (+ F29 Walmart hand-off) |   ☐    |                      0 / 17                            |
-|       | **Total**                              |        |                        **94 / 149**                         |
+|       | **Total**                              |        |                        **106 / 148**                        |
 
 ---
 
@@ -244,25 +244,53 @@ Goal: Magic Import + smart recipe generation. **Revalidate DeepSeek vision suppo
 
 ---
 
-## Phase 7 — External calendar sync 🔌 `☐` → F18–F22, F25
+## Phase 7 — External calendar sync 🔌 `◐` → F25 ☑, F18 + F20 kept (**read-only**); **F19/F21/F22 descoped**
 
-Goal: connect Google/Outlook/Apple/Yahoo/Cozi. Two-way where possible; read-only otherwise.
+Goal: pull in the calendars this household uses — **Google** and **Apple/iCloud** — **read-only** (their
+events display in the app; we never write back), on top of a standard **ICS** foundation. **Outlook (F19),
+Cozi (F21), and Yahoo (F22) were descoped** on 2026-06-15 (not used here); specs kept in FEATURES for later.
 
-- [ ] `[BE]` `ExternalAccount` (provider, tokens, sync state) + map ext-calendar→`Calendar`+color
-- [ ] `[BE]` Sync engine: incremental pull/push, conflict resolution, scheduled polling
-- [ ] `[BE]` `[🔌]` ICS import/export foundation — **F25**
-- [ ] `[BE]` `[🔌]` Google OAuth2 + Calendar API, two-way — **F18**
-- [ ] `[BE]` `[🔌]` Outlook / Microsoft Graph OAuth2, two-way — **F19**
-- [ ] `[BE]` `[🔌]` Apple CalDAV (app password), read→write — **F20**
-- [ ] `[BE]` `[🔌]` Yahoo CalDAV (app password), read — **F22**
-- [ ] `[BE]` `[🔌]` Cozi best-effort `.ics` import (no API), read-only — **F21**
-- [ ] `[FE]` Connect-account UI per provider (OAuth start, CalDAV creds, ICS URL)
-- [ ] `[FE]` Calendar mapping + color assignment + sync status/last-synced
-- [ ] `[FE]` Per-provider capability messaging (two-way vs read-only)
-- [ ] `[ ] ` Tests: token refresh, dedupe, conflict, recurrence mapping
-- [ ] `[ ] ` AC: Google event ↔ MySkylight two-way
-- [ ] `[ ] ` AC: Apple/Yahoo/Cozi import read-only
-- [ ] `[ ] ` Research spikes: CalDAV libs, Graph delta, Cozi ICS availability
+> **Status (2026-06-15):** **F25 ICS import/export is built + tested** (backend). Export a calendar as
+> `.ics`; import a `.ics` file **or a feed URL** (the generic URL-import survives the Cozi descope as a
+> useful capability). **Write-back to Google/Apple is descoped** (2026-06-15) — sync is **one-way pull
+> only**, which drops conflict-resolution and push. **Google (F18) + Apple (F20) need the owner's provider
+> credentials** (a Google Cloud OAuth client; an iCloud app-specific password) before they can be built
+> and tested end-to-end. **F25's FE import/export UI is now built** (a companion-app calendar toolbar
+> action → dialog with calendar picker, `.ics` export download, and import via file upload / paste / feed URL).
+> **F18's Google connect scaffold is built + tested** (OAuth authorize→callback→store/discover, list,
+> disconnect; creds via env, 503 when unset). **Update (2026-06-16): the read-only pull engine is now
+> built + tested for BOTH providers** — Google (incremental `syncToken` events.list → mirror) and **Apple/
+> iCloud (F20, CalDAV** with an app-specific password: PROPFIND discovery + `sync-collection` REPORT, reusing
+> the ICS parser). Shared mirror engine (`app/services/external_sync.py`) upserts external events into a
+> mapped local calendar keyed on a provider-namespaced `ical_uid`; mapping + manual-sync endpoints and a
+> 30-min scheduled poll are wired.
+>
+> **Update (2026-06-16): the FE is now built and Phase 7 is code-complete.** A "Calendar sync"
+> page (`app/app/family/[id]/integrations/`, owner/adult) connects Google (OAuth) + iCloud (Apple ID +
+> app-specific password), maps each discovered calendar to a local one / a new one / off, runs **Sync now**,
+> shows status + last-synced, and disconnects. **Read-only is now enforced end-to-end:** occurrences/events
+> carry a `read_only` flag (derived from the `google:`/`apple:` `ical_uid` prefix), the event sheet shows
+> mirror events as a no-edit details view, and the events API **403s** any PATCH/DELETE on a mirror. The
+> OAuth callback now returns to the sync page. **Backend 129 green; FE typecheck + lint clean.** The only
+> remainder is **live verification** with the owner's real Google Cloud OAuth client + iCloud app password.
+
+- [x] `[BE]` `[🔌]` `ExternalAccount` + `ExternalCalendar` store (provider, tokens, status, discovered calendars) — **F18/F20** _(`app/models/external.py`; migration `010`; read-only one-way design — no write-back)_
+- [x] `[BE]` `[🔌]` Map ext-calendar→`Calendar` + color (read-only mirror) — enable a discovered calendar for sync _(`PUT …/external/calendars/{id}` in `app/routers/external.py`: map to an existing local calendar, **auto-create** one mirroring the external name/color, or clear the mapping; resets the sync cursor on any change so the new target gets a full re-pull)_
+- [x] `[BE]` Sync engine: incremental **pull only** (read-only), scheduled polling _(no push / conflict resolution — write-back descoped)_ _(`app/services/external_sync.py` — provider-agnostic `MirrorEvent` + `apply_mirror_events` upsert keyed on a provider-namespaced `ical_uid`, soft-deletes on upstream removal; `POST …/external/accounts/{id}/sync` for on-demand; APScheduler `external_sync` job every `external_sync_minutes` (30) syncs all active accounts)_
+- [x] `[BE]` `[🔌]` ICS import/export foundation — **F25** _(`app/services/ics.py` + `app/routers/sync.py`: `GET …/calendars/{id}/ics` export, `POST …/calendars/{id}/import-ics` for inline `.ics` **or** a fetched feed URL; migration `009` adds `events.ical_uid`; re-import dedupes on it; RRULE + all-day round-trip. `tests/test_ics.py` — round-trip, recurrence expansion, re-import dedup, URL feed, both-source rejection, cross-family 404. Suite **88 green**)_
+- [x] `[BE]` `[🔌]` Google OAuth **connect** flow, **read-only** — **F18** _(`app/services/google_oauth.py` + `app/routers/external.py`: `POST …/external/google/authorize` → consent URL (**503** when unconfigured), `GET /external/google/callback` exchanges the code → stores tokens + discovers calendars (an **HMAC-signed `state`** ties the no-JWT callback back to the family), `GET …/external/accounts` lists, `DELETE …/{id}` disconnects. `calendar.readonly` scope; creds via env (`google_client_id`/`_secret`/`_redirect_uri`). `tests/test_external.py` — 13 tests; suite **101 green**)_
+- [x] `[BE]` `[🔌]` Google Calendar API **event pull → read-only mirror** — **F18** _(`google_oauth.fetch_events`: paginated `events.list` with `singleEvents=false` so recurring **masters** mirror with their RRULE, `showDeleted` so incremental pulls see cancellations; `syncToken` persisted per ext-calendar, **410** → full resync, **401** → token refresh via `ensure_fresh_token` (else `needs_reauth`). Tested with a mocked Google API — live still needs a real Google Cloud OAuth client)_
+- [~] `[BE]` `[🔌]` ~~Outlook / Microsoft Graph OAuth2~~ — **F19 DESCOPED** (household doesn't use Outlook; would reuse F18's OAuth scaffolding if revived)
+- [x] `[BE]` `[🔌]` Apple CalDAV (app password), **read-only** — **F20** _(`app/services/caldav.py`: `POST …/external/apple/connect` validates an Apple ID + **app-specific password** by discovering calendars (PROPFIND principal → calendar-home-set → list, VEVENT-only); pull uses a `sync-collection` REPORT (RFC 6578) and reuses `app.services.ics` to parse the returned `calendar-data`, feeding the same `apply_mirror_events`. Credential stored in `refresh_token`; provider already in migration `010`'s enum (no new migration). Tested with a mocked CalDAV transport — live needs a real iCloud app password)_
+- [~] `[BE]` `[🔌]` ~~Yahoo CalDAV (app password), read~~ — **F22 DESCOPED** (not used; would reuse F20's CalDAV engine if revived)
+- [~] `[BE]` `[🔌]` ~~Cozi best-effort `.ics` import (no API), read-only~~ — **F21 DESCOPED** (not used; F25's URL-import covers the mechanism ad-hoc if ever needed)
+- [x] `[FE]` `[🔌]` `.ics` import/export UI — **F25** _(`components/calendar/calendar-sync-dialog.tsx` + a toolbar action in `calendar-view.tsx`, companion/`app` surface only; export downloads a Blob via the auth proxy, import posts file/paste/URL through `useImportCalendarIcs`; typecheck + lint clean)_
+- [x] `[FE]` `[🔌]` Connect-account UI (Google OAuth start, Apple CalDAV creds) for **F18/F20** _(`app/app/family/[id]/integrations/page.tsx` "Calendar sync" page, owner/adult only via `FamilyMenu`: **Connect Google** → `useGoogleAuthorize` → redirect to consent URL (toasts on 503-unconfigured); **Connect iCloud** → `apple-connect-dialog.tsx` Apple ID + app-specific-password form (`useConnectApple`, 401/502 handling, links to appleid.apple.com). OAuth callback now returns to this page (`?external=connected|error`) and toasts. Disconnect via AlertDialog. `hooks/use-external-calendars.ts`, `lib/types/external.ts`; added `put` to the API client)_
+- [x] `[FE]` `[🔌]` Calendar mapping + color + sync status/last-synced; **read-only external events shown but not editable** _(`external-account-card.tsx`: per-discovered-calendar Select → map to existing local calendar / **＋ new calendar** / **don't sync** (`useMapExternalCalendar`), shows the external color swatch + "Synced <when>" per mapped calendar, **Sync now** (`useSyncExternalAccount`, count toast) + status badge (Connected / Reconnect needed). **Read-only enforcement:** occurrences/events now carry `read_only` (backend derives it from the `google:`/`apple:` `ical_uid` prefix); `event-sheet.tsx` renders a no-edit **details** view for them, and the events API **403s** PATCH/DELETE on a mirror. typecheck + lint clean)_
+- [x] `[ ] ` Tests: token refresh, dedupe, recurrence mapping _(no conflict/push tests — write-back descoped)_ _(`tests/test_external.py` now 38 tests: event parsing units, mirror create/update/cancel, skip-unmapped, Google token refresh + `needs_reauth`, map/unmap, manual-sync 200/404/503, CalDAV discovery + sync-report + 401 parsing, Apple connect/reconnect/bad-creds, Apple mirror + auth→reauth. Suite **126 green**)_
+- [~] `[ ] ` AC: a Google event appears in MySkylight (read-only, not editable) _(pull→mirror + **"not editable" now fully enforced** — FE shows mirror events as a read-only details view and the events API 403s writes; **mock-tested**. Only live verification with a real Google Cloud OAuth client remains)_
+- [~] `[ ] ` AC: Apple/iCloud events import read-only _(CalDAV pull→mirror + read-only enforcement **done + mock-tested**; only live verification with a real iCloud app password remains)_
+- [x] `[ ] ` Research spikes: CalDAV lib (Apple), Google sync-token delta _(resolved in-implementation: hand-rolled CalDAV via httpx + `xml.etree` reusing the ICS parser — no new dep; Google `syncToken` delta with 410→full-resync)_
 
 ---
 
@@ -315,8 +343,10 @@ Goal: notifications, offline, accessibility, performance, deploy.
 - Native mobile (Expo/React Native) deferred — PWA first; API stays client-agnostic (PLAN §9).
 - ~~Instacart~~ (**descoped** — owner doesn't use it; F05 dropped from Phase 4) → grocery hand-off
   instead lands as **F29** (personal Walmart UI automation, Phase 9 — spike at
-  `GithubProjects/WalmartGrocerySync`). DeepSeek vision and Cozi each still have a research spike before
-  their phase — keep expectations realistic and ship graceful fallbacks.
+  `GithubProjects/WalmartGrocerySync`). DeepSeek vision (Phase 6) still has a research spike before its
+  phase — keep expectations realistic and ship graceful fallbacks. _(Cozi's spike is moot — F21 descoped.)_
+- External sync (Phase 7) is **read-only**: Google + Apple/iCloud events are pulled in to display only;
+  MySkylight never writes back. Outlook (F19), Cozi (F21), and Yahoo (F22) are descoped (decided 2026-06-15).
 
 ---
 

@@ -30,6 +30,8 @@ export function makeApi() {
       request<T>(path, { method: "GET", ...init }),
     post: <T>(path: string, body?: unknown, init?: RequestOptions) =>
       request<T>(path, { method: "POST", body, ...init }),
+    put: <T>(path: string, body?: unknown, init?: RequestOptions) =>
+      request<T>(path, { method: "PUT", body, ...init }),
     patch: <T>(path: string, body?: unknown, init?: RequestOptions) =>
       request<T>(path, { method: "PATCH", body, ...init }),
     delete: <T>(path: string, init?: RequestOptions) =>

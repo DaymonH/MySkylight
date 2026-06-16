@@ -27,6 +27,8 @@ export interface EventOut {
   rrule: string | null
   color: string | null
   is_countdown: boolean
+  /** True for events mirrored read-only from a connected external calendar (F18/F20). */
+  read_only: boolean
   created_at: string
   updated_at: string
   members: MemberBrief[]
@@ -46,6 +48,8 @@ export interface OccurrenceOut {
   is_countdown: boolean
   is_exception: boolean
   is_recurring: boolean
+  /** True when this occurrence belongs to a read-only external mirror (F18/F20). */
+  read_only: boolean
   effective_color: string
   members: MemberBrief[]
   reminder_minutes: number[]
@@ -53,6 +57,14 @@ export interface OccurrenceOut {
 }
 
 export type CalendarView = "month" | "week" | "day" | "schedule"
+
+/** Result of an ICS import (F25). `total` = created + updated. */
+export interface IcsImportResult {
+  calendar_id: string
+  created: number
+  updated: number
+  total: number
+}
 
 export interface EventCreatePayload {
   calendar_id: string

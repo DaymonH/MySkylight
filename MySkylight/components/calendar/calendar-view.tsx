@@ -3,7 +3,12 @@
 import { useState, useEffect, useMemo, useRef } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { toast } from "sonner"
-import { ChevronLeftIcon, ChevronRightIcon, PlusIcon } from "lucide-react"
+import {
+  ArrowDownUpIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  PlusIcon,
+} from "lucide-react"
 import { useApi } from "@/hooks/use-api"
 import {
   useCalendars,
@@ -24,6 +29,7 @@ import { DayView } from "./day-view"
 import { ScheduleView } from "./schedule-view"
 import { CountdownStrip } from "./countdown-strip"
 import { EventSheet } from "./event-sheet"
+import { CalendarSyncDialog } from "./calendar-sync-dialog"
 import { CalendarSkeleton } from "./calendar-skeleton"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -143,6 +149,7 @@ export function CalendarView({
   const { start: dayStartHour, end: dayEndHour } = useVisibleHours()
   const [anchor, setAnchor] = useState(new Date())
   const [sheetOpen, setSheetOpen] = useState(false)
+  const [syncOpen, setSyncOpen] = useState(false)
   const [defaultDate, setDefaultDate] = useState<string | undefined>()
   const [editing, setEditing] = useState<OccurrenceOut | undefined>()
 
@@ -398,6 +405,17 @@ export function CalendarView({
               ))}
             </TabsList>
           </Tabs>
+          {/* Import/export (.ics) is a companion-app task, not a wall-display one. */}
+          {!isDevice && (
+            <Button
+              variant="outline"
+              size="icon-sm"
+              onClick={() => setSyncOpen(true)}
+              aria-label="Import or export calendar (.ics)"
+            >
+              <ArrowDownUpIcon />
+            </Button>
+          )}
           <Button size={isDevice ? "lg" : "sm"} onClick={() => openNew()}>
             <PlusIcon />
             <span className={isDevice ? "" : "hidden sm:inline"}>Add</span>
@@ -490,6 +508,15 @@ export function CalendarView({
         defaultDate={defaultDate}
         editing={editing}
       />
+
+      {!isDevice && (
+        <CalendarSyncDialog
+          open={syncOpen}
+          onClose={() => setSyncOpen(false)}
+          familyId={familyId}
+          calendars={calendars}
+        />
+      )}
     </div>
   )
 }

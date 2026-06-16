@@ -430,37 +430,111 @@ frontend (FE) pieces, and **acceptance criteria** (AC) that define "done".
 
 > _"Seamlessly Auto-Syncs With: Google, Outlook, Apple, Cozi, Yahoo."_ Built last and incrementally;
 > two-way where the provider allows, read-only otherwise.
+>
+> **Scope (decided 2026-06-15):** the household uses **Google** + **Apple/iCloud**, so Phase 7 keeps
+> **F25** (done), **F18** (Google), and **F20** (Apple). **F19 (Outlook), F21 (Cozi), and F22 (Yahoo) are
+> descoped** (not used) — specs kept below for later, struck through like F05. **Sync is read-only
+> (one-way pull):** external events are mirrored in to *display* in the app; **MySkylight never writes back**
+> to Google/Apple. This drops the two-way push, conflict-resolution, and write-back work entirely.
 
-### F18 — Google sync 🔌
+### F18 — Google sync 🔌 ⭐ _(kept — read-only)_
 
-- **Approach:** OAuth2 + Google Calendar API; incremental (sync tokens); two-way.
-- **BE:** OAuth flow, `ExternalAccount` token store, mapping ext-calendar→`Calendar`+color, push/pull.
-- **AC:** A Google event appears in MySkylight and a MySkylight event appears in Google.
+- **Approach:** OAuth2 + Google Calendar API (read-only `calendar.readonly` scope); incremental pull via
+  sync tokens. **One-way: pull Google events in to display; no write-back.**
+- **BE:** OAuth flow, `ExternalAccount` token store, mapping ext-calendar→`Calendar`+color, **pull only**.
+- **Status (2026-06-16):** ☑ **Code-complete (connect + pull→mirror + FE), mock-tested; only live verification pending.**
+  - **Connect (BE):** `app/models/external.py` — `ExternalAccount` (provider, tokens, expiry, status,
+    soft-delete) + `ExternalCalendar` (discovered calendars, optional `calendar_id` map, `sync_token`);
+    migration `010`. `app/services/google_oauth.py` — authorize-URL builder, code exchange, token
+    refresh, userinfo, calendar-list (read-only), and an **HMAC-signed `state`** so the JWT-less callback
+    is tied to the family that started it. `app/routers/external.py` — `POST …/external/google/authorize`
+    (owner/adult; **503** when unconfigured), `GET /external/google/callback`, `GET …/external/accounts`,
+    `DELETE …/{id}`. Creds from env (`google_client_id`/`_secret`/`_redirect_uri`); never committed.
+  - **Pull → read-only mirror (BE, new 2026-06-16):** `google_oauth.fetch_events` — paginated `events.list`
+    with `singleEvents=false` (recurring **masters** mirror with their RRULE) + `showDeleted` (incremental
+    pulls see cancellations); per-calendar `syncToken` persisted, **410**→full resync, **401**→refresh
+    (`ensure_fresh_token`, else `needs_reauth`). `app/services/external_sync.py` — the **shared mirror
+    engine**: `apply_mirror_events` upserts into the mapped local calendar keyed on a provider-namespaced
+    `ical_uid` (`google:<extcal>:<eventid>`), soft-deleting on upstream removal. `PUT …/external/calendars/{id}`
+    maps/creates/clears the local-calendar target; `POST …/external/accounts/{id}/sync` pulls on demand;
+    an APScheduler `external_sync` job polls every `external_sync_minutes` (30). A pull publishes an SSE
+    `event.created` nudge so devices refresh. `tests/test_external.py` — **38 tests** (parsing, mirror
+    create/update/cancel, token refresh, mapping, manual-sync); suite **129 green**.
+  - **FE (new 2026-06-16):** a "Calendar sync" page (`app/app/family/[id]/integrations/page.tsx`,
+    owner/adult, linked from `FamilyMenu`) — **Connect Google** (`useGoogleAuthorize` → redirect to the
+    consent URL; toasts when the server is unconfigured) and **Connect iCloud** (see F20). Each discovered
+    calendar maps via a Select to an existing local calendar / a **new** one / off
+    (`useMapExternalCalendar`), with a color swatch, "Synced <when>", a **Sync now** button + status badge,
+    and Disconnect. The OAuth callback returns to this page (`?external=connected|error`). Hooks in
+    `hooks/use-external-calendars.ts`, types in `lib/types/external.ts`.
+  - **Read-only enforcement (new 2026-06-16):** occurrences/events now carry a `read_only` flag, derived
+    from the `google:`/`apple:` `ical_uid` prefix (`is_external_mirror` in `app/models/external.py`). The
+    event sheet renders mirror events as a no-edit **details** view, and the events API **403s** any
+    PATCH/DELETE on a mirror — so a local change can never be silently clobbered on the next pull. FE
+    typecheck + lint clean.
+  - **TODO:** **live end-to-end** only — needs a real Google Cloud OAuth client + account.
+- **Setup:** needs a Google Cloud OAuth client (ID/secret); for personal/self-hosted use, OAuth
+  "testing" mode with the household's own accounts as test users avoids Google's app-verification review.
+- **AC:** ✅ (code-complete) A Google event appears in MySkylight, **read-only and not editable in-app**
+  (FE details view + API 403 on writes). _Proven by mock-tests; live display pending a real OAuth client._
 
-### F19 — Outlook sync 🔌
+### F19 — ~~Outlook sync~~ 🔌 — **DESCOPED** (household doesn't use Outlook)
 
-- **Approach:** Microsoft Graph OAuth2; two-way; delta queries.
-- **AC:** Outlook ↔ MySkylight events stay consistent.
+- ~~**Approach:** Microsoft Graph OAuth2; two-way; delta queries.~~
+- ~~**AC:** Outlook ↔ MySkylight events stay consistent.~~ — _Not built. Reusable if revived: shares
+  the OAuth/`ExternalAccount`/sync-engine scaffolding with F18 (Google)._
 
-### F20 — Apple sync 🔌
+### F20 — Apple sync 🔌 _(kept — read-only)_
 
-- **Approach:** **CalDAV** (iCloud app-specific password); read-first, then write.
-- **AC:** iCloud calendar events import; writes land back when enabled.
+- **Approach:** **CalDAV** (iCloud app-specific password); **read-only** (pull iCloud events in to display;
+  no write-back).
+- **Setup:** needs an iCloud account + app-specific password (appleid.apple.com → Sign-In and Security →
+  App-Specific Passwords).
+- **Status (2026-06-16):** ☑ **Code-complete (connect + pull→mirror + FE), mock-tested; only live verification pending.**
+  - **Done (BE):** `app/services/caldav.py` — a small read-only CalDAV client (httpx + `xml.etree`, no new
+    dependency). `POST …/external/apple/connect` (owner/adult) validates an Apple ID + app-specific password
+    by **discovering** calendars (PROPFIND principal → calendar-home-set → list, filtered to VEVENT-capable
+    collections), then stores them as `ExternalCalendar` rows on an `apple` `ExternalAccount` (the
+    app-specific password is the durable credential, kept in `refresh_token`; **no new migration** — `apple`
+    was already in migration `010`'s provider enum). Pull uses a `sync-collection` REPORT (RFC 6578:
+    empty token = full, stored token = delta + removals, rejected token → full re-pull) and **reuses the ICS
+    parser** (`app.services.ics`) on the returned `calendar-data`, feeding the **same** `apply_mirror_events`
+    as Google (uid `apple:<calurl>:<href>`). `tests/test_external.py` covers CalDAV discovery/sync-report/401
+    parsing, connect/reconnect/bad-creds, and the Apple mirror + auth→`needs_reauth`. Suite **129 green**.
+  - **FE (new 2026-06-16):** **Connect iCloud** on the "Calendar sync" page opens
+    `components/integrations/apple-connect-dialog.tsx` — an Apple ID + app-specific-password form
+    (`useConnectApple`; links to appleid.apple.com; toasts 401 bad-creds / 502 unreachable). Discovered
+    iCloud calendars map / sync / show status through the **same** `ExternalAccountCard` as Google. Mirror
+    events get the shared `read_only` treatment (no-edit details view + API 403); see F18.
+  - **TODO:** **live verification** only — needs a real iCloud app-specific password.
+- **AC:** ✅ (code-complete) iCloud calendar events import **read-only** (shown but not editable in-app).
+  _Proven by mock-tests; live display pending a real iCloud app password._
 
-### F21 — Cozi sync 🔌
+### F21 — ~~Cozi sync~~ 🔌 — **DESCOPED** (household doesn't use Cozi)
 
-- **Approach:** **No public API** → best-effort **`.ics` feed import** (read-only). Set expectations in UI.
-- **AC:** A Cozi-published ICS feed imports events read-only.
+- ~~**Approach:** No public API → best-effort `.ics` feed import (read-only).~~ — _The mechanism still
+  exists: F25's `import-ics` accepts a **feed URL**, so a Cozi `.ics` feed could be imported ad-hoc
+  without reviving this as a named feature._
 
-### F22 — Yahoo sync 🔌
+### F22 — ~~Yahoo sync~~ 🔌 — **DESCOPED** (not used)
 
-- **Approach:** **CalDAV** (app password); read-first.
-- **AC:** Yahoo calendar events import.
+- ~~**Approach:** CalDAV (app password); read-first.~~ — _Not built. Would reuse F20's CalDAV engine if revived._
 
-### F25 — ICS import/export (enabler)
+### F25 — ICS import/export (enabler) `☑`
 
-- **Approach:** Standard `.ics` import/export underpins Cozi + any provider; useful on its own.
-- **AC:** Import a `.ics` file into a calendar; export a calendar as `.ics`.
+- **Approach:** Standard `.ics` import/export underpins any provider; useful on its own.
+- **Status (2026-06-15):** ☑ **Built + tested (backend) and wired up (frontend).**
+  - **BE:** `app/services/ics.py` (export/parse/import via the `icalendar` lib) + `app/routers/sync.py`:
+    `GET …/calendars/{id}/ics` exports, `POST …/calendars/{id}/import-ics` imports inline `.ics` text
+    **or** a fetched feed URL. Migration `009` adds `events.ical_uid`; re-import dedupes on it. RRULE +
+    all-day round-trip. `tests/test_ics.py` (7 tests; suite **88 green**).
+  - **FE:** `components/calendar/calendar-sync-dialog.tsx` — opened from an import/export action in the
+    `CalendarView` toolbar (companion `/app` surface only; the wall display doesn't do file I/O). Picks a
+    calendar, then **exports** by streaming the `text/calendar` response through the auth proxy into a
+    downloaded Blob (the JSON `apiRequest` helper drops non-JSON bodies, so export uses a raw `fetch`),
+    and **imports** via file upload / paste / feed URL through `useImportCalendarIcs`, toasting the
+    created/updated counts and invalidating the occurrences cache. Typecheck + lint clean.
+- **AC:** ✅ Import a `.ics` file into a calendar; export a calendar as `.ics`. _(BE proven by tests; FE built.)_
 
 ---
 
@@ -503,7 +577,7 @@ frontend (FE) pieces, and **acceptance criteria** (AC) that define "done".
 |     4 | F04 _(F05 Instacart descoped)_                       |
 |     5 | F14, F15, F27, F28 _(F16 parked → revisit later)_    |
 |     6 | F17, F15 (AI recipes + URL/photo recipe import)      |
-|     7 | F18, F19, F20, F21, F22, F25                         |
+|     7 | **F25** ☑, **F18** (Google), **F20** (Apple) _(F19/F21/F22 descoped)_ |
 |     8 | F09, F12                                             |
 |     9 | notifications, offline, a11y, deploy (cross-cutting), **F29** |
 

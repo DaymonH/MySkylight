@@ -4,7 +4,7 @@ import { useEffect, useState } from "react"
 import { useForm, Controller } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
-import { Trash2Icon } from "lucide-react"
+import { CloudIcon, Trash2Icon } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -88,6 +88,34 @@ function toDatetimeLocal(iso: string) {
   const d = new Date(iso)
   const pad = (n: number) => String(n).padStart(2, "0")
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
+// Human-readable "when" for the read-only details view (external mirror events).
+function formatWhen(occ: OccurrenceOut) {
+  const start = new Date(occ.start_dt)
+  const end = new Date(occ.end_dt)
+  const dateOpts: Intl.DateTimeFormatOptions = {
+    weekday: "short",
+    month: "long",
+    day: "numeric",
+  }
+  if (occ.all_day) {
+    const sameDay = occ.start_dt.slice(0, 10) === occ.end_dt.slice(0, 10)
+    return sameDay
+      ? `${start.toLocaleDateString(undefined, dateOpts)} · All day`
+      : `${start.toLocaleDateString(undefined, dateOpts)} – ${end.toLocaleDateString(undefined, dateOpts)}`
+  }
+  const timeOpts: Intl.DateTimeFormatOptions = { hour: "numeric", minute: "2-digit" }
+  if (start.toDateString() === end.toDateString()) {
+    return `${start.toLocaleDateString(undefined, dateOpts)} · ${start.toLocaleTimeString(
+      undefined,
+      timeOpts,
+    )} – ${end.toLocaleTimeString(undefined, timeOpts)}`
+  }
+  return `${start.toLocaleString(undefined, { ...dateOpts, ...timeOpts })} – ${end.toLocaleString(
+    undefined,
+    { ...dateOpts, ...timeOpts },
+  )}`
 }
 
 export function EventSheet({
@@ -201,6 +229,78 @@ export function EventSheet({
   function confirmSave() {
     if (pendingValues) onSubmit(pendingValues)
     setConfirmOpen(false)
+  }
+
+  // External-mirror events (F18/F20) are read-only: show their details, but offer
+  // no edit form, no save, and no delete — the backend rejects writes anyway.
+  if (editing?.read_only) {
+    return (
+      <Sheet open={open} onOpenChange={(o) => !o && onClose()}>
+        <SheetContent side="right" className="w-full gap-0 p-0 sm:max-w-md">
+          <SheetHeader className="border-b">
+            <SheetTitle className="text-lg">Event details</SheetTitle>
+          </SheetHeader>
+
+          <div className="thin-scrollbar flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto p-6">
+            <div className="flex items-center gap-2 rounded-2xl bg-muted/50 px-3.5 py-2.5 text-sm text-muted-foreground">
+              <CloudIcon className="size-4 flex-shrink-0" />
+              <span>Synced from an external calendar — read-only here.</span>
+            </div>
+
+            <div className="space-y-1">
+              <p className="text-xs font-medium text-muted-foreground">Title</p>
+              <p className="text-base font-medium">{editing.title}</p>
+            </div>
+
+            <div className="space-y-1">
+              <p className="text-xs font-medium text-muted-foreground">When</p>
+              <p className="text-sm">{formatWhen(editing)}</p>
+            </div>
+
+            {editing.location && (
+              <div className="space-y-1">
+                <p className="text-xs font-medium text-muted-foreground">Location</p>
+                <p className="text-sm">{editing.location}</p>
+              </div>
+            )}
+
+            {editing.description && (
+              <div className="space-y-1">
+                <p className="text-xs font-medium text-muted-foreground">Notes</p>
+                <p className="whitespace-pre-wrap text-sm">{editing.description}</p>
+              </div>
+            )}
+
+            {editing.members.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-xs font-medium text-muted-foreground">Assigned to</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {editing.members.map((m) => (
+                    <span
+                      key={m.id}
+                      className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs"
+                      style={{ borderColor: m.color }}
+                    >
+                      <span
+                        className="size-2 rounded-full"
+                        style={{ backgroundColor: m.color }}
+                      />
+                      {m.name}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <SheetFooter className="border-t">
+            <Button type="button" variant="outline" className="w-full" onClick={onClose}>
+              Close
+            </Button>
+          </SheetFooter>
+        </SheetContent>
+      </Sheet>
+    )
   }
 
   return (

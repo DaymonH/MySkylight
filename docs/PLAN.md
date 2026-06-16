@@ -36,7 +36,7 @@ Both talk to one **FastAPI + SQLite** backend. Changes on a phone appear on the 
 | # | Decision | Choice | Rationale |
 |---|----------|--------|-----------|
 | D1 | Mobile strategy | **Responsive Next.js + PWA** (one app, `/device` + `/app`) | One codebase/deploy; installable on phones; native app can come later. |
-| D2 | External calendar sync | **Internal-first**, external providers in a later phase | Fastest path to a working product; sync (esp. Cozi/CalDAV) is the heaviest, riskiest work. |
+| D2 | External calendar sync | **Internal-first**; later phase adds **read-only pull** from Google + Apple/iCloud (+ ICS). No write-back. | Fastest path to a working product; read-only sidesteps the heaviest, riskiest work (two-way push, conflict resolution). Outlook/Cozi/Yahoo descoped. |
 | D3 | AI / Smart features | **DeepSeek** (OpenAI-compatible API) | Used for Magic Import parsing + smart recipe generation. Behind a thin provider interface so it's swappable. |
 | D4 | Authentication | **Clerk** (identity only) | Clerk owns login, sessions, social/MFA. Backend verifies Clerk JWTs; **Family, roles & invitations stay in our DB** (we did *not* adopt Clerk Organizations). |
 
@@ -124,7 +124,7 @@ Both talk to one **FastAPI + SQLite** backend. Changes on a phone appear on the 
             └───────────────────────────────────────────────────────────────────────────┘
                          │ external (Phase 6/7)        │
                          ▼                             ▼
-     Clerk (identity·JWT·webhooks) · DeepSeek/OCR · Google·Outlook·Apple·Yahoo·Cozi · Weather
+     Clerk (identity·JWT·webhooks) · DeepSeek/OCR · Google·Apple/iCloud (read-only) · Weather
 ```
 
 ### Multi-tenancy & auth model
@@ -206,12 +206,17 @@ Each phase is independently shippable and has an **exit criteria**. Detailed tas
 | **4** | Lists & groceries | **Custom Lists** (to-dos/groceries), items, check/categorize/assign. _(Grocery → Instacart **descoped**.)_ | Shared grocery list edits sync across surfaces. |
 | **5** | Calendar Plus I | **Rewards** (star economy), **Rotating Chores** (F27, auto-rotate assignee), **Meal Planning** (slots → calendar), **Recipes** (manual/upload, structured ingredients), **Recipe → Grocery** (F28, aggregated list), **Photo Screensaver** (albums, idle slideshow) | Stars awarded on chore completion + redeemed; a rotating chore cycles members daily; meals show on calendar; a meal plan builds an aggregated grocery list; idle device shows album slideshow. |
 | **6** | Smart / AI | **Magic Import** (email/PDF/photo → OCR → DeepSeek → draft events → confirm), **Smart recipe** generation | Forwarded flyer becomes a reviewed, saved event; recipe generated from a prompt. |
-| **7** | External sync | **Google** → **Outlook** → **Apple/Yahoo (CalDAV)** → **Cozi** (best-effort ICS). Two-way where possible. | A Google event appears in MySkylight and vice-versa; others import read-only. |
+| **7** | External sync | **ICS import/export** (F25, ✅) + **read-only pull** from **Google** (API) and **Apple/iCloud** (CalDAV) to display in-app. _(Outlook/Cozi/Yahoo descoped; write-back descoped — read-only only.)_ | A Google/iCloud event appears in MySkylight read-only; a calendar imports/exports as `.ics`. |
 | **8** | Device & system | **Device Linking** (pairing, multi-screen), **Sleep Mode**, orientation, default views | Two paired screens share data; screen sleeps/wakes on schedule. |
 | **9** | Polish & hardening | Web **push notifications** + reminder delivery, offline/PWA caching, a11y, kiosk wake-lock, perf, backups, deploy | Reminder fires as a push; app usable offline; Lighthouse PWA passes; one-command deploy. |
 
 > Weather and Countdowns ride with Phase 2 because they attach to events. Instacart (the Phase-4
 > Grocery hand-off) is **descoped** — not used. Sync is deliberately late (Phase 7).
+>
+> **Phase 7 scope (decided 2026-06-15):** keep **F25** (ICS, done), **F18** (Google), **F20** (Apple/iCloud);
+> **descope F19 (Outlook), F21 (Cozi), F22 (Yahoo)** — not used by this household. Sync is **read-only
+> (one-way pull)**: external events are mirrored in to display; MySkylight **never writes back**. This
+> removes two-way push, conflict resolution, and write-back from the phase.
 
 ---
 
@@ -236,10 +241,10 @@ Each phase is independently shippable and has an **exit criteria**. Detailed tas
 
 | Risk / question | Impact | Mitigation |
 |---|---|---|
-| **Cozi has no public API** | Can't truly two-way sync | Best-effort `.ics` feed/import only; set expectations in UI. |
+| ~~Cozi has no public API~~ | ~~Can't truly two-way sync~~ | **Descoped (2026-06-15)** — household doesn't use Cozi. (F25's URL `.ics` import remains if ever needed.) |
 | **DeepSeek has no public vision API** | Magic Import on photos | OCR pre-stage; keep AI layer swappable; revalidate at Phase 6. |
 | ~~Instacart API is partner-gated (US-only)~~ | ~~Grocery 1-tap order~~ | **Descoped** — feature dropped (owner doesn't use Instacart), so the risk no longer applies. |
-| **CalDAV quirks (Apple/Yahoo)** | Flaky sync | Use a battle-tested CalDAV client lib; read-only first. |
+| **CalDAV quirks (Apple)** | Flaky sync | Use a battle-tested CalDAV client lib. **Read-only only** (write-back descoped 2026-06-15), which sidesteps the riskiest CalDAV write/ETag-conflict paths. (Yahoo descoped.) |
 | **Next.js 16 is pre-GA-ish / breaking** | FE churn | Follow bundled docs in `node_modules/next/dist/docs/`; pin versions. |
 | **Clerk dependency / pricing / outage** | Auth is third-party | Verify JWTs networklessly (cached JWKS) so brief Clerk outages don't break verified sessions; webhook + JIT user sync; keep identity isolated so it's swappable. |
 | **SQLite write concurrency** | Many devices writing | WAL mode; serialize writes; fine for household scale. |
