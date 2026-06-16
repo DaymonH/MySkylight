@@ -324,6 +324,34 @@ frontend (FE) pieces, and **acceptance criteria** (AC) that define "done".
   meal plan generates a complete grocery list; quantities are editable before save.
 - _Depends on **F04** (lists) + **F15** (recipes/meal plan). Phase 5._
 
+### F29 — Grocery → Walmart hand-off (personal web automation) 🔌
+
+> **Replaces the descoped F05 Instacart hand-off.** Personal-use only; deliberately one of the **last**
+> features built (Phase 9).
+
+- **Approach:** A **desktop worker** drives the Walmart UI with **SeleniumBase** (UC/CDP mode for
+  anti-bot), reusing the owner's logged-in session (persistent Chrome profile, **home IP, real
+  account**), to add a MySkylight grocery `List`'s items to a Walmart **list** (or cart). Best-effort:
+  the owner then reviews and checks out (pickup/delivery slot + payment) **in Walmart**. It is **not** a
+  hands-off ordering robot — Walmart exposes **no public consumer ordering API**, and the official
+  add-to-cart/OPD APIs are partner-gated and a poor fit for a private household app (see git history /
+  the F05 descope for that analysis).
+- **Spike (already scaffolded):** `GithubProjects/WalmartGrocerySync/` — `login.py` (one-time
+  interactive login → persisted `chrome-profile/`, never handles credentials) + `add_to_walmart.py`
+  (search → add top result; gentle pacing; per-item report). **Parked** until Phase 9; the UC-mode
+  session/reconnect/pacing pattern is solid, the CSS selectors need live verification.
+- **BE (MySkylight):** read-only feed of a grocery `List`'s items for the worker (reuse
+  `GET /families/{id}/lists/{id}`); optional per-item **preferred Walmart product URL/ID** so repeat
+  items add deterministically instead of via fuzzy search.
+- **FE:** an "export to Walmart" action on a grocery list + a last-run result view (added / not-found /
+  needs-pick).
+- **AC:** a MySkylight grocery list populates a Walmart list the owner can review and check out;
+  unmatched items are reported for manual selection.
+- **Caveats:** automated access is generally against Walmart's ToS (low practical risk for personal use
+  on one's own account — worst case a flagged/captcha'd session); selectors are brittle; sessions
+  expire; **runs on the desktop, not the Pi** (headless Chromium + anti-bot is too heavy for the Pi).
+- _Phase 9 (last). Depends on **F04** (grocery lists)._
+
 ### F17 — Magic Import 🤖⭐
 
 > _"Forward emails and PDFs, or upload photos of lists/flyers to automatically add dates and details."_
@@ -420,6 +448,6 @@ frontend (FE) pieces, and **acceptance criteria** (AC) that define "done".
 |     6 | F17, F15 (AI recipes + URL/photo recipe import)      |
 |     7 | F18, F19, F20, F21, F22, F25                         |
 |     8 | F09, F12                                             |
-|     9 | notifications, offline, a11y, deploy (cross-cutting) |
+|     9 | notifications, offline, a11y, deploy (cross-cutting), **F29** |
 
 _\* foundational scaffolding begins in Phase 0, completed in Phase 1._

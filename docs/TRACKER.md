@@ -30,8 +30,8 @@ Update the **Progress summary** counts when you complete a phase. Tags: `[INFRA]
 |     6 | Smart / AI (DeepSeek)                  |   ☐    |                           0 / 11                            |
 |     7 | External sync                          |   ☐    |                           0 / 16                            |
 |     8 | Device & system                        |   ☐    |                           0 / 10                            |
-|     9 | Polish & hardening                     |   ☐    |                           0 / 15                            |
-|       | **Total**                              |        |                        **75 / 152**                         |
+|     9 | Polish & hardening (+ F29 Walmart hand-off) |   ☐    |                      0 / 17                            |
+|       | **Total**                              |        |                        **75 / 154**                         |
 
 ---
 
@@ -299,14 +299,20 @@ Goal: notifications, offline, accessibility, performance, deploy.
 - [ ] `[ ] ` End-to-end smoke across device + mobile
 - [ ] `[ ] ` Docs: deploy guide, env reference, backup/restore
 
+**Grocery → Walmart hand-off — F29** _(deliberately last; optional personal automation; replaces the descoped F05 Instacart)_
+
+- [ ] `[BE]` `[🔌]` Grocery export feed for the worker: read a grocery `List`'s items; optional per-item "preferred Walmart product URL/ID" for deterministic adds — **F29**
+- [ ] `[🔌]` Desktop **SeleniumBase** worker (UC/CDP anti-bot, persisted login session, owner's home IP) adds the list to a Walmart list/cart; owner reviews + checks out (Walmart has no public consumer ordering API) — **F29** _(spike already scaffolded at `GithubProjects/WalmartGrocerySync` — `login.py` + `add_to_walmart.py`; **parked** here until Phase 9; selectors need live verification; runs on the **desktop**, not the Pi)_
+
 ---
 
 ### Notes / parking lot
 
 - Native mobile (Expo/React Native) deferred — PWA first; API stays client-agnostic (PLAN §9).
-- ~~Instacart~~ (**descoped** — owner doesn't use it; F05 dropped from Phase 4). DeepSeek vision and
-  Cozi each still have a research spike before their phase — keep expectations realistic and ship
-  graceful fallbacks.
+- ~~Instacart~~ (**descoped** — owner doesn't use it; F05 dropped from Phase 4) → grocery hand-off
+  instead lands as **F29** (personal Walmart UI automation, Phase 9 — spike at
+  `GithubProjects/WalmartGrocerySync`). DeepSeek vision and Cozi each still have a research spike before
+  their phase — keep expectations realistic and ship graceful fallbacks.
 
 ---
 
