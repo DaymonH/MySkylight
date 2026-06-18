@@ -1,6 +1,5 @@
 "use client"
 
-import { useState, useEffect } from "react"
 import { useQueries } from "@tanstack/react-query"
 import { useApi } from "@/hooks/use-api"
 
@@ -36,23 +35,6 @@ function maxOf(arr: (number | null)[] | undefined): number {
   let m = 0
   for (const v of arr) if (v != null && v > m) m = v
   return m
-}
-
-export function useGeolocation() {
-  const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(
-    null
-  )
-
-  useEffect(() => {
-    if (!navigator.geolocation) return
-    navigator.geolocation.getCurrentPosition(
-      (pos) =>
-        setCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-      () => {} // silently skip if denied
-    )
-  }, [])
-
-  return coords
 }
 
 export function useWeatherDays(

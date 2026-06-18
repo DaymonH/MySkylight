@@ -12,6 +12,7 @@ import { useApi } from "@/hooks/use-api"
 import { useRealtime } from "@/hooks/use-realtime"
 import { FamilyNameEditor } from "@/components/family-name-editor"
 import { FamilyTimezoneSelect } from "@/components/family-timezone-select"
+import { FamilyWeatherLocation } from "@/components/family-weather-location"
 import { MemberEditSheet } from "@/components/member-edit-sheet"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -106,8 +107,10 @@ export default function MembersPage({ params }: { params: Promise<{ familyId: st
       </header>
 
       <Card>
-        <CardContent>
+        <CardContent className="flex flex-col gap-6">
           <FamilyTimezoneSelect familyId={familyId} />
+          <div className="border-t" />
+          <FamilyWeatherLocation familyId={familyId} />
         </CardContent>
       </Card>
 

@@ -19,7 +19,7 @@ import {
   useDeleteEvent,
 } from "@/hooks/use-calendars"
 import { useRealtime } from "@/hooks/use-realtime"
-import { useGeolocation, useWeatherDays } from "@/hooks/use-weather"
+import { useWeatherDays } from "@/hooks/use-weather"
 import { useVisibleHours } from "@/hooks/use-visible-hours"
 import { useActiveMember } from "@/hooks/use-active-member"
 import { MemberFilter } from "./member-filter"
@@ -157,7 +157,21 @@ export function CalendarView({
 
   useRealtime(familyId)
 
-  const coords = useGeolocation()
+  // Weather uses the family's saved "home" location (set once in settings) rather
+  // than browser geolocation, so no device prompts for location on every open.
+  // Shares the ["family", familyId] cache, so saving a location live-updates here.
+  const { data: family } = useQuery({
+    queryKey: ["family", familyId],
+    queryFn: () =>
+      api.get<{ weather_lat: number | null; weather_lng: number | null }>(
+        `/families/${familyId}`,
+      ),
+    enabled: !!familyId,
+  })
+  const coords =
+    family?.weather_lat != null && family?.weather_lng != null
+      ? { lat: family.weather_lat, lng: family.weather_lng }
+      : null
 
   const calendarsQuery = useCalendars(familyId)
   const calendars = calendarsQuery.data ?? []
