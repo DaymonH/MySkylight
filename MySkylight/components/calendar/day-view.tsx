@@ -132,12 +132,20 @@ export function DayView({
           </div>
 
           {/* Event column */}
-          <div
-            className="relative flex-1"
-            style={{
-              backgroundImage: `repeating-linear-gradient(to bottom, var(--border) 0, var(--border) 1px, transparent 1px, transparent ${hourHeight}px)`,
-            }}
-          >
+          <div className="relative flex-1">
+            {/* Hour gridlines as real bordered rows. These paint crisply at any
+                browser zoom / OS display-scaling, whereas a repeating
+                linear-gradient drops whole bands of 1px lines on sub-pixel
+                rounding (the "missing 2–5pm lines" bug). */}
+            <div className="pointer-events-none absolute inset-0 flex flex-col">
+              {Array.from({ length: spanHours }, (_, h) => (
+                <div
+                  key={h}
+                  className="border-t border-border"
+                  style={{ height: hourHeight }}
+                />
+              ))}
+            </div>
             {positioned.map((p, i) => {
               if (p.endMin <= startMinClamp || p.startMin >= endMinClamp)
                 return null
