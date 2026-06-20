@@ -29,5 +29,13 @@ Backend canonical docs cross-reference here; its API surface is in `docs/PLAN.md
 - **PWA:** manifest + service worker; iOS Web Push needs "Add to Home Screen" (16.4+).
 - File/folder naming: kebab-case; components/types PascalCase; hooks/functions camelCase.
 
+## Deployment — automatic on push to `main` (no manual deploy)
+The frontend is hosted on **Netlify** (`MySkylight/netlify.toml`: `next build` + `@netlify/plugin-nextjs`)
+and **auto-deploys on every push to `main`** — there's no GitHub Actions workflow and nothing to run by
+hand. The **backend deploys separately** (its own GitHub Actions → SSH → rebuild on the Pi, which runs
+`alembic upgrade head`). So a push to `main` here goes live on its own.
+- When an **API-contract change spans both repos** (e.g. a field added/removed on an endpoint), push the
+  backend and frontend close together — otherwise the live FE and BE briefly mismatch.
+
 ## Never edit
 `.env*` / secrets. `NEXT_PUBLIC_*` are the only client-exposed vars.
