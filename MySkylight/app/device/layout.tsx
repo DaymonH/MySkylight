@@ -1,6 +1,18 @@
+import type { Metadata } from "next"
+
 import { DeviceSidebar } from "@/components/device-sidebar"
 
-export const metadata = { title: "MySkylight — Device" }
+// Override the root manifest so adding /device to the Home Screen installs a
+// kiosk PWA that launches at /device (the root manifest's start_url is /app).
+export const metadata: Metadata = {
+  title: "MySkylight — Device",
+  manifest: "/device-manifest.json",
+  appleWebApp: {
+    capable: true,
+    title: "MySkylight Kiosk",
+    statusBarStyle: "default",
+  },
+}
 
 export default function DeviceLayout({ children }: { children: React.ReactNode }) {
   return (
