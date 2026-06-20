@@ -48,7 +48,7 @@ export function CountdownStrip({
                 isToday ? "today" : `in ${occ.days_until} days`
               }`}
               className={cn(
-                "bg-card ring-foreground/5 relative flex flex-shrink-0 flex-col items-center gap-0.5 overflow-hidden rounded-xl px-3 text-center shadow-sm ring-1 transition-all hover:-translate-y-0.5 hover:shadow-md",
+                "bg-card ring-foreground/5 relative flex flex-shrink-0 flex-col items-center gap-0.5 overflow-hidden rounded-xl px-3 text-center shadow-sm ring-1 transition-all hover:-translate-y-0.5 hover:shadow-md active:translate-y-0 active:shadow",
                 large ? "min-w-[5.5rem] py-2" : "min-w-[4.75rem] py-1.5",
               )}
             >

@@ -2,6 +2,7 @@
 
 import { CalendarPlusIcon, MapPinIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { readableTextOn } from "@/lib/colors"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import type { MemberBrief, OccurrenceOut } from "@/lib/types/calendar"
@@ -37,7 +38,10 @@ function MemberAvatars({ members }: { members: MemberBrief[] }) {
     <div className="flex -space-x-1.5">
       {members.slice(0, 3).map((m) => (
         <Avatar key={m.id} size="sm" className="ring-2 ring-background" title={m.name}>
-          <AvatarFallback style={{ backgroundColor: m.color }} className="text-[10px] font-semibold text-white">
+          <AvatarFallback
+            style={{ backgroundColor: m.color, color: readableTextOn(m.color) }}
+            className="text-[10px] font-semibold"
+          >
             {m.name.slice(0, 1).toUpperCase()}
           </AvatarFallback>
         </Avatar>
@@ -100,7 +104,7 @@ export function ScheduleView({ occurrences, onEventClick, onAdd }: ScheduleViewP
                 <button
                   key={i}
                   onClick={() => onEventClick(occ)}
-                  className="bg-card ring-foreground/5 hover:bg-accent/50 group flex items-start gap-3 rounded-2xl p-3 text-left shadow-sm ring-1 transition-colors"
+                  className="bg-card ring-foreground/5 hover:bg-accent/50 active:bg-accent group flex items-start gap-3 rounded-2xl p-3 text-left shadow-sm ring-1 transition-colors"
                 >
                   <span
                     className="mt-0.5 h-9 w-1 flex-shrink-0 rounded-full"

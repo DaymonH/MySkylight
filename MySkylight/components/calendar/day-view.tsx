@@ -3,6 +3,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 import { MapPinIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { readableTextOn } from "@/lib/colors"
 import type { OccurrenceOut } from "@/lib/types/calendar"
 import type { WeatherDay } from "@/hooks/use-weather"
 import { WeatherIcon } from "./weather-icon"
@@ -101,8 +102,11 @@ export function DayView({
               <button
                 key={i}
                 onClick={() => onEventClick(occ)}
-                className="rounded-md px-2 py-0.5 text-xs font-medium text-white shadow-sm"
-                style={{ backgroundColor: occ.effective_color }}
+                className="rounded-md px-2 py-0.5 text-xs font-medium shadow-sm ring-1 ring-black/5 transition-shadow active:shadow-md"
+                style={{
+                  backgroundColor: occ.effective_color,
+                  color: readableTextOn(occ.effective_color),
+                }}
               >
                 {occ.title}
               </button>
@@ -148,13 +152,14 @@ export function DayView({
                 <button
                   key={i}
                   onClick={() => onEventClick(p.occ)}
-                  className="absolute z-10 flex flex-col overflow-hidden rounded-lg px-2.5 py-1 text-left text-white shadow-sm ring-1 ring-black/5 transition-shadow hover:z-20 hover:shadow-md"
+                  className="absolute z-10 flex flex-col overflow-hidden rounded-md px-2.5 py-1 text-left shadow-sm ring-1 ring-black/5 transition-shadow hover:z-20 hover:shadow-md active:shadow-md"
                   style={{
                     top,
                     height,
                     left: `calc(${p.col * widthPct}% + 4px)`,
                     width: `calc(${widthPct}% - 8px)`,
                     backgroundColor: p.occ.effective_color,
+                    color: readableTextOn(p.occ.effective_color),
                   }}
                 >
                   <span

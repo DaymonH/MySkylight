@@ -7,15 +7,33 @@ interface CalendarSkeletonProps {
 
 export function CalendarSkeleton({ view }: CalendarSkeletonProps) {
   if (view === "month") {
+    // Mirror the real month grid (bordered cells, not gaps) so there's no layout
+    // shift when data arrives.
     return (
-      <div className="grid h-full auto-rows-fr grid-cols-7 gap-px p-px">
-        {Array.from({ length: 35 }, (_, i) => (
-          <div key={i} className="flex flex-col gap-1.5 p-1.5">
-            <Skeleton className="size-6 rounded-full" />
-            {i % 3 === 0 && <Skeleton className="h-3 w-full rounded" />}
-            {i % 4 === 0 && <Skeleton className="h-3 w-2/3 rounded" />}
-          </div>
-        ))}
+      <div className="flex h-full flex-col">
+        <div className="grid grid-cols-7 border-b">
+          {Array.from({ length: 7 }, (_, i) => (
+            <div key={i} className="flex justify-center py-1.5">
+              <Skeleton className="h-3 w-7 rounded" />
+            </div>
+          ))}
+        </div>
+        <div className="grid flex-1 auto-rows-fr">
+          {Array.from({ length: 5 }, (_, row) => (
+            <div key={row} className="grid grid-cols-7 border-b last:border-b-0">
+              {Array.from({ length: 7 }, (_, col) => {
+                const i = row * 7 + col
+                return (
+                  <div key={col} className="flex flex-col gap-1.5 border-r p-1.5 last:border-r-0">
+                    <Skeleton className="size-6 rounded-full" />
+                    {i % 3 === 0 && <Skeleton className="h-3 w-full rounded" />}
+                    {i % 4 === 0 && <Skeleton className="h-3 w-2/3 rounded" />}
+                  </div>
+                )
+              })}
+            </div>
+          ))}
+        </div>
       </div>
     )
   }
