@@ -372,10 +372,11 @@ export function CalendarView({
           >
             Today
           </Button>
-          <div className="flex items-center">
+          <div className="flex items-center overflow-hidden rounded-lg border">
             <Button
               variant="ghost"
               size={isDevice ? "icon" : "icon-sm"}
+              className="rounded-none border-r"
               onClick={() => setAnchor(navigate(view, anchor, -1))}
               aria-label="Previous"
             >
@@ -384,6 +385,7 @@ export function CalendarView({
             <Button
               variant="ghost"
               size={isDevice ? "icon" : "icon-sm"}
+              className="rounded-none"
               onClick={() => setAnchor(navigate(view, anchor, 1))}
               aria-label="Next"
             >
@@ -476,6 +478,10 @@ export function CalendarView({
               occurrences={visibleOccurrences}
               onDayClick={(date) => openNew(date)}
               onEventClick={openEdit}
+              onViewDay={(date) => {
+                changeView("day")
+                setAnchor(new Date(`${date}T00:00:00`))
+              }}
               large={isDevice}
             />
           </div>

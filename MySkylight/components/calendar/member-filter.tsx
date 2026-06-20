@@ -4,6 +4,7 @@ import type { CSSProperties } from "react"
 import { UsersIcon } from "lucide-react"
 
 import { cn } from "@/lib/utils"
+import { readableTextOn } from "@/lib/colors"
 import type { MemberBrief } from "@/lib/types/calendar"
 
 interface MemberFilterProps {
@@ -72,8 +73,12 @@ export function MemberFilter({
 
       {members.map((m) => {
         const active = m.id === activeMemberId
-        // Tint the active ring to the member's own colour.
-        const style: CSSProperties = { backgroundColor: m.color }
+        // Tint the active ring to the member's own colour; keep initials legible
+        // on light avatars (amber/sky) with a luminance-based text color.
+        const style: CSSProperties = {
+          backgroundColor: m.color,
+          color: readableTextOn(m.color),
+        }
         if (active) (style as Record<string, string>)["--tw-ring-color"] = m.color
 
         return (
@@ -87,7 +92,7 @@ export function MemberFilter({
           >
             <span
               className={cn(
-                "ring-offset-background flex items-center justify-center rounded-full font-semibold text-white transition group-focus-visible:ring-2 group-focus-visible:ring-ring group-focus-visible:ring-offset-2",
+                "ring-offset-background flex items-center justify-center rounded-full font-semibold transition group-focus-visible:ring-2 group-focus-visible:ring-ring group-focus-visible:ring-offset-2",
                 avatarSize,
                 active ? "ring-2 ring-offset-2" : "opacity-60 hover:opacity-100",
               )}

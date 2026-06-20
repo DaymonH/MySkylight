@@ -2,6 +2,7 @@
 
 import { useMemo, useEffect, useLayoutEffect, useRef, useState } from "react"
 import { cn } from "@/lib/utils"
+import { readableTextOn } from "@/lib/colors"
 import type { OccurrenceOut } from "@/lib/types/calendar"
 import type { WeatherDay } from "@/hooks/use-weather"
 import { WeatherIcon } from "./weather-icon"
@@ -170,8 +171,11 @@ export function WeekView({
                   <button
                     key={j}
                     onClick={() => onEventClick(occ)}
-                    className="truncate rounded-md px-1.5 py-0.5 text-left text-xs font-medium text-white shadow-sm"
-                    style={{ backgroundColor: occ.effective_color }}
+                    className="truncate rounded-md px-1.5 py-0.5 text-left text-xs font-medium shadow-sm ring-1 ring-black/5 transition-shadow active:shadow-md"
+                    style={{
+                      backgroundColor: occ.effective_color,
+                      color: readableTextOn(occ.effective_color),
+                    }}
                   >
                     {occ.title}
                   </button>
@@ -231,13 +235,14 @@ export function WeekView({
                       <button
                         key={j}
                         onClick={() => onEventClick(p.occ)}
-                        className="absolute z-10 overflow-hidden rounded-md px-1.5 py-0.5 text-left text-white shadow-sm ring-1 ring-black/5 transition-shadow hover:z-20 hover:shadow-md"
+                        className="absolute z-10 overflow-hidden rounded-md px-1.5 py-0.5 text-left shadow-sm ring-1 ring-black/5 transition-shadow hover:z-20 hover:shadow-md active:shadow-md"
                         style={{
                           top,
                           height,
                           left: `calc(${p.col * widthPct}% + 2px)`,
                           width: `calc(${widthPct}% - 4px)`,
                           backgroundColor: p.occ.effective_color,
+                          color: readableTextOn(p.occ.effective_color),
                         }}
                       >
                         <span className="block truncate text-xs leading-tight font-medium">
