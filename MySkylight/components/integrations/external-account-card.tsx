@@ -19,14 +19,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectSeparator,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
+import { Switch } from "@/components/ui/switch"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -43,11 +36,6 @@ import type {
   ExternalAccountOut,
   ExternalCalendarOut,
 } from "@/lib/types/external"
-
-// Select sentinels — Radix Select can't use "" as a value, so map the
-// "not mapped" / "create a new local calendar" choices to explicit tokens.
-const NONE = "__none__"
-const CREATE = "__create__"
 
 const PROVIDER_LABEL: Record<string, string> = {
   google: "Google Calendar",
@@ -108,19 +96,31 @@ export function ExternalAccountCard({
     })
   }
 
-  function handleMap(cal: ExternalCalendarOut, value: string) {
-    const args =
-      value === NONE
-        ? { extCalId: cal.id, calendarId: null }
-        : value === CREATE
-          ? { extCalId: cal.id, create: true }
-          : { extCalId: cal.id, calendarId: value }
+  function handleToggle(cal: ExternalCalendarOut, on: boolean) {
+    if (!on) {
+      mapCalendar.mutate(
+        { extCalId: cal.id, calendarId: null },
+        {
+          onSuccess: () => toast.success(`Stopped syncing “${cal.name}”`),
+          onError: () =>
+            toast.error("Couldn't update that calendar. Please try again."),
+        },
+      )
+      return
+    }
+    // Mirror into its own local calendar. Reuse a same-named one if it already
+    // exists so flipping the toggle off and on doesn't spawn duplicate mirrors;
+    // otherwise the backend creates one named & colored after the source.
+    const existing = calendars.find(
+      (c) => c.name.trim().toLowerCase() === cal.name.trim().toLowerCase(),
+    )
+    const args = existing
+      ? { extCalId: cal.id, calendarId: existing.id }
+      : { extCalId: cal.id, create: true }
     mapCalendar.mutate(args, {
-      onSuccess: () => {
-        if (value === NONE) toast.success(`Stopped syncing “${cal.name}”`)
-        else toast.success(`“${cal.name}” will sync into your calendar`)
-      },
-      onError: () => toast.error("Couldn't update that calendar. Please try again."),
+      onSuccess: () => toast.success(`“${cal.name}” will sync into your calendar`),
+      onError: () =>
+        toast.error("Couldn't update that calendar. Please try again."),
     })
   }
 
@@ -170,13 +170,13 @@ export function ExternalAccountCard({
           ) : (
             <ul className="flex flex-col gap-2.5">
               {account.calendars.map((cal) => {
-                const value = cal.calendar_id ?? NONE
+                const synced = !!cal.calendar_id
                 const isPending =
                   mapCalendar.isPending && mapCalendar.variables?.extCalId === cal.id
                 return (
                   <li
                     key={cal.id}
-                    className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"
+                    className="flex items-center justify-between gap-3"
                   >
                     <div className="flex min-w-0 items-center gap-2">
                       <span
@@ -185,36 +185,21 @@ export function ExternalAccountCard({
                       />
                       <div className="min-w-0">
                         <p className="truncate text-sm font-medium">{cal.name}</p>
-                        {cal.calendar_id && (
-                          <p className="text-muted-foreground text-xs">
-                            {formatWhen(cal.last_synced_at)}
-                          </p>
-                        )}
+                        <p className="text-muted-foreground text-xs">
+                          {synced ? formatWhen(cal.last_synced_at) : "Not syncing"}
+                        </p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-shrink-0 items-center gap-2.5">
                       {isPending && (
                         <Loader2Icon className="text-muted-foreground size-4 animate-spin" />
                       )}
-                      <Select
-                        value={value}
-                        onValueChange={(v) => handleMap(cal, v)}
+                      <Switch
+                        checked={synced}
+                        onCheckedChange={(on) => handleToggle(cal, on)}
                         disabled={isPending}
-                      >
-                        <SelectTrigger className="w-full sm:w-52">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value={NONE}>Don&apos;t sync</SelectItem>
-                          <SelectItem value={CREATE}>＋ New calendar</SelectItem>
-                          {calendars.length > 0 && <SelectSeparator />}
-                          {calendars.map((c) => (
-                            <SelectItem key={c.id} value={c.id}>
-                              {c.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                        aria-label={`Sync ${cal.name}`}
+                      />
                     </div>
                   </li>
                 )
