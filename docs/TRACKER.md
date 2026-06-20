@@ -244,7 +244,7 @@ Goal: Magic Import + smart recipe generation. **Revalidate DeepSeek vision suppo
 
 ---
 
-## Phase 7 — External calendar sync 🔌 `◐` → F25 ☑, F18 + F20 kept (**read-only**); **F19/F21/F22 descoped**
+## Phase 7 — External calendar sync 🔌 `◐` → F25 removed, F18 + F20 kept (**read-only**); **F19/F21/F22 descoped**
 
 Goal: pull in the calendars this household uses — **Google** and **Apple/iCloud** — **read-only** (their
 events display in the app; we never write back), on top of a standard **ICS** foundation. **Outlook (F19),
@@ -265,6 +265,12 @@ Cozi (F21), and Yahoo (F22) were descoped** on 2026-06-15 (not used here); specs
 > mapped local calendar keyed on a provider-namespaced `ical_uid`; mapping + manual-sync endpoints and a
 > 30-min scheduled poll are wired.
 >
+> **Update (2026-06-20): Model B refactor.** Removed the local `Calendar` entity (migration `012`). Native
+> events are family-scoped + member-colored; synced events reference their source via
+> `Event.external_calendar_id`. The per-calendar **map** became a simple **on/off `synced` toggle**
+> (`PUT …/external/calendars/{id}` → `{synced}`; FE `useSetCalendarSync`). **F25 ICS import/export was
+> removed** (the `parse_ics` parser is kept for CalDAV). Backend suite **122 green**.
+>
 > **Update (2026-06-16): the FE is now built and Phase 7 is code-complete.** A "Calendar sync"
 > page (`app/app/family/[id]/integrations/`, owner/adult) connects Google (OAuth) + iCloud (Apple ID +
 > app-specific password), maps each discovered calendar to a local one / a new one / off, runs **Sync now**,
@@ -275,7 +281,7 @@ Cozi (F21), and Yahoo (F22) were descoped** on 2026-06-15 (not used here); specs
 > remainder is **live verification** with the owner's real Google Cloud OAuth client + iCloud app password.
 
 - [x] `[BE]` `[🔌]` `ExternalAccount` + `ExternalCalendar` store (provider, tokens, status, discovered calendars) — **F18/F20** _(`app/models/external.py`; migration `010`; read-only one-way design — no write-back)_
-- [x] `[BE]` `[🔌]` Map ext-calendar→`Calendar` + color (read-only mirror) — enable a discovered calendar for sync _(`PUT …/external/calendars/{id}` in `app/routers/external.py`: map to an existing local calendar, **auto-create** one mirroring the external name/color, or clear the mapping; resets the sync cursor on any change so the new target gets a full re-pull)_
+- [x] `[BE]` `[🔌]` Enable/disable read-only mirroring of a discovered calendar _(`PUT …/external/calendars/{id}` → `{synced}` in `app/routers/external.py`; mirrored events link to the `ExternalCalendar` via `Event.external_calendar_id`; enabling resets the sync cursor for a full re-pull. **Updated 2026-06-20 (Model B):** replaced the old map-to-local-`Calendar` / auto-create mechanism)_
 - [x] `[BE]` Sync engine: incremental **pull only** (read-only), scheduled polling _(no push / conflict resolution — write-back descoped)_ _(`app/services/external_sync.py` — provider-agnostic `MirrorEvent` + `apply_mirror_events` upsert keyed on a provider-namespaced `ical_uid`, soft-deletes on upstream removal; `POST …/external/accounts/{id}/sync` for on-demand; APScheduler `external_sync` job every `external_sync_minutes` (30) syncs all active accounts)_
 - [x] `[BE]` `[🔌]` ICS import/export foundation — **F25** _(`app/services/ics.py` + `app/routers/sync.py`: `GET …/calendars/{id}/ics` export, `POST …/calendars/{id}/import-ics` for inline `.ics` **or** a fetched feed URL; migration `009` adds `events.ical_uid`; re-import dedupes on it; RRULE + all-day round-trip. `tests/test_ics.py` — round-trip, recurrence expansion, re-import dedup, URL feed, both-source rejection, cross-family 404. Suite **88 green**)_
 - [x] `[BE]` `[🔌]` Google OAuth **connect** flow, **read-only** — **F18** _(`app/services/google_oauth.py` + `app/routers/external.py`: `POST …/external/google/authorize` → consent URL (**503** when unconfigured), `GET /external/google/callback` exchanges the code → stores tokens + discovers calendars (an **HMAC-signed `state`** ties the no-JWT callback back to the family), `GET …/external/accounts` lists, `DELETE …/{id}` disconnects. `calendar.readonly` scope; creds via env (`google_client_id`/`_secret`/`_redirect_uri`). `tests/test_external.py` — 13 tests; suite **101 green**)_

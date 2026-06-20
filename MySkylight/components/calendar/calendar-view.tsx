@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useMemo, useRef } from "react"
+import { useState, useMemo } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { toast } from "sonner"
 import {
@@ -10,8 +10,6 @@ import {
 } from "lucide-react"
 import { useApi } from "@/hooks/use-api"
 import {
-  useCalendars,
-  useCreateCalendar,
   useOccurrences,
   useCreateEvent,
   useUpdateEvent,
@@ -31,7 +29,6 @@ import { EventSheet } from "./event-sheet"
 import { CalendarSkeleton } from "./calendar-skeleton"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { DEFAULT_CALENDAR_COLOR } from "@/lib/colors"
 import { cn } from "@/lib/utils"
 import type {
   CalendarView,
@@ -170,8 +167,6 @@ export function CalendarView({
       ? { lat: family.weather_lat, lng: family.weather_lng }
       : null
 
-  const calendarsQuery = useCalendars(familyId)
-  const calendars = calendarsQuery.data ?? []
   const { data: members = [] } = useQuery({
     queryKey: ["members", familyId],
     queryFn: () => api.get<MemberBrief[]>(`/families/${familyId}/members`),
@@ -252,26 +247,9 @@ export function CalendarView({
   }, [view, anchor])
   const weatherByDate = useWeatherDays(familyId, coords, weatherDates)
 
-  const createCalendar = useCreateCalendar(familyId)
   const createEvent = useCreateEvent(familyId)
   const updateEvent = useUpdateEvent(familyId)
   const deleteEvent = useDeleteEvent(familyId)
-
-  // Auto-create default "Family" calendar on first load — only after the query
-  // has actually resolved (so initial undefined -> [] doesn't trigger a create),
-  // and only once per mount to avoid racing duplicates.
-  const autoCreatedRef = useRef(false)
-  useEffect(() => {
-    if (
-      calendarsQuery.isSuccess &&
-      calendars.length === 0 &&
-      !autoCreatedRef.current &&
-      !createCalendar.isPending
-    ) {
-      autoCreatedRef.current = true
-      createCalendar.mutate({ name: "Family", color: DEFAULT_CALENDAR_COLOR })
-    }
-  }, [calendarsQuery.isSuccess, calendars.length]) // eslint-disable-line react-hooks/exhaustive-deps
 
   function changeView(v: CalendarView) {
     setView(v)
@@ -292,7 +270,6 @@ export function CalendarView({
 
   async function handleSubmit(data: {
     title: string
-    calendar_id: string
     start_dt: string
     end_dt: string
     all_day: boolean
@@ -303,12 +280,8 @@ export function CalendarView({
     member_ids: string[]
     reminder_minutes: number[]
   }) {
-    const calendar_id = data.calendar_id || calendars[0]?.id
-    if (!calendar_id) return
-
     const payload = {
       ...data,
-      calendar_id,
       start_dt: new Date(data.start_dt).toISOString(),
       end_dt: new Date(data.end_dt).toISOString(),
       rrule: data.rrule || undefined,
@@ -509,7 +482,6 @@ export function CalendarView({
         onDelete={editing ? handleDelete : undefined}
         isPending={createEvent.isPending || updateEvent.isPending}
         isDeleting={deleteEvent.isPending}
-        calendars={calendars}
         members={members}
         defaultDate={defaultDate}
         editing={editing}

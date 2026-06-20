@@ -10,7 +10,6 @@ import {
   PlusIcon,
 } from "lucide-react"
 
-import { useCalendars } from "@/hooks/use-calendars"
 import {
   useExternalAccounts,
   useGoogleAuthorize,
@@ -37,7 +36,6 @@ export default function IntegrationsPage({
   useRealtime(familyId)
 
   const { data: accounts = [], isLoading } = useExternalAccounts(familyId)
-  const { data: calendars = [] } = useCalendars(familyId)
   const googleAuth = useGoogleAuthorize(familyId)
 
   // The OAuth callback bounces back here with ?external=connected|error. Surface
@@ -136,7 +134,6 @@ export default function IntegrationsPage({
               key={account.id}
               familyId={familyId}
               account={account}
-              calendars={calendars}
             />
           ))}
         </div>

@@ -1,13 +1,3 @@
-export interface CalendarOut {
-  id: string
-  family_id: string
-  name: string
-  color: string
-  description: string | null
-  created_at: string
-  updated_at: string
-}
-
 export interface MemberBrief {
   id: string
   name: string
@@ -16,7 +6,8 @@ export interface MemberBrief {
 
 export interface EventOut {
   id: string
-  calendar_id: string
+  /** Source external calendar when this is a read-only mirror; null for native events. */
+  external_calendar_id: string | null
   family_id: string
   title: string
   description: string | null
@@ -37,7 +28,6 @@ export interface EventOut {
 
 export interface OccurrenceOut {
   event_id: string
-  calendar_id: string
   occurrence_date: string  // YYYY-MM-DD
   start_dt: string
   end_dt: string
@@ -58,16 +48,7 @@ export interface OccurrenceOut {
 
 export type CalendarView = "month" | "week" | "day" | "schedule"
 
-/** Result of an ICS import (F25). `total` = created + updated. */
-export interface IcsImportResult {
-  calendar_id: string
-  created: number
-  updated: number
-  total: number
-}
-
 export interface EventCreatePayload {
-  calendar_id: string
   title: string
   description?: string
   location?: string

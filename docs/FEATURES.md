@@ -34,10 +34,15 @@ frontend (FE) pieces, and **acceptance criteria** (AC) that define "done".
 ### F23 — Calendar & Events Engine
 
 - **Approach:** The core CRUD + recurrence engine underneath all calendar features.
-- **BE:** `Calendar`, `Event`, `EventAssignment`, `Reminder`; RRULE recurrence with per-occurrence
-  overrides (this/following/all); `/calendars`, `/events`, `/events/{id}/occurrences`.
+- **BE:** `Event`, `EventAssignment`, `Reminder`; RRULE recurrence with per-occurrence
+  overrides (this/following/all); `/events`, `/events/{id}/occurrences`.
 - **FE:** Event create/edit sheet (title, time, all-day, location, repeat, members, reminder, color).
 - **AC:** Create/edit/delete single + recurring events; "edit this occurrence only" works; reminders persist.
+- **Status (2026-06-20):** Removed the local `Calendar` container (migration `012`, "Model B"). Native
+  events belong to the family and are colored by their assigned member (fallback `DEFAULT_EVENT_COLOR`) —
+  there's no "choose a calendar" step. Synced events reference their source via `Event.external_calendar_id`
+  and take that `ExternalCalendar`'s color; occurrences hide events whose source is toggled off
+  (`ExternalCalendar.synced`).
 
 ### F24 — Realtime live-update
 
@@ -454,17 +459,18 @@ frontend (FE) pieces, and **acceptance criteria** (AC) that define "done".
     with `singleEvents=false` (recurring **masters** mirror with their RRULE) + `showDeleted` (incremental
     pulls see cancellations); per-calendar `syncToken` persisted, **410**→full resync, **401**→refresh
     (`ensure_fresh_token`, else `needs_reauth`). `app/services/external_sync.py` — the **shared mirror
-    engine**: `apply_mirror_events` upserts into the mapped local calendar keyed on a provider-namespaced
-    `ical_uid` (`google:<extcal>:<eventid>`), soft-deleting on upstream removal. `PUT …/external/calendars/{id}`
-    maps/creates/clears the local-calendar target; `POST …/external/accounts/{id}/sync` pulls on demand;
+    engine**: `apply_mirror_events` upserts events linked to the source `ExternalCalendar`
+    (`Event.external_calendar_id`) keyed on a provider-namespaced `ical_uid` (`google:<extcal>:<eventid>`),
+    soft-deleting on upstream removal. `PUT …/external/calendars/{id}` toggles `synced` (on/off);
+    `POST …/external/accounts/{id}/sync` pulls on demand;
     an APScheduler `external_sync` job polls every `external_sync_minutes` (30). A pull publishes an SSE
     `event.created` nudge so devices refresh. `tests/test_external.py` — **38 tests** (parsing, mirror
     create/update/cancel, token refresh, mapping, manual-sync); suite **129 green**.
   - **FE (new 2026-06-16):** a "Calendar sync" page (`app/app/family/[id]/integrations/page.tsx`,
     owner/adult, linked from `FamilyMenu`) — **Connect Google** (`useGoogleAuthorize` → redirect to the
     consent URL; toasts when the server is unconfigured) and **Connect iCloud** (see F20). Each discovered
-    calendar maps via a Select to an existing local calendar / a **new** one / off
-    (`useMapExternalCalendar`), with a color swatch, "Synced <when>", a **Sync now** button + status badge,
+    calendar has an on/off **sync toggle** (`useSetCalendarSync` → `synced`), with a color swatch,
+    "Synced <when>", a **Sync now** button + status badge,
     and Disconnect. The OAuth callback returns to this page (`?external=connected|error`). Hooks in
     `hooks/use-external-calendars.ts`, types in `lib/types/external.ts`.
   - **Read-only enforcement (new 2026-06-16):** occurrences/events now carry a `read_only` flag, derived
@@ -520,21 +526,15 @@ frontend (FE) pieces, and **acceptance criteria** (AC) that define "done".
 
 - ~~**Approach:** CalDAV (app password); read-first.~~ — _Not built. Would reuse F20's CalDAV engine if revived._
 
-### F25 — ICS import/export (enabler) `☑`
+### F25 — ~~ICS import/export~~ — **REMOVED** (2026-06-20)
 
-- **Approach:** Standard `.ics` import/export underpins any provider; useful on its own.
-- **Status (2026-06-15):** ☑ **Built + tested (backend) and wired up (frontend).**
-  - **BE:** `app/services/ics.py` (export/parse/import via the `icalendar` lib) + `app/routers/sync.py`:
-    `GET …/calendars/{id}/ics` exports, `POST …/calendars/{id}/import-ics` imports inline `.ics` text
-    **or** a fetched feed URL. Migration `009` adds `events.ical_uid`; re-import dedupes on it. RRULE +
-    all-day round-trip. `tests/test_ics.py` (7 tests; suite **88 green**).
-  - **FE:** `components/calendar/calendar-sync-dialog.tsx` — opened from an import/export action in the
-    `CalendarView` toolbar (companion `/app` surface only; the wall display doesn't do file I/O). Picks a
-    calendar, then **exports** by streaming the `text/calendar` response through the auth proxy into a
-    downloaded Blob (the JSON `apiRequest` helper drops non-JSON bodies, so export uses a raw `fetch`),
-    and **imports** via file upload / paste / feed URL through `useImportCalendarIcs`, toasting the
-    created/updated counts and invalidating the occurrences cache. Typecheck + lint clean.
-- **AC:** ✅ Import a `.ics` file into a calendar; export a calendar as `.ics`. _(BE proven by tests; FE built.)_
+- ~~**Approach:** Standard `.ics` import/export underpins any provider; useful on its own.~~
+- **Status (2026-06-20):** Removed with the Model B refactor (no local `Calendar` to import into/export
+  from). The `.ics` **parser** (`parse_ics` in `app/services/ics.py`) is **kept** — Apple/CalDAV sync (F20)
+  still uses it — but the user-facing feature is gone: deleted `app/routers/sync.py`,
+  `components/calendar/calendar-sync-dialog.tsx`, the `useImportCalendarIcs` hook, and the toolbar entry
+  point. `events.ical_uid` (migration `009`) stays as the mirror dedup key. Re-addable later (likely as a
+  family-level export) if wanted.
 
 ---
 

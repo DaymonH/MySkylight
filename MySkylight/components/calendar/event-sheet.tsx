@@ -37,11 +37,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
-import type {
-  CalendarOut,
-  MemberBrief,
-  OccurrenceOut,
-} from "@/lib/types/calendar"
+import type { MemberBrief, OccurrenceOut } from "@/lib/types/calendar"
 
 const RRULE_OPTIONS = [
   { label: "Does not repeat", value: "none" },
@@ -54,7 +50,6 @@ const RRULE_OPTIONS = [
 
 const schema = z.object({
   title: z.string().min(1, "Title is required"),
-  calendar_id: z.string().min(1, "Choose a calendar"),
   start_dt: z.string().min(1),
   end_dt: z.string().min(1),
   all_day: z.boolean(),
@@ -74,7 +69,6 @@ interface EventSheetProps {
   onDelete?: () => void
   isPending: boolean
   isDeleting?: boolean
-  calendars: CalendarOut[]
   members: MemberBrief[]
   defaultDate?: string // YYYY-MM-DD
   editing?: OccurrenceOut
@@ -125,7 +119,6 @@ export function EventSheet({
   onDelete,
   isPending,
   isDeleting,
-  calendars,
   members,
   defaultDate,
   editing,
@@ -163,7 +156,6 @@ export function EventSheet({
     resolver: zodResolver(schema),
     defaultValues: {
       title: "",
-      calendar_id: calendars[0]?.id ?? "",
       start_dt: defaultStart,
       end_dt: defaultEnd,
       all_day: false,
@@ -179,7 +171,6 @@ export function EventSheet({
       if (editing) {
         reset({
           title: editing.title,
-          calendar_id: editing.calendar_id,
           start_dt: toDatetimeLocal(editing.start_dt),
           end_dt: toDatetimeLocal(editing.end_dt),
           all_day: editing.all_day,
@@ -193,7 +184,6 @@ export function EventSheet({
       } else {
         reset({
           title: "",
-          calendar_id: calendars[0]?.id ?? "",
           start_dt: defaultStart,
           end_dt: defaultEnd,
           all_day: false,
@@ -328,38 +318,6 @@ export function EventSheet({
               {errors.title && (
                 <p className="text-xs text-destructive">
                   {errors.title.message}
-                </p>
-              )}
-            </div>
-
-            {/* Calendar */}
-            <div className="space-y-1.5">
-              <Label>Calendar</Label>
-              <Controller
-                name="calendar_id"
-                control={control}
-                render={({ field }) => (
-                  <Select value={field.value} onValueChange={field.onChange}>
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Choose a calendar" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {calendars.map((c) => (
-                        <SelectItem key={c.id} value={c.id}>
-                          <span
-                            className="size-2.5 rounded-full"
-                            style={{ backgroundColor: c.color }}
-                          />
-                          {c.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                )}
-              />
-              {errors.calendar_id && (
-                <p className="text-xs text-destructive">
-                  {errors.calendar_id.message}
                 </p>
               )}
             </div>

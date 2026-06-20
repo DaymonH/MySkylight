@@ -60,31 +60,18 @@ export function useDisconnectExternalAccount(familyId: string) {
 }
 
 /**
- * Choose where a discovered external calendar mirrors to: an existing local
- * calendar (`calendarId`), a freshly-created one (`create: true`), or nowhere
- * (both omitted → stop syncing). A change can create a local calendar and will
- * re-pull events on the next sync, so refresh calendars + occurrences too.
+ * Turn read-only mirroring of a discovered external calendar on or off. Enabling
+ * re-pulls its events on the next sync; disabling hides them. Either way refresh
+ * the accounts list and the occurrence cache.
  */
-export function useMapExternalCalendar(familyId: string) {
+export function useSetCalendarSync(familyId: string) {
   const api = useApi()
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: ({
-      extCalId,
-      calendarId,
-      create,
-    }: {
-      extCalId: string
-      calendarId?: string | null
-      create?: boolean
-    }) =>
-      api.put(`/families/${familyId}/external/calendars/${extCalId}`, {
-        calendar_id: calendarId ?? null,
-        create: create ?? false,
-      }),
+    mutationFn: ({ extCalId, synced }: { extCalId: string; synced: boolean }) =>
+      api.put(`/families/${familyId}/external/calendars/${extCalId}`, { synced }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["external-accounts", familyId] })
-      qc.invalidateQueries({ queryKey: ["calendars", familyId] })
       qc.invalidateQueries({ queryKey: ["occurrences", familyId] })
     },
   })

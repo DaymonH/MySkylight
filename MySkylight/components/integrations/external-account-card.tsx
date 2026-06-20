@@ -11,7 +11,7 @@ import {
 
 import {
   useDisconnectExternalAccount,
-  useMapExternalCalendar,
+  useSetCalendarSync,
   useSyncExternalAccount,
 } from "@/hooks/use-external-calendars"
 import { ApiError } from "@/lib/api-client"
@@ -31,7 +31,6 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
-import type { CalendarOut } from "@/lib/types/calendar"
 import type {
   ExternalAccountOut,
   ExternalCalendarOut,
@@ -55,15 +54,13 @@ function formatWhen(iso: string | null): string {
 export function ExternalAccountCard({
   familyId,
   account,
-  calendars,
 }: {
   familyId: string
   account: ExternalAccountOut
-  calendars: CalendarOut[]
 }) {
   const syncAccount = useSyncExternalAccount(familyId)
   const disconnect = useDisconnectExternalAccount(familyId)
-  const mapCalendar = useMapExternalCalendar(familyId)
+  const setSync = useSetCalendarSync(familyId)
 
   const needsReauth = account.status === "needs_reauth"
 
@@ -97,31 +94,19 @@ export function ExternalAccountCard({
   }
 
   function handleToggle(cal: ExternalCalendarOut, on: boolean) {
-    if (!on) {
-      mapCalendar.mutate(
-        { extCalId: cal.id, calendarId: null },
-        {
-          onSuccess: () => toast.success(`Stopped syncing “${cal.name}”`),
-          onError: () =>
-            toast.error("Couldn't update that calendar. Please try again."),
-        },
-      )
-      return
-    }
-    // Mirror into its own local calendar. Reuse a same-named one if it already
-    // exists so flipping the toggle off and on doesn't spawn duplicate mirrors;
-    // otherwise the backend creates one named & colored after the source.
-    const existing = calendars.find(
-      (c) => c.name.trim().toLowerCase() === cal.name.trim().toLowerCase(),
+    setSync.mutate(
+      { extCalId: cal.id, synced: on },
+      {
+        onSuccess: () =>
+          toast.success(
+            on
+              ? `“${cal.name}” will sync into your calendar`
+              : `Stopped syncing “${cal.name}”`,
+          ),
+        onError: () =>
+          toast.error("Couldn't update that calendar. Please try again."),
+      },
     )
-    const args = existing
-      ? { extCalId: cal.id, calendarId: existing.id }
-      : { extCalId: cal.id, create: true }
-    mapCalendar.mutate(args, {
-      onSuccess: () => toast.success(`“${cal.name}” will sync into your calendar`),
-      onError: () =>
-        toast.error("Couldn't update that calendar. Please try again."),
-    })
   }
 
   return (
@@ -170,9 +155,9 @@ export function ExternalAccountCard({
           ) : (
             <ul className="flex flex-col gap-2.5">
               {account.calendars.map((cal) => {
-                const synced = !!cal.calendar_id
+                const synced = cal.synced
                 const isPending =
-                  mapCalendar.isPending && mapCalendar.variables?.extCalId === cal.id
+                  setSync.isPending && setSync.variables?.extCalId === cal.id
                 return (
                   <li
                     key={cal.id}

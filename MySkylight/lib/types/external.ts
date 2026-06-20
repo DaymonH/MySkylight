@@ -12,8 +12,8 @@ export interface ExternalCalendarOut {
   external_id: string
   name: string
   color: string | null
-  /** The local calendar this external one mirrors into; null = not synced. */
-  calendar_id: string | null
+  /** Whether this calendar is actively mirrored in (the on/off toggle). */
+  synced: boolean
   last_synced_at: string | null
 }
 
