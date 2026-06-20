@@ -24,6 +24,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { useVisibleHours } from "@/hooks/use-visible-hours"
+import { cn } from "@/lib/utils"
 
 const THEME_OPTIONS = [
   { value: "light", label: "Light" },
@@ -41,7 +42,14 @@ function fmtHour(h: number) {
 const START_HOURS = Array.from({ length: 24 }, (_, i) => i) // 0..23
 const END_HOURS = Array.from({ length: 24 }, (_, i) => i + 1) // 1..24
 
-export function SettingsButton({ className }: { className?: string }) {
+export function SettingsButton({
+  className,
+  label,
+}: {
+  className?: string
+  /** When set, renders a stacked icon-over-label rail item (for the device sidebar). */
+  label?: string
+}) {
   const [open, setOpen] = useState(false)
   const { theme, setTheme } = useTheme()
   const { start, end, setRange } = useVisibleHours()
@@ -49,14 +57,21 @@ export function SettingsButton({ className }: { className?: string }) {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button
-          variant="ghost"
-          size="icon"
-          className={className}
-          aria-label="Open settings"
-        >
-          <SettingsIcon />
-        </Button>
+        {label ? (
+          <button type="button" className={cn(className)} aria-label="Open settings">
+            <SettingsIcon className="size-6" />
+            {label}
+          </button>
+        ) : (
+          <Button
+            variant="ghost"
+            size="icon"
+            className={className}
+            aria-label="Open settings"
+          >
+            <SettingsIcon />
+          </Button>
+        )}
       </DialogTrigger>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
