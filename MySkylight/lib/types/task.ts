@@ -2,6 +2,11 @@ import type { MemberBrief } from "@/lib/types/calendar"
 
 export type AssignmentStrategy = "fixed" | "rotating"
 
+// Cadence the rotating assignee advances on, decoupled from recurrence (F27).
+// "occurrence" steps every Nth occurrence (legacy behaviour); the time units step
+// on calendar boundaries (weeks on Monday, months on the 1st).
+export type RotationUnit = "occurrence" | "day" | "week" | "month"
+
 export interface TaskOut {
   id: string
   family_id: string
@@ -13,6 +18,9 @@ export interface TaskOut {
   rrule: string | null
   sort_order: number
   assignment_strategy: AssignmentStrategy
+  rotation_unit: RotationUnit
+  rotation_interval: number
+  rotation_anchor_date: string | null // YYYY-MM-DD; null falls back to start_date
   star_value: number
   created_at: string
   updated_at: string
@@ -42,9 +50,23 @@ export interface TaskOccurrenceOut {
   effective_color: string
   is_recurring: boolean
   star_value: number
+  rotation_unit: RotationUnit
+  rotation_interval: number
   members: MemberBrief[]
   completed_member_ids: string[]
   up_next: MemberBrief | null
+  // Rotation override state (F27 swap/skip): `is_overridden` = a manual reassignment
+  // is in effect; `is_skipped` = excused this occurrence (no one assigned).
+  is_overridden: boolean
+  is_skipped: boolean
+}
+
+export type RotationOverrideScope = "occurrence" | "turn"
+
+export interface RotationOverrideOut {
+  task_id: string
+  occurrence_date: string // YYYY-MM-DD
+  member_id: string | null // null = skip (no one assigned)
 }
 
 export interface StreakOut {
@@ -65,6 +87,9 @@ export interface TaskCreatePayload {
   rrule?: string | null
   sort_order?: number
   assignment_strategy?: AssignmentStrategy
+  rotation_unit?: RotationUnit
+  rotation_interval?: number
+  rotation_anchor_date?: string | null
   star_value?: number
   // Order is the rotation roster order when rotating.
   member_ids?: string[]

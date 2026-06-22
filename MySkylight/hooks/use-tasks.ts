@@ -3,6 +3,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useApi } from "@/hooks/use-api"
 import type {
+  RotationOverrideOut,
+  RotationOverrideScope,
   RoutineCreatePayload,
   RoutineOut,
   RoutineUpdatePayload,
@@ -210,6 +212,50 @@ export function useUncompleteTask(familyId: string) {
       ctx?.prev?.forEach(([key, data]) => qc.setQueryData(key, data))
     },
     onSettled: () => {
+      qc.invalidateQueries({ queryKey: ["task-occurrences", familyId] })
+      qc.invalidateQueries({ queryKey: ["task-streak", familyId] })
+    },
+  })
+}
+
+// ── Rotation overrides (swap / skip — F27) ──────────────────────────────────
+
+interface OverrideVars {
+  taskId: string
+  occurrenceDate: string // YYYY-MM-DD
+  memberId: string | null // null = skip
+  scope?: RotationOverrideScope
+}
+
+export function useSetRotationOverride(familyId: string) {
+  const api = useApi()
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ taskId, occurrenceDate, memberId, scope = "occurrence" }: OverrideVars) =>
+      api.put<RotationOverrideOut[]>(
+        `/families/${familyId}/tasks/${taskId}/overrides/${occurrenceDate}`,
+        { member_id: memberId, scope },
+      ),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["task-occurrences", familyId] })
+      qc.invalidateQueries({ queryKey: ["task-streak", familyId] })
+    },
+  })
+}
+
+export function useClearRotationOverride(familyId: string) {
+  const api = useApi()
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({
+      taskId,
+      occurrenceDate,
+      scope = "occurrence",
+    }: Pick<OverrideVars, "taskId" | "occurrenceDate" | "scope">) =>
+      api.delete(
+        `/families/${familyId}/tasks/${taskId}/overrides/${occurrenceDate}?scope=${scope}`,
+      ),
+    onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["task-occurrences", familyId] })
       qc.invalidateQueries({ queryKey: ["task-streak", familyId] })
     },

@@ -44,7 +44,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
-import { describeTaskRrule } from "@/lib/recurrence"
+import { describeRotation, describeTaskRrule } from "@/lib/recurrence"
 import { cn } from "@/lib/utils"
 import type { MemberBrief } from "@/lib/types/calendar"
 import type { RoutineOut, TaskCreatePayload, TaskOut } from "@/lib/types/task"
@@ -116,6 +116,8 @@ export default function TasksPage({ params }: { params: Promise<{ familyId: stri
       // Rotation needs at least two members; otherwise it's just a fixed assignee.
       assignment_strategy:
         values.rotate && values.member_ids.length >= 2 ? "rotating" : "fixed",
+      rotation_unit: values.rotation_unit,
+      rotation_interval: values.rotation_interval,
       star_value: values.star_value,
       member_ids: values.member_ids,
     }
@@ -438,7 +440,8 @@ function TaskRow({
           <Badge variant="secondary">{describeTaskRrule(task.rrule)}</Badge>
           {task.assignment_strategy === "rotating" && (
             <Badge variant="secondary" className="gap-1">
-              <RepeatIcon className="size-3" /> Rotating
+              <RepeatIcon className="size-3" /> Rotating ·{" "}
+              {describeRotation(task.rotation_unit, task.rotation_interval)}
             </Badge>
           )}
           {task.star_value > 0 && (

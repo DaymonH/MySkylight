@@ -91,6 +91,13 @@ frontend (FE) pieces, and **acceptance criteria** (AC) that define "done".
   `task.*`/`routine.*` SSE wiring (`hooks/use-realtime.ts`). Build + typecheck + 39 backend tests green;
   live two-device smoke pending. One backend tweak: `update_task` now honours explicit nulls so a task can
   be moved out of a routine or have its rrule/notes cleared. **Not pushed yet** (HomeServerAPI auto-deploys on push).
+- **Update (2026-06-21) — custom recurrence days (FE):** the task sheet's **Repeat** control now offers
+  **"Custom days…"**, revealing Mon–Sun weekday chips that assemble a `FREQ=WEEKLY;BYDAY=…` rrule (e.g.
+  "deep clean the bathroom" on **Tue + Sat**). The backend already accepted arbitrary `BYDAY` via
+  `rrulestr`; this just surfaces it. `describeTaskRrule` reads custom sets back as e.g. "Tue, Sat".
+  Decoupled rotation cadence (F27) layers on top unchanged — a twice-weekly chore can still rotate per
+  occurrence / weekly / monthly. FE-only; `lib/recurrence.ts` + `components/tasks/task-sheet.tsx`.
+  Typecheck clean.
 - _Phase 3_
 
 ### F02 — Color Coding
@@ -332,9 +339,15 @@ frontend (FE) pieces, and **acceptance criteria** (AC) that define "done".
 
 - **Approach:** A recurring `Task` can use a **rotating** assignment strategy over an ordered roster of
   members instead of a fixed assignee. The assignee for each occurrence is resolved **deterministically
-  from the occurrence's index** in the series (`roster[index % len(roster)]`), so every device computes
-  the same person and it stays stable across reschedules — no stored per-day assignee needed. Default
-  stays **fixed** assignment (current F01 behavior).
+  from a rotation "bucket"** (`roster[bucket % len(roster)]`), so every device computes the same person
+  and it stays stable across reschedules — no stored per-day assignee needed. Default stays **fixed**
+  assignment (current F01 behavior).
+- **Decoupled cadence (2026-06-21):** rotation cadence is **independent of recurrence** — a chore can
+  recur on one schedule but hand off the owner on another (e.g. _dishes daily, but one person owns the
+  whole week_). Cadence is `rotation_unit` (`occurrence` | `day` | `week` | `month`) × `rotation_interval`
+  (N), anchored at `rotation_anchor_date` (defaults to `start_date`). Time units are **calendar-aligned**
+  (weeks flip Monday, months on the 1st); `occurrence`/1 reproduces the original per-occurrence rotation,
+  so existing rotating chores are unchanged.
 - **BE:** `assignment_strategy` (`fixed` | `rotating`) + an **ordered** rotation roster on `Task` (an
   order column on `TaskAssignment`, or a `rotation_order` list); occurrence→assignee resolver that skips
   soft-deleted members; the resolved assignee is returned with each `…/tasks/occurrences` row.
@@ -350,6 +363,35 @@ frontend (FE) pieces, and **acceptance criteria** (AC) that define "done".
   "Rotate between members" Switch (≥2 members) + ordered roster with ↑/↓ in `task-sheet.tsx`, a "Rotating"
   badge on the task list, and a "Next: <name>" hint on the device chore board. `tsc` + `next build` clean.
   **Deferred:** drag-to-reorder the roster (↑/↓ ships now); live two-device smoke.
+- **Update (2026-06-21) — decoupled cadence + forward-compat hooks:** added `rotation_unit` /
+  `rotation_interval` / `rotation_anchor_date` to `Task` (migration `013`; defaults `occurrence`/`1`/null
+  reproduce prior behavior). `get_task_occurrences` now resolves the assignee via a calendar-aligned
+  **bucket** (`_rotation_bucket`) instead of the raw occurrence index, and `up_next` is the next
+  **handoff** owner. Two robustness hooks landed alongside: the resolver consults an (empty)
+  `_rotation_overrides(task)` map so a future per-occurrence **swap/skip** table (`TaskRotationOverride`)
+  drops in with no rewrite, and `compute_streak` now counts a member's **assigned turns** only — a week
+  owned by someone else no longer breaks a rotating chore's streak. **FE:** a "Rotate every N
+  occurrence/day/week/month" control in `task-sheet.tsx`; the list badge shows the cadence
+  (`describeRotation`). 6 new tests (suite **128** green); `tsc` + lint clean (lint's 1 pre-existing error
+  is unrelated). The `TaskRotationOverride` swap/skip table that the hook anticipated is now built — see
+  the next update.
+- **Update (2026-06-21) — swap / skip / "not my week" overrides:** `TaskRotationOverride`
+  (`task_id`, `occurrence_date`, nullable `member_id`; migration `014`) lets a rotating turn be manually
+  **reassigned** (member set) or **skipped** (member NULL = excused, no one assigned), reverting by
+  deleting the row. The resolver's override hook now reads the table; `get_task_occurrences` returns
+  `is_overridden` / `is_skipped` (and `rotation_unit`/`rotation_interval`) per occurrence, resolves swap
+  targets against **any** active family member, and `compute_streak` uses the **effective** assignee (a
+  swapped-away turn isn't yours; a skip is no one's). Endpoints (owner/adult): `GET …/tasks/{id}/overrides`,
+  `PUT …/overrides/{date}` (body `{member_id, scope}`), `DELETE …/overrides/{date}?scope=`. `scope="turn"`
+  fans the action across every occurrence in the same rotation bucket, so "skip my whole week" is one call.
+  Emits `task.override_set` / `task.override_cleared`. **FE:** a per-chore swap/skip/reset dropdown on the
+  device board (owner/adult only), a "Skipped today" section with Restore, and a "Swapped in" marker. 7 new
+  tests (suite **135** green); `tsc` + lint clean.
+- **Known limitation (now mitigated):** the computed assignee is `roster[bucket % len]`, so
+  **adding/removing/reordering** roster members still re-phases the cycle (and `compute_streak`/board
+  recompute past assignees). The override table now lets you **manually correct** any specific turn that
+  lands on the wrong person; full automatic stability (materializing resolved assignments) remains
+  deferred — only worth it if fairness disputes ever matter.
 - _Depends on **F01** (Tasks). Phase 5._
 
 ### F28 — Recipe → Grocery List (ingredient aggregation) ⭐

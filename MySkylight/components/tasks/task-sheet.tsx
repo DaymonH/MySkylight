@@ -31,7 +31,15 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
-import { TASK_RRULE_OPTIONS } from "@/lib/recurrence"
+import {
+  bydayRrule,
+  CUSTOM_WEEKLY,
+  parseByday,
+  TASK_RRULE_OPTIONS,
+  WEEKDAYS,
+  weekdayOf,
+  type WeekdayCode,
+} from "@/lib/recurrence"
 import type { MemberBrief } from "@/lib/types/calendar"
 import type { RoutineOut, TaskOut } from "@/lib/types/task"
 
@@ -46,6 +54,8 @@ const schema = z.object({
   star_value: z.number().int().min(0).max(999),
   member_ids: z.array(z.string()),
   rotate: z.boolean(),
+  rotation_unit: z.enum(["occurrence", "day", "week", "month"]),
+  rotation_interval: z.number().int().min(1).max(52),
 })
 export type TaskFormValues = z.infer<typeof schema>
 
@@ -98,6 +108,8 @@ export function TaskSheet({
       star_value: 1,
       member_ids: [],
       rotate: false,
+      rotation_unit: "occurrence",
+      rotation_interval: 1,
     },
   })
 
@@ -113,6 +125,8 @@ export function TaskSheet({
         star_value: editing.star_value,
         member_ids: editing.members.map((m) => m.id),
         rotate: editing.assignment_strategy === "rotating",
+        rotation_unit: editing.rotation_unit ?? "occurrence",
+        rotation_interval: editing.rotation_interval ?? 1,
       })
     } else {
       reset({
@@ -124,11 +138,28 @@ export function TaskSheet({
         star_value: 1,
         member_ids: [],
         rotate: false,
+        rotation_unit: "occurrence",
+        rotation_interval: 1,
       })
     }
   }, [open, editing, defaultRoutineId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const rotate = useWatch({ control, name: "rotate" })
+  const rotationInterval = useWatch({ control, name: "rotation_interval" })
+  const startDate = useWatch({ control, name: "start_date" })
+  // The Repeat select shows "Custom days…" for any weekly BYDAY rrule that isn't a
+  // named preset (e.g. FREQ=WEEKLY;BYDAY=TU,SA). The form field still holds the real
+  // rrule string — this just decides which select item is highlighted.
+  const selectRepeatValue = (rrule: string): string => {
+    if (TASK_RRULE_OPTIONS.some((o) => o.value === rrule)) return rrule
+    if (rrule.includes("FREQ=WEEKLY") && rrule.includes("BYDAY=")) return CUSTOM_WEEKLY
+    return rrule || "none"
+  }
+  const unitLabel = (unit: "occurrence" | "day" | "week" | "month") => {
+    const plural = rotationInterval !== 1
+    if (unit === "occurrence") return plural ? "times it's due" : "time it's due"
+    return plural ? `${unit}s` : unit
+  }
 
   return (
     <Sheet open={open} onOpenChange={(o) => !o && onClose()}>
@@ -185,20 +216,63 @@ export function TaskSheet({
               <Controller
                 name="rrule"
                 control={control}
-                render={({ field }) => (
-                  <Select value={field.value || "none"} onValueChange={field.onChange}>
-                    <SelectTrigger className="w-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {TASK_RRULE_OPTIONS.map((o) => (
-                        <SelectItem key={o.value} value={o.value}>
-                          {o.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                )}
+                render={({ field }) => {
+                  const selectValue = selectRepeatValue(field.value)
+                  const onRepeatChange = (val: string) => {
+                    if (val === CUSTOM_WEEKLY) {
+                      // Entering custom mode: keep any existing day-set, else seed
+                      // with the start date's weekday so it's never an empty rule.
+                      const existing = parseByday(field.value)
+                      const seed = startDate ? weekdayOf(startDate) : "MO"
+                      field.onChange(bydayRrule(existing.length ? existing : [seed]))
+                    } else {
+                      field.onChange(val)
+                    }
+                  }
+                  const days = parseByday(field.value)
+                  const onToggleDays = (next: string[]) => {
+                    if (next.length === 0) return // keep at least one day selected
+                    field.onChange(bydayRrule(next as WeekdayCode[]))
+                  }
+                  return (
+                    <>
+                      <Select value={selectValue} onValueChange={onRepeatChange}>
+                        <SelectTrigger className="w-full">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {TASK_RRULE_OPTIONS.map((o) => (
+                            <SelectItem key={o.value} value={o.value}>
+                              {o.label}
+                            </SelectItem>
+                          ))}
+                          <SelectItem value={CUSTOM_WEEKLY}>Custom days…</SelectItem>
+                        </SelectContent>
+                      </Select>
+
+                      {selectValue === CUSTOM_WEEKLY && (
+                        <ToggleGroup
+                          type="multiple"
+                          variant="outline"
+                          value={days}
+                          onValueChange={onToggleDays}
+                          className="flex flex-wrap justify-start pt-1"
+                        >
+                          {WEEKDAYS.map((d) => (
+                            <ToggleGroupItem
+                              key={d.code}
+                              value={d.code}
+                              aria-label={d.label}
+                              className="w-12 rounded-full"
+                            >
+                              {d.label}
+                            </ToggleGroupItem>
+                          ))}
+                        </ToggleGroup>
+                      )}
+                    </>
+                  )
+                }}
               />
             </div>
 
@@ -282,7 +356,7 @@ export function TaskSheet({
                           <div className="min-w-0">
                             <p className="text-sm font-medium">Rotate between members</p>
                             <p className="text-muted-foreground text-xs">
-                              Each time the chore repeats, it moves to the next person in order.
+                              Hands off to the next person on the cadence you choose below.
                             </p>
                           </div>
                           <Controller
@@ -301,7 +375,44 @@ export function TaskSheet({
 
                         {rotate && field.value.length >= 2 && (
                           <div className="space-y-1.5">
+                            {/* Rotation cadence — decoupled from how often the chore repeats. */}
                             <p className="text-muted-foreground text-xs font-medium uppercase tracking-wide">
+                              Rotation cadence
+                            </p>
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm whitespace-nowrap">Rotate every</span>
+                              <Input
+                                type="number"
+                                min={1}
+                                max={52}
+                                className="w-16"
+                                aria-label="Rotation interval"
+                                {...register("rotation_interval", { valueAsNumber: true })}
+                              />
+                              <Controller
+                                name="rotation_unit"
+                                control={control}
+                                render={({ field: uf }) => (
+                                  <Select value={uf.value} onValueChange={uf.onChange}>
+                                    <SelectTrigger className="flex-1">
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="occurrence">{unitLabel("occurrence")}</SelectItem>
+                                      <SelectItem value="day">{unitLabel("day")}</SelectItem>
+                                      <SelectItem value="week">{unitLabel("week")}</SelectItem>
+                                      <SelectItem value="month">{unitLabel("month")}</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                )}
+                              />
+                            </div>
+                            <p className="text-muted-foreground text-xs">
+                              How often the chore passes to the next person — independent of how often
+                              it repeats. Weeks change on Monday, months on the 1st.
+                            </p>
+
+                            <p className="text-muted-foreground pt-1 text-xs font-medium uppercase tracking-wide">
                               Rotation order
                             </p>
                             <ul className="flex flex-col gap-1.5">

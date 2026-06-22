@@ -4,22 +4,37 @@ import { useMemo } from "react"
 import type { CSSProperties } from "react"
 import { useQuery } from "@tanstack/react-query"
 import {
+  ArrowLeftRightIcon,
+  BanIcon,
   CheckIcon,
+  EllipsisVerticalIcon,
   ListChecksIcon,
   Loader2Icon,
   PartyPopperIcon,
   RepeatIcon,
   StarIcon,
+  Undo2Icon,
 } from "lucide-react"
+import { toast } from "sonner"
 
 import { useApi } from "@/hooks/use-api"
 import { useRealtime } from "@/hooks/use-realtime"
 import {
   useCompleteTask,
+  useClearRotationOverride,
   useRoutines,
+  useSetRotationOverride,
   useTaskOccurrences,
   useUncompleteTask,
 } from "@/hooks/use-tasks"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { cn } from "@/lib/utils"
 import type { TaskOccurrenceOut } from "@/lib/types/task"
 
@@ -27,6 +42,12 @@ interface MemberRow {
   id: string
   name: string
   color: string
+}
+
+interface MembershipResponse {
+  id: string
+  family_id: string
+  role: "owner" | "adult" | "child" | "viewer"
 }
 
 const ANYTIME_KEY = "__anytime__"
@@ -72,6 +93,16 @@ export function ChoreBoard({ familyId }: { familyId: string }) {
 
   const complete = useCompleteTask(familyId)
   const uncomplete = useUncompleteTask(familyId)
+  const setOverride = useSetRotationOverride(familyId)
+  const clearOverride = useClearRotationOverride(familyId)
+
+  // Reassigning/skipping a turn is an owner/adult action (kids can't dodge chores).
+  const { data: memberships = [] } = useQuery({
+    queryKey: ["me", "memberships"],
+    queryFn: () => api.get<MembershipResponse[]>("/me/memberships"),
+  })
+  const role = memberships.find((m) => m.family_id === familyId)?.role
+  const canManage = role === "owner" || role === "adult"
 
   // routine_id → sort_order, so member cards group chores in the same order the
   // routines were arranged (Morning before Bedtime, etc.). "Anytime" sorts last.
@@ -108,14 +139,36 @@ export function ChoreBoard({ familyId }: { familyId: string }) {
     }))
     .filter((c) => c.items.length > 0)
 
+  // Skipped ("not my week") occurrences are excused — no one's on the hook. They
+  // have no members, so split them out from genuinely-unassigned chores.
+  const skippedToday = occurrences.filter((o) => o.is_skipped)
   // Tasks with no assignee can't be checked off per-member — surface them so they
   // don't silently vanish, with a hint to assign them.
-  const unassigned = occurrences.filter((o) => o.members.length === 0)
+  const unassigned = occurrences.filter((o) => o.members.length === 0 && !o.is_skipped)
 
   function toggle(o: TaskOccurrenceOut, memberId: string, done: boolean) {
     const vars = { taskId: o.task_id, memberId, occurrenceDate: today }
     if (done) uncomplete.mutate(vars)
     else complete.mutate(vars)
+  }
+
+  function swapTo(o: TaskOccurrenceOut, memberId: string) {
+    setOverride.mutate(
+      { taskId: o.task_id, occurrenceDate: today, memberId, scope: "occurrence" },
+      { onError: () => toast.error("Couldn't reassign this chore.") },
+    )
+  }
+  function skip(o: TaskOccurrenceOut, scope: "occurrence" | "turn") {
+    setOverride.mutate(
+      { taskId: o.task_id, occurrenceDate: today, memberId: null, scope },
+      { onError: () => toast.error("Couldn't skip this chore.") },
+    )
+  }
+  function resetRotation(o: TaskOccurrenceOut) {
+    clearOverride.mutate(
+      { taskId: o.task_id, occurrenceDate: today, scope: "occurrence" },
+      { onError: () => toast.error("Couldn't reset this chore.") },
+    )
   }
 
   const heading = new Date().toLocaleDateString(undefined, {
@@ -142,7 +195,7 @@ export function ChoreBoard({ familyId }: { familyId: string }) {
             <Loader2Icon className="size-5 animate-spin" />
             Loading chores…
           </div>
-        ) : memberCards.length === 0 && unassigned.length === 0 ? (
+        ) : memberCards.length === 0 && unassigned.length === 0 && skippedToday.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center gap-3 text-center">
             <span className="bg-muted text-muted-foreground flex size-16 items-center justify-center rounded-2xl">
               <PartyPopperIcon className="size-8" />
@@ -202,12 +255,15 @@ export function ChoreBoard({ familyId }: { familyId: string }) {
                             return (
                               <li key={o.task_id}>
                                 <ChoreRow
-                                  title={o.title}
-                                  color={o.effective_color}
+                                  occurrence={o}
+                                  currentMemberId={member.id}
+                                  allMembers={members}
+                                  canManage={canManage}
                                   done={done}
-                                  upNext={o.up_next?.name}
-                                  stars={o.star_value}
                                   onToggle={() => toggle(o, member.id, done)}
+                                  onSwap={(mid) => swapTo(o, mid)}
+                                  onSkip={(scope) => skip(o, scope)}
+                                  onReset={() => resetRotation(o)}
                                 />
                               </li>
                             )
@@ -242,6 +298,37 @@ export function ChoreBoard({ familyId }: { familyId: string }) {
                 </ul>
               </section>
             )}
+
+            {skippedToday.length > 0 && (
+              <section className="border-muted-foreground/20 flex flex-col gap-3 rounded-3xl border border-dashed p-5">
+                <header>
+                  <p className="text-lg font-semibold leading-tight">Skipped today</p>
+                  <p className="text-muted-foreground text-sm">Excused — no one&apos;s on the hook.</p>
+                </header>
+                <ul className="flex flex-col gap-2">
+                  {skippedToday.map((o) => (
+                    <li
+                      key={o.task_id}
+                      className="flex items-center gap-3 rounded-2xl border px-4 py-3"
+                    >
+                      <BanIcon className="text-muted-foreground size-4 shrink-0" />
+                      <span className="text-muted-foreground flex-1 truncate line-through">
+                        {o.title}
+                      </span>
+                      {canManage && (
+                        <button
+                          type="button"
+                          onClick={() => resetRotation(o)}
+                          className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1 text-sm font-medium"
+                        >
+                          <Undo2Icon className="size-3.5" /> Restore
+                        </button>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
           </div>
         )}
       </div>
@@ -250,69 +337,133 @@ export function ChoreBoard({ familyId }: { familyId: string }) {
 }
 
 function ChoreRow({
-  title,
-  color,
+  occurrence,
+  currentMemberId,
+  allMembers,
+  canManage,
   done,
-  upNext,
-  stars,
   onToggle,
+  onSwap,
+  onSkip,
+  onReset,
 }: {
-  title: string
-  color: string
+  occurrence: TaskOccurrenceOut
+  currentMemberId: string
+  allMembers: MemberRow[]
+  canManage: boolean
   done: boolean
-  upNext?: string
-  stars?: number
   onToggle: () => void
+  onSwap: (memberId: string) => void
+  onSkip: (scope: "occurrence" | "turn") => void
+  onReset: () => void
 }) {
+  const { title, effective_color: color, up_next: upNext, star_value: stars } = occurrence
   const style: CSSProperties = done
     ? { backgroundColor: color, borderColor: color }
     : { borderColor: color }
 
+  // up_next is set only for a rotating chore with ≥2 members — exactly when a
+  // swap/skip makes sense. A multi-day turn (e.g. a weekly owner) also offers
+  // "skip the whole turn".
+  const isRotating = upNext != null
+  const showMenu = canManage && isRotating
+  const multiDayTurn = occurrence.rotation_unit !== "occurrence" || occurrence.rotation_interval > 1
+  const swapTargets = allMembers.filter((m) => m.id !== currentMemberId)
+
   return (
-    <button
-      type="button"
-      onClick={onToggle}
-      aria-pressed={done}
-      className={cn(
-        "flex w-full items-center gap-3.5 rounded-2xl border px-4 py-3.5 text-left transition-colors",
-        "focus-visible:ring-ring/40 focus-visible:outline-none focus-visible:ring-2",
-        done ? "bg-muted/50" : "hover:bg-muted/40",
-      )}
-    >
-      <span
-        className="flex size-9 shrink-0 items-center justify-center rounded-xl border-2 transition-all"
-        style={style}
-      >
-        {done && (
-          <CheckIcon className="size-5 text-white duration-200 animate-in zoom-in-50" />
+    <div className="flex items-stretch gap-1.5">
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-pressed={done}
+        className={cn(
+          "flex flex-1 items-center gap-3.5 rounded-2xl border px-4 py-3.5 text-left transition-colors",
+          "focus-visible:ring-ring/40 focus-visible:outline-none focus-visible:ring-2",
+          done ? "bg-muted/50" : "hover:bg-muted/40",
         )}
-      </span>
-      <span className="min-w-0 flex-1">
+      >
         <span
-          className={cn(
-            "block text-lg font-medium transition-all",
-            done && "text-muted-foreground line-through",
-          )}
+          className="flex size-9 shrink-0 items-center justify-center rounded-xl border-2 transition-all"
+          style={style}
         >
-          {title}
+          {done && (
+            <CheckIcon className="size-5 text-white duration-200 animate-in zoom-in-50" />
+          )}
         </span>
-        {upNext && !done && (
-          <span className="text-muted-foreground mt-0.5 flex items-center gap-1 text-xs">
-            <RepeatIcon className="size-3" /> Next: {upNext}
+        <span className="min-w-0 flex-1">
+          <span
+            className={cn(
+              "block text-lg font-medium transition-all",
+              done && "text-muted-foreground line-through",
+            )}
+          >
+            {title}
+          </span>
+          {occurrence.is_overridden && !done ? (
+            <span className="text-muted-foreground mt-0.5 flex items-center gap-1 text-xs">
+              <ArrowLeftRightIcon className="size-3" /> Swapped in
+            </span>
+          ) : upNext && !done ? (
+            <span className="text-muted-foreground mt-0.5 flex items-center gap-1 text-xs">
+              <RepeatIcon className="size-3" /> Next: {upNext.name}
+            </span>
+          ) : null}
+        </span>
+        {!!stars && stars > 0 && (
+          <span
+            className={cn(
+              "flex shrink-0 items-center gap-1 text-sm font-semibold text-amber-500",
+              done && "opacity-40",
+            )}
+          >
+            <StarIcon className="size-4 fill-amber-400 text-amber-400" />
+            {stars}
           </span>
         )}
-      </span>
-      {!!stars && stars > 0 && (
-        <span
-          className={cn(
-            "flex shrink-0 items-center gap-1 text-sm font-semibold text-amber-500",
-            done && "opacity-40",
-          )}
-        >
-          <StarIcon className="size-4 fill-amber-400 text-amber-400" />
-          {stars}
-        </span>
+      </button>
+
+      {showMenu && (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              aria-label={`Options for ${title}`}
+              className="text-muted-foreground hover:bg-muted/40 hover:text-foreground focus-visible:ring-ring/40 flex items-center justify-center rounded-2xl border px-2.5 transition-colors focus-visible:outline-none focus-visible:ring-2"
+            >
+              <EllipsisVerticalIcon className="size-5" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-52">
+            {swapTargets.length > 0 && (
+              <>
+                <DropdownMenuLabel>Reassign today</DropdownMenuLabel>
+                {swapTargets.map((m) => (
+                  <DropdownMenuItem key={m.id} onClick={() => onSwap(m.id)}>
+                    <ArrowLeftRightIcon /> Swap to {m.name}
+                  </DropdownMenuItem>
+                ))}
+                <DropdownMenuSeparator />
+              </>
+            )}
+            <DropdownMenuItem onClick={() => onSkip("occurrence")}>
+              <BanIcon /> Skip today
+            </DropdownMenuItem>
+            {multiDayTurn && (
+              <DropdownMenuItem onClick={() => onSkip("turn")}>
+                <BanIcon /> Skip this whole turn
+              </DropdownMenuItem>
+            )}
+            {occurrence.is_overridden && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={onReset}>
+                  <Undo2Icon /> Reset to rotation
+                </DropdownMenuItem>
+              </>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
       )}
-    </button>
+    </div>
   )
 }
