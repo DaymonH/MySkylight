@@ -112,7 +112,7 @@ export default function MembersPage({ params }: { params: Promise<{ familyId: st
   })
 
   return (
-    <div className="thin-scrollbar mx-auto flex w-full max-w-xl flex-col gap-6 overflow-y-auto p-4 pb-24 sm:p-6 sm:pb-24">
+    <div className="thin-scrollbar mx-auto flex w-full max-w-xl flex-col gap-6 overflow-y-auto p-4 sm:p-6">
       <header className="flex flex-col gap-1">
         <FamilyNameEditor familyId={familyId} />
         <p className="text-muted-foreground text-sm">Manage members and sharing for your family.</p>
@@ -139,7 +139,11 @@ export default function MembersPage({ params }: { params: Promise<{ familyId: st
       {adding && (
         <Card ref={addFormRef} className="scroll-mt-4">
           <CardContent>
-            <form onSubmit={handleSubmit((v) => addMember.mutate(v))} className="flex flex-col gap-5">
+            <form
+              id="member-add-form"
+              onSubmit={handleSubmit((v) => addMember.mutate(v))}
+              className="flex flex-col gap-5"
+            >
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="member-name">Name</Label>
                 <Input id="member-name" {...register("name")} placeholder="e.g. Mom, Jake" autoFocus />
@@ -197,10 +201,6 @@ export default function MembersPage({ params }: { params: Promise<{ familyId: st
                   {errors.pin && <p className="text-destructive text-xs">{errors.pin.message}</p>}
                 </div>
               )}
-
-              <Button type="submit" disabled={addMember.isPending}>
-                {addMember.isPending ? "Adding…" : "Add member"}
-              </Button>
             </form>
           </CardContent>
         </Card>
@@ -279,6 +279,21 @@ export default function MembersPage({ params }: { params: Promise<{ familyId: st
             </li>
           ))}
         </ul>
+      )}
+
+      {/* Submit pinned to the bottom of the screen so it's always reachable even
+          when the form is taller than the viewport (linked to the form by id). */}
+      {adding && (
+        <div className="bg-background/90 sticky bottom-0 z-10 -mx-4 border-t px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6">
+          <Button
+            type="submit"
+            form="member-add-form"
+            className="w-full"
+            disabled={addMember.isPending}
+          >
+            {addMember.isPending ? "Adding…" : "Add member"}
+          </Button>
+        </div>
       )}
 
       <MemberEditSheet
