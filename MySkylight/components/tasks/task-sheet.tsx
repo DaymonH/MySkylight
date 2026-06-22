@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect } from "react"
+import { useEffect, useState } from "react"
 import { useForm, useWatch, Controller } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
@@ -79,6 +79,16 @@ function todayYMD() {
   ).padStart(2, "0")}`
 }
 
+// Which Repeat select item an rrule maps to. A weekly BYDAY rule that isn't a named
+// preset maps to "Custom days…". Note a custom set can coincide with a preset value
+// (e.g. Mon–Fri === the Weekdays preset) — picker mode is tracked separately so the
+// custom picker stays open while the user edits, regardless of that coincidence.
+const selectRepeatValue = (rrule: string): string => {
+  if (TASK_RRULE_OPTIONS.some((o) => o.value === rrule)) return rrule
+  if (rrule.includes("FREQ=WEEKLY") && rrule.includes("BYDAY=")) return CUSTOM_WEEKLY
+  return rrule || "none"
+}
+
 export function TaskSheet({
   open,
   onClose,
@@ -113,9 +123,16 @@ export function TaskSheet({
     },
   })
 
+  // Whether the Repeat picker is in "Custom days…" mode. Tracked explicitly (not
+  // derived from the rrule) so the picker stays open even when the chosen day-set
+  // happens to equal a preset value (e.g. Mon–Fri === the Weekdays preset).
+  const [customMode, setCustomMode] = useState(false)
+
   useEffect(() => {
     if (!open) return
     if (editing) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- reset picker mode alongside the form reset
+      setCustomMode(selectRepeatValue(editing.rrule ?? "none") === CUSTOM_WEEKLY)
       reset({
         title: editing.title,
         description: editing.description ?? "",
@@ -129,6 +146,7 @@ export function TaskSheet({
         rotation_interval: editing.rotation_interval ?? 1,
       })
     } else {
+      setCustomMode(false)
       reset({
         title: "",
         description: "",
@@ -147,14 +165,6 @@ export function TaskSheet({
   const rotate = useWatch({ control, name: "rotate" })
   const rotationInterval = useWatch({ control, name: "rotation_interval" })
   const startDate = useWatch({ control, name: "start_date" })
-  // The Repeat select shows "Custom days…" for any weekly BYDAY rrule that isn't a
-  // named preset (e.g. FREQ=WEEKLY;BYDAY=TU,SA). The form field still holds the real
-  // rrule string — this just decides which select item is highlighted.
-  const selectRepeatValue = (rrule: string): string => {
-    if (TASK_RRULE_OPTIONS.some((o) => o.value === rrule)) return rrule
-    if (rrule.includes("FREQ=WEEKLY") && rrule.includes("BYDAY=")) return CUSTOM_WEEKLY
-    return rrule || "none"
-  }
   const unitLabel = (unit: "occurrence" | "day" | "week" | "month") => {
     const plural = rotationInterval !== 1
     if (unit === "occurrence") return plural ? "times it's due" : "time it's due"
@@ -217,15 +227,17 @@ export function TaskSheet({
                 name="rrule"
                 control={control}
                 render={({ field }) => {
-                  const selectValue = selectRepeatValue(field.value)
+                  const selectValue = customMode ? CUSTOM_WEEKLY : selectRepeatValue(field.value)
                   const onRepeatChange = (val: string) => {
                     if (val === CUSTOM_WEEKLY) {
                       // Entering custom mode: keep any existing day-set, else seed
                       // with the start date's weekday so it's never an empty rule.
+                      setCustomMode(true)
                       const existing = parseByday(field.value)
                       const seed = startDate ? weekdayOf(startDate) : "MO"
                       field.onChange(bydayRrule(existing.length ? existing : [seed]))
                     } else {
+                      setCustomMode(false)
                       field.onChange(val)
                     }
                   }
@@ -263,7 +275,7 @@ export function TaskSheet({
                               key={d.code}
                               value={d.code}
                               aria-label={d.label}
-                              className="w-12 rounded-full"
+                              className="w-12 rounded-full data-[state=on]:border-primary data-[state=on]:bg-primary data-[state=on]:text-primary-foreground data-[state=on]:hover:bg-primary data-[state=on]:hover:text-primary-foreground"
                             >
                               {d.label}
                             </ToggleGroupItem>
