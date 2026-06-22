@@ -1,6 +1,6 @@
 "use client"
 
-import { use, useState } from "react"
+import { use, useState, useEffect, useRef } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { toast } from "sonner"
 import {
@@ -90,6 +90,13 @@ export default function TasksPage({ params }: { params: Promise<{ familyId: stri
   const [defaultRoutineId, setDefaultRoutineId] = useState<string | undefined>()
   const [addingRoutine, setAddingRoutine] = useState(false)
   const [routineName, setRoutineName] = useState("")
+  // Bring the add-routine form into view when it opens so its button isn't below the fold.
+  const addRoutineFormRef = useRef<HTMLFormElement>(null)
+  useEffect(() => {
+    if (addingRoutine) {
+      addRoutineFormRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
+    }
+  }, [addingRoutine])
 
   const ungrouped = tasks.filter((t) => !t.routine_id)
   const isLoading = routinesLoading || tasksLoading
@@ -163,7 +170,7 @@ export default function TasksPage({ params }: { params: Promise<{ familyId: stri
   }
 
   return (
-    <div className="thin-scrollbar mx-auto flex w-full max-w-2xl flex-col gap-6 overflow-y-auto p-4 sm:p-6">
+    <div className="thin-scrollbar mx-auto flex w-full max-w-2xl flex-col gap-6 overflow-y-auto p-4 pb-24 sm:p-6 sm:pb-24">
       <header className="flex flex-col gap-1">
         <h1 className="font-heading text-xl font-semibold tracking-tight">Tasks &amp; routines</h1>
         <p className="text-muted-foreground text-sm">
@@ -190,11 +197,12 @@ export default function TasksPage({ params }: { params: Promise<{ familyId: stri
 
       {addingRoutine && (
         <form
+          ref={addRoutineFormRef}
           onSubmit={(e) => {
             e.preventDefault()
             handleAddRoutine()
           }}
-          className="flex items-center gap-2"
+          className="flex items-center gap-2 scroll-mt-4"
         >
           <Input
             value={routineName}

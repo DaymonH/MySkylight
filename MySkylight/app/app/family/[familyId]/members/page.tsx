@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, use } from "react"
+import { useState, use, useEffect, useRef } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
@@ -51,9 +51,21 @@ export default function MembersPage({ params }: { params: Promise<{ familyId: st
   const qc = useQueryClient()
   const [adding, setAdding] = useState(false)
   const [editingMember, setEditingMember] = useState<MemberOut | null>(null)
+  // When the add form opens, pull it (and its submit button) into view so the
+  // button isn't left below the fold of the scroll container.
+  const addFormRef = useRef<HTMLDivElement>(null)
 
   // Live-update the list (and the family name) when another device changes them.
   useRealtime(familyId)
+
+  // Bring the add form fully into view when it opens (scrollIntoView also works
+  // when a touch device's nested scroll is finicky), so the submit button below
+  // the Child-profile toggle is reachable without hunting for it.
+  useEffect(() => {
+    if (adding) {
+      addFormRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
+    }
+  }, [adding])
 
   const { data: members = [], isLoading } = useQuery({
     queryKey: ["members", familyId],
@@ -100,7 +112,7 @@ export default function MembersPage({ params }: { params: Promise<{ familyId: st
   })
 
   return (
-    <div className="thin-scrollbar mx-auto flex w-full max-w-xl flex-col gap-6 overflow-y-auto p-4 sm:p-6">
+    <div className="thin-scrollbar mx-auto flex w-full max-w-xl flex-col gap-6 overflow-y-auto p-4 pb-24 sm:p-6 sm:pb-24">
       <header className="flex flex-col gap-1">
         <FamilyNameEditor familyId={familyId} />
         <p className="text-muted-foreground text-sm">Manage members and sharing for your family.</p>
@@ -125,7 +137,7 @@ export default function MembersPage({ params }: { params: Promise<{ familyId: st
       </div>
 
       {adding && (
-        <Card>
+        <Card ref={addFormRef} className="scroll-mt-4">
           <CardContent>
             <form onSubmit={handleSubmit((v) => addMember.mutate(v))} className="flex flex-col gap-5">
               <div className="flex flex-col gap-1.5">

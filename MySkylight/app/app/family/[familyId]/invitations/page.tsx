@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, use } from "react"
+import { useState, use, useEffect, useRef } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
@@ -69,6 +69,13 @@ export default function InvitationsPage({ params }: { params: Promise<{ familyId
   const qc = useQueryClient()
   const [adding, setAdding] = useState(false)
   const [copiedId, setCopiedId] = useState<string | null>(null)
+  // Bring the invite form into view when it opens so its button isn't below the fold.
+  const addFormRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (adding) {
+      addFormRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
+    }
+  }, [adding])
 
   // Mirror the backend guard (FamilyOwnerOrAdult): only owner/adult manage invites.
   const { data: memberships } = useQuery({
@@ -154,7 +161,7 @@ export default function InvitationsPage({ params }: { params: Promise<{ familyId
   }
 
   return (
-    <div className="thin-scrollbar mx-auto flex w-full max-w-xl flex-col gap-6 overflow-y-auto p-4 sm:p-6">
+    <div className="thin-scrollbar mx-auto flex w-full max-w-xl flex-col gap-6 overflow-y-auto p-4 pb-24 sm:p-6 sm:pb-24">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="font-heading text-xl font-bold tracking-tight">Invitations</h1>
@@ -166,7 +173,7 @@ export default function InvitationsPage({ params }: { params: Promise<{ familyId
       </div>
 
       {adding && (
-        <Card>
+        <Card ref={addFormRef} className="scroll-mt-4">
           <CardContent>
             <form onSubmit={handleSubmit((v) => sendInvite.mutate(v))} className="flex flex-col gap-5">
               <div className="flex flex-col gap-1.5">

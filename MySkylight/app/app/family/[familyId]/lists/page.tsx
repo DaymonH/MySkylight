@@ -1,6 +1,6 @@
 "use client"
 
-import { use, useState } from "react"
+import { use, useState, useEffect, useRef } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { toast } from "sonner"
 import {
@@ -98,6 +98,13 @@ export default function ListsPage({ params }: { params: Promise<{ familyId: stri
   const [creating, setCreating] = useState(false)
   const [newName, setNewName] = useState("")
   const [newType, setNewType] = useState<ListType>("todo")
+  // Bring the create-list form into view when it opens so its button isn't below the fold.
+  const createFormRef = useRef<HTMLFormElement>(null)
+  useEffect(() => {
+    if (creating) {
+      createFormRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
+    }
+  }, [creating])
 
   function handleCreateList() {
     const name = newName.trim()
@@ -117,7 +124,7 @@ export default function ListsPage({ params }: { params: Promise<{ familyId: stri
   }
 
   return (
-    <div className="thin-scrollbar mx-auto flex w-full max-w-2xl flex-col gap-6 overflow-y-auto p-4 sm:p-6">
+    <div className="thin-scrollbar mx-auto flex w-full max-w-2xl flex-col gap-6 overflow-y-auto p-4 pb-24 sm:p-6 sm:pb-24">
       <header className="flex flex-col gap-1">
         <h1 className="font-heading text-xl font-semibold tracking-tight">Lists &amp; groceries</h1>
         <p className="text-muted-foreground text-sm">
@@ -173,11 +180,12 @@ export default function ListsPage({ params }: { params: Promise<{ familyId: stri
 
       {creating && (
         <form
+          ref={createFormRef}
           onSubmit={(e) => {
             e.preventDefault()
             handleCreateList()
           }}
-          className="flex flex-col gap-3 rounded-2xl border p-4"
+          className="flex flex-col gap-3 rounded-2xl border p-4 scroll-mt-4"
         >
           <Input
             value={newName}
