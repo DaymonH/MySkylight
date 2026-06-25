@@ -79,11 +79,13 @@ Goal: real auth, families, members with colors, and sharing.
 - [x] `[BE]` Per-family authorization dependency (role-aware) used by all routers
 - [x] `[BE]` `/families` CRUD + `/members` CRUD (color, avatar) — **F02**
 - [x] `[BE]` `Invitation` model + `/invitations` create/accept/revoke (roles) — **F13** _(accept auto-creates the user's `Member` persona via `ensure_member_for_user`, idempotent; the owner's persona is created on family-create the same way)_
+  - [x] `[BE]` Link-invite-to-existing-profile (claim-on-accept) — **F13** _(nullable `Invitation.member_id`, migration `015`; accept claims the unclaimed persona instead of duplicating, so chore assignments carry over. See FEATURES F13 enhancement 2026-06-25.)_
 - [x] `[FE]` Clerk `<SignIn>`/`<SignUp>` + route protection + `<UserButton>`; Clerk token attached via the proxy (`app/sign-in`, `app/sign-up`, `app/app/layout.tsx`)
 - [x] `[FE]` Create-family wizard (post sign-in onboarding) (`app/app/onboarding/page.tsx`)
 - [x] `[FE]` Member management UI: add member, color picker, avatar (`app/app/family/[familyId]/members/page.tsx`) — **F02** _(edit-member drawer still TODO — see Appendix A)_
 - [x] `[FE]` Profile switcher (device + mobile) _(member avatar filter in `components/calendar/member-filter.tsx`, state in `hooks/use-active-member.ts`; wired into `CalendarView` so both `/device` and `/app` get it. Scopes the calendar to one member; "All" clears. Strict filter — unassigned family-wide events show under "All". **Distinct from** the deferred multi-**family** switcher for co-parents.)_
 - [x] `[FE]` Invite flow: send invite (role picker), pending list, revoke, copy-link, accept-invite landing — **F13** _(link-based: `InvitationOut` exposes `token`; reached via new `FamilyMenu` header menu. Optional rename/recolour on accept deferred — BE auto-creates the persona)_
+  - [x] `[FE]` Invite form "Link to existing profile" picker (unlinked members) + "Links to <name>" badge on pending invites — **F13**
 - [x] `[BE]` Color-resolution helper (event→member→calendar) — **F02** _(`_resolve_color` in `services/calendar.py`)_
 - [x] `[ ] ` Tests: Clerk JWT verification, webhook user-sync, cross-family authz rejection, invite accept _(JWT verify in `tests/test_security.py`; webhook user-sync in `tests/test_webhooks.py`; cross-family + role rejection in `tests/test_authz.py`; invite create/list/revoke/accept in `tests/test_invitations.py` — 31 backend tests green)_
 - [x] `[ ] ` AC: two Clerk users share one family with correct roles _(proven end-to-end at the API in `tests/test_invitations.py::test_accept_invitation_adds_member_and_persona`)_

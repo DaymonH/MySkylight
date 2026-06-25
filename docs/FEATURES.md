@@ -291,6 +291,16 @@ frontend (FE) pieces, and **acceptance criteria** (AC) that define "done".
   also caught + fixed an expiry-check bug (SQLite returns `expires_at` tz-naive → `TypeError` on every
   accept). **Deferred:** optional rename/recolour step on accept (BE auto-creates the persona, so the
   landing is intentionally thin); multi-family switcher in the header (currently uses `memberships[0]`).
+- **Enhancement (2026-06-25) — link an invite to an existing profile (claim-on-accept):** You can
+  pre-create a login-less `Member` (e.g. a spouse) and assign them chores, then later give them a login
+  **without losing those assignments or reassigning anything**. `Invitation` gained a nullable `member_id`
+  (migration `015`). When set, `create_invitation` validates the target is a live, **unclaimed** member of
+  the family; on accept, instead of `ensure_member_for_user` spawning a duplicate, the existing persona is
+  **claimed** (its `user_id` is set) so every `TaskAssignment` (and completion) carries over untouched —
+  `Member.id` never changes. Falls back to the default new-persona behaviour when `member_id` is null, the
+  target was already claimed, or the user already has a persona in the family. FE: invite form gains a
+  "Link to existing profile" picker (unlinked members only); pending invites show a "Links to <name>" badge.
+  Covered by new cases in `tests/test_invitations.py` (incl. a test proving chore assignments survive).
 - _Phase 1_
 
 ---

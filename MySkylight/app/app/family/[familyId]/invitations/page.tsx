@@ -7,7 +7,7 @@ import { z } from "zod"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import {
-  CheckIcon, ClockIcon, CopyIcon, MailPlusIcon, MailIcon, ShieldAlertIcon, Trash2Icon, XIcon,
+  CheckIcon, ClockIcon, CopyIcon, LinkIcon, MailPlusIcon, MailIcon, ShieldAlertIcon, Trash2Icon, XIcon,
 } from "lucide-react"
 
 import { useApi } from "@/hooks/use-api"
@@ -36,15 +36,21 @@ const ROLE_LABELS: Record<InviteRole, string> = {
   viewer: "Viewer",
 }
 
+// Sentinel for the "Link to existing profile" select meaning "don't link — create a
+// fresh profile on accept" (the default). Empty/this value omits member_id from the post.
+const CREATE_NEW = "new"
+
 const schema = z.object({
   email: z.string().email("Enter a valid email"),
   role: z.enum(INVITE_ROLES),
+  member_id: z.string().optional(),
 })
 type FormValues = z.infer<typeof schema>
 
 interface InvitationOut {
   id: string
   family_id: string
+  member_id: string | null
   email: string
   role: InviteRole | "owner"
   status: "pending" | "accepted" | "revoked"
@@ -57,6 +63,14 @@ interface MembershipResponse {
   id: string
   family_id: string
   role: "owner" | "adult" | "child" | "viewer"
+}
+
+interface Member {
+  id: string
+  name: string
+  color: string
+  user_id: string | null
+  is_child: boolean
 }
 
 function daysUntil(iso: string): number {
@@ -91,6 +105,16 @@ export default function InvitationsPage({ params }: { params: Promise<{ familyId
     enabled: canManage,
   })
 
+  // Existing profiles without a login — candidates to link an invite to so the
+  // invitee claims that profile (keeping its chores) instead of getting a new one.
+  const { data: members = [] } = useQuery({
+    queryKey: ["members", familyId],
+    queryFn: () => api.get<Member[]>(`/families/${familyId}/members`),
+    enabled: canManage,
+  })
+  const unlinkedMembers = members.filter((m) => !m.user_id)
+  const memberName = (id: string) => members.find((m) => m.id === id)?.name
+
   const {
     register,
     handleSubmit,
@@ -100,24 +124,33 @@ export default function InvitationsPage({ params }: { params: Promise<{ familyId
     formState: { errors },
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
-    defaultValues: { role: "adult" },
+    defaultValues: { role: "adult", member_id: CREATE_NEW },
   })
   const role = watch("role")
+  const memberId = watch("member_id")
 
   const sendInvite = useMutation({
-    mutationFn: (values: FormValues) =>
-      api.post<InvitationOut>(`/families/${familyId}/invitations`, values),
+    mutationFn: (values: FormValues) => {
+      const linkId = values.member_id && values.member_id !== CREATE_NEW ? values.member_id : undefined
+      return api.post<InvitationOut>(`/families/${familyId}/invitations`, {
+        email: values.email,
+        role: values.role,
+        ...(linkId ? { member_id: linkId } : {}),
+      })
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["invitations", familyId] })
-      reset({ role: "adult", email: "" })
+      reset({ role: "adult", email: "", member_id: CREATE_NEW })
       setAdding(false)
       toast.success("Invitation created — copy the link to share it")
     },
     onError: (err: unknown) => {
-      const status = (err as { status?: number })?.status
+      const { status, message } = (err as { status?: number; message?: string }) ?? {}
+      // 404 (profile not found) / 409 (dupe email or profile already has a login) come
+      // back with a specific backend detail — surface it; otherwise a generic fallback.
       toast.error(
-        status === 409
-          ? "There's already a pending invite for that email."
+        (status === 409 || status === 404) && message
+          ? message
           : "Couldn't create the invitation. Please try again.",
       )
     },
@@ -203,6 +236,30 @@ export default function InvitationsPage({ params }: { params: Promise<{ familyId
                 </Select>
               </div>
 
+              {unlinkedMembers.length > 0 && (
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="invite-link">Link to existing profile</Label>
+                  <Select
+                    value={memberId ?? CREATE_NEW}
+                    onValueChange={(v) => setValue("member_id", v)}
+                  >
+                    <SelectTrigger id="invite-link" className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={CREATE_NEW}>Create a new profile</SelectItem>
+                      {unlinkedMembers.map((m) => (
+                        <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-muted-foreground text-xs">
+                    Already made a profile for this person (with chores assigned)? Link it
+                    here so they keep all of it when they log in — no reassigning.
+                  </p>
+                </div>
+              )}
+
               <Button type="submit" disabled={sendInvite.isPending}>
                 {sendInvite.isPending ? "Creating…" : "Create invitation"}
               </Button>
@@ -248,12 +305,18 @@ export default function InvitationsPage({ params }: { params: Promise<{ familyId
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="truncate font-medium leading-tight">{inv.email}</p>
-                    <div className="text-muted-foreground mt-1 flex items-center gap-2 text-xs">
+                    <div className="text-muted-foreground mt-1 flex flex-wrap items-center gap-2 text-xs">
                       <Badge variant="secondary">{ROLE_LABELS[inv.role as InviteRole] ?? inv.role}</Badge>
                       <span className="flex items-center gap-1">
                         <ClockIcon className="size-3" />
                         {days <= 0 ? "Expired" : `Expires in ${days} day${days === 1 ? "" : "s"}`}
                       </span>
+                      {inv.member_id && (
+                        <Badge variant="outline" className="gap-1">
+                          <LinkIcon className="size-3" />
+                          Links to {memberName(inv.member_id) ?? "a profile"}
+                        </Badge>
+                      )}
                     </div>
                   </div>
                   <AlertDialog>
