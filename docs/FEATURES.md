@@ -98,6 +98,21 @@ frontend (FE) pieces, and **acceptance criteria** (AC) that define "done".
   Decoupled rotation cadence (F27) layers on top unchanged — a twice-weekly chore can still rotate per
   occurrence / weekly / monthly. FE-only; `lib/recurrence.ts` + `components/tasks/task-sheet.tsx`.
   Typecheck clean.
+- **Update (2026-06-25) — week view, missed/overdue, and filters (FE, both surfaces):** the chore
+  experience now answers "what day / who / what's overdue" directly. Both the **device kiosk**
+  (`components/tasks/chore-board.tsx`) and a **new companion view** (`/app/family/[familyId]/chores`,
+  `components/tasks/chores-panel.tsx`) gained: a **Today / Week** toggle (week adds a Sunday-aligned day
+  strip with per-day done/total — matches the calendar's week start), a persistent **"Missed"** section
+  surfacing un-done chores from earlier days (14-day lookback, computed *before* the active window so
+  within-week misses live in the day strip, not double-counted), and a shared **filter bar**
+  (`components/tasks/chore-filter-bar.tsx`) covering **completion status (All / To do / Done) · person ·
+  routine · frequency**. Frequency is bucketed from the task rrule by `classifyFrequency` in
+  `lib/recurrence.ts`; all filter/overdue/date logic is pure in `lib/chores.ts`. **Bug fixed:** the board
+  hard-coded completion to *today* — it now completes against each occurrence's real date, so a missed
+  Tuesday chore checks off against Tuesday (required for the Missed section + week view to work). The
+  companion `FamilyMenu` now links **Chores** (the do/check view) separately from **Manage tasks** (the
+  CRUD page). No backend change — `GET …/tasks/occurrences?from&to` already served arbitrary ranges.
+  `next build` + typecheck + eslint clean; 25 backend task tests still green. Live two-device smoke pending.
 - _Phase 3_
 
 ### F02 — Color Coding

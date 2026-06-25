@@ -74,6 +74,27 @@ export function describeTaskRrule(rrule: string | null): string {
   return "Repeats"
 }
 
+// Coarse recurrence buckets for the chores "timeframe" filter. We only need the
+// FREQ — interval/byday detail is irrelevant to "show me the weekly chores".
+export type ChoreFrequency = "one-off" | "daily" | "weekly" | "monthly"
+
+export const FREQUENCY_FILTER_OPTIONS: { value: ChoreFrequency; label: string }[] = [
+  { value: "one-off", label: "One-time" },
+  { value: "daily", label: "Daily" },
+  { value: "weekly", label: "Weekly" },
+  { value: "monthly", label: "Monthly" },
+]
+
+/** Bucket a task's rrule into a coarse frequency for filtering. */
+export function classifyFrequency(rrule: string | null): ChoreFrequency {
+  if (!rrule) return "one-off"
+  if (rrule.includes("FREQ=DAILY")) return "daily"
+  if (rrule.includes("FREQ=MONTHLY")) return "monthly"
+  if (rrule.includes("FREQ=YEARLY")) return "monthly" // rare; group with monthly
+  // Weekdays/weekly/every-N-weeks and any other weekly variants.
+  return "weekly"
+}
+
 /** Short human label for a rotation cadence, e.g. "weekly" or "every 2 weeks". */
 export function describeRotation(unit: RotationUnit, interval: number): string {
   if (unit === "occurrence") return interval === 1 ? "each time" : `every ${interval} times`

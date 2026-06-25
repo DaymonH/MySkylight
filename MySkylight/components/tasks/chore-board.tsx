@@ -1,9 +1,10 @@
 "use client"
 
-import { useMemo } from "react"
+import { useMemo, useState } from "react"
 import type { CSSProperties } from "react"
 import { useQuery } from "@tanstack/react-query"
 import {
+  AlertTriangleIcon,
   ArrowLeftRightIcon,
   BanIcon,
   CheckIcon,
@@ -24,6 +25,7 @@ import {
   useClearRotationOverride,
   useRoutines,
   useSetRotationOverride,
+  useTasks,
   useTaskOccurrences,
   useUncompleteTask,
 } from "@/hooks/use-tasks"
@@ -35,7 +37,26 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
+import { ChoreFilterBar } from "@/components/tasks/chore-filter-bar"
 import { cn } from "@/lib/utils"
+import {
+  type ChoreFilters,
+  DEFAULT_FILTERS,
+  addDaysYMD,
+  applyFilters,
+  dayLabel,
+  dayStripLabel,
+  filtersActive,
+  isOverdue,
+  matchesStatus,
+  matchesStatusForMember,
+  occurrenceDone,
+  todayYMD,
+  weekDatesYMD,
+  weekRangeYMD,
+} from "@/lib/chores"
+import { classifyFrequency, type ChoreFrequency } from "@/lib/recurrence"
 import type { TaskOccurrenceOut } from "@/lib/types/task"
 
 interface MemberRow {
@@ -51,13 +72,8 @@ interface MembershipResponse {
 }
 
 const ANYTIME_KEY = "__anytime__"
-
-function todayYMD() {
-  const d = new Date()
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
-    d.getDate(),
-  ).padStart(2, "0")}`
-}
+// How far back to look for un-done chores from earlier days.
+const OVERDUE_LOOKBACK_DAYS = 14
 
 function initials(name: string) {
   const parts = name.trim().split(/\s+/)
@@ -72,10 +88,14 @@ interface RoutineGroup {
 }
 
 /**
- * The device "chores" surface: one card per family member showing today's
- * assigned tasks with big, satisfying tap targets. Tapping toggles completion
- * for that member on today's occurrence (optimistic — the wall display reacts
- * instantly and any other screen catches up over SSE).
+ * The device "chores" surface: per-member cards with big, satisfying tap targets.
+ * Defaults to today; a Today/Week toggle adds a day strip so the family can see
+ * what's due which day. A persistent "Missed" section surfaces un-done chores from
+ * previous days, and a filter bar narrows by status / person / routine / frequency.
+ *
+ * Tapping a chore toggles completion for that member on *that occurrence's* date
+ * (so a missed Tuesday chore completes against Tuesday) — optimistic, with other
+ * screens catching up over SSE.
  */
 export function ChoreBoard({ familyId }: { familyId: string }) {
   useRealtime(familyId)
@@ -83,13 +103,30 @@ export function ChoreBoard({ familyId }: { familyId: string }) {
   const api = useApi()
   const today = todayYMD()
 
+  const [view, setView] = useState<"today" | "week">("today")
+  const [selectedDate, setSelectedDate] = useState(today)
+  const [filters, setFilters] = useState<ChoreFilters>(DEFAULT_FILTERS)
+
+  const week = weekRangeYMD(today)
+  // Main window: just today, or the whole current week.
+  const mainFrom = view === "today" ? today : week.start
+  const mainTo = view === "today" ? today : week.end
+  // "Missed" is everything still un-done *before* the main window — before today in
+  // day view, before the week's Sunday in week view (so within-week misses live in
+  // the day strip instead of being double-counted here).
+  const overdueAnchor = view === "today" ? today : week.start
+  const overdueFrom = addDaysYMD(overdueAnchor, -OVERDUE_LOOKBACK_DAYS)
+  const overdueTo = addDaysYMD(overdueAnchor, -1)
+
   const { data: members = [] } = useQuery({
     queryKey: ["members", familyId],
     queryFn: () => api.get<MemberRow[]>(`/families/${familyId}/members`),
     enabled: !!familyId,
   })
   const { data: routines = [] } = useRoutines(familyId)
-  const { data: occurrences = [], isLoading } = useTaskOccurrences(familyId, today, today)
+  const { data: tasks = [] } = useTasks(familyId)
+  const { data: mainOccs = [], isLoading } = useTaskOccurrences(familyId, mainFrom, mainTo)
+  const { data: pastOccs = [] } = useTaskOccurrences(familyId, overdueFrom, overdueTo)
 
   const complete = useCompleteTask(familyId)
   const uncomplete = useUncompleteTask(familyId)
@@ -104,13 +141,51 @@ export function ChoreBoard({ familyId }: { familyId: string }) {
   const role = memberships.find((m) => m.family_id === familyId)?.role
   const canManage = role === "owner" || role === "adult"
 
-  // routine_id → sort_order, so member cards group chores in the same order the
-  // routines were arranged (Morning before Bedtime, etc.). "Anytime" sorts last.
+  // task_id → coarse frequency, for the "Repeat" filter (occurrences don't carry the rrule).
+  const freqByTaskId = useMemo(
+    () => new Map<string, ChoreFrequency>(tasks.map((t) => [t.id, classifyFrequency(t.rrule)])),
+    [tasks],
+  )
+
+  // routine_id → sort_order, so cards group chores in routine order ("Anytime" last).
   const routineOrder = useMemo(() => {
     const m = new Map<string, { name: string; sort: number }>()
     routines.forEach((r) => m.set(r.id, { name: r.name, sort: r.sort_order }))
     return m
   }, [routines])
+
+  // Apply person/routine/frequency filters once; status is applied per-member below.
+  const filteredMain = useMemo(
+    () => applyFilters(mainOccs, filters, freqByTaskId),
+    [mainOccs, filters, freqByTaskId],
+  )
+  // The day actually shown on the cards (today view pins to today).
+  const activeDate = view === "today" ? today : selectedDate
+  const dayOccs = useMemo(
+    () => filteredMain.filter((o) => o.occurrence_date === activeDate),
+    [filteredMain, activeDate],
+  )
+
+  // Per-day done/total for the week strip (respects active filters).
+  const weekDays = useMemo(() => {
+    if (view !== "week") return []
+    return weekDatesYMD(today).map((d) => {
+      const items = filteredMain.filter((o) => o.occurrence_date === d)
+      return { date: d, total: items.length, done: items.filter(occurrenceDone).length }
+    })
+  }, [view, filteredMain, today])
+
+  const overdueItems = useMemo(
+    () =>
+      applyFilters(pastOccs, filters, freqByTaskId)
+        .filter((o) => isOverdue(o, overdueAnchor) && matchesStatus(o, filters.status))
+        .sort((a, b) =>
+          a.occurrence_date === b.occurrence_date
+            ? a.title.localeCompare(b.title)
+            : a.occurrence_date.localeCompare(b.occurrence_date),
+        ),
+    [pastOccs, filters, freqByTaskId, overdueAnchor],
+  )
 
   function groupsFor(items: TaskOccurrenceOut[]): RoutineGroup[] {
     const byRoutine = new Map<string, TaskOccurrenceOut[]>()
@@ -131,63 +206,121 @@ export function ChoreBoard({ familyId }: { familyId: string }) {
       .map(({ key, name, items }) => ({ key, name, items }))
   }
 
-  // Cards: one per member who has ≥1 chore today.
+  // Cards: one per member with ≥1 chore on the active day (after the status filter).
   const memberCards = members
     .map((m) => ({
       member: m,
-      items: occurrences.filter((o) => o.members.some((mm) => mm.id === m.id)),
+      items: dayOccs.filter(
+        (o) =>
+          o.members.some((mm) => mm.id === m.id) &&
+          matchesStatusForMember(o, m.id, filters.status),
+      ),
     }))
     .filter((c) => c.items.length > 0)
 
-  // Skipped ("not my week") occurrences are excused — no one's on the hook. They
-  // have no members, so split them out from genuinely-unassigned chores.
-  const skippedToday = occurrences.filter((o) => o.is_skipped)
-  // Tasks with no assignee can't be checked off per-member — surface them so they
-  // don't silently vanish, with a hint to assign them.
-  const unassigned = occurrences.filter((o) => o.members.length === 0 && !o.is_skipped)
+  // Skipped ("not my week") occurrences are excused — no one's on the hook.
+  const skippedItems = dayOccs.filter((o) => o.is_skipped)
+  // Unassigned chores can't be checked off per-member — surface them so they don't vanish.
+  const unassigned = dayOccs.filter((o) => o.members.length === 0 && !o.is_skipped)
 
   function toggle(o: TaskOccurrenceOut, memberId: string, done: boolean) {
-    const vars = { taskId: o.task_id, memberId, occurrenceDate: today }
+    const vars = { taskId: o.task_id, memberId, occurrenceDate: o.occurrence_date }
     if (done) uncomplete.mutate(vars)
     else complete.mutate(vars)
   }
-
   function swapTo(o: TaskOccurrenceOut, memberId: string) {
     setOverride.mutate(
-      { taskId: o.task_id, occurrenceDate: today, memberId, scope: "occurrence" },
+      { taskId: o.task_id, occurrenceDate: o.occurrence_date, memberId, scope: "occurrence" },
       { onError: () => toast.error("Couldn't reassign this chore.") },
     )
   }
   function skip(o: TaskOccurrenceOut, scope: "occurrence" | "turn") {
     setOverride.mutate(
-      { taskId: o.task_id, occurrenceDate: today, memberId: null, scope },
+      { taskId: o.task_id, occurrenceDate: o.occurrence_date, memberId: null, scope },
       { onError: () => toast.error("Couldn't skip this chore.") },
     )
   }
   function resetRotation(o: TaskOccurrenceOut) {
     clearOverride.mutate(
-      { taskId: o.task_id, occurrenceDate: today, scope: "occurrence" },
+      { taskId: o.task_id, occurrenceDate: o.occurrence_date, scope: "occurrence" },
       { onError: () => toast.error("Couldn't reset this chore.") },
     )
   }
 
-  const heading = new Date().toLocaleDateString(undefined, {
-    weekday: "long",
-    month: "long",
-    day: "numeric",
-  })
+  const heading =
+    view === "today"
+      ? new Date().toLocaleDateString(undefined, {
+          weekday: "long",
+          month: "long",
+          day: "numeric",
+        })
+      : dayLabel(activeDate, today)
+
+  const nothingToShow =
+    memberCards.length === 0 &&
+    unassigned.length === 0 &&
+    skippedItems.length === 0 &&
+    overdueItems.length === 0
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex items-center gap-3 border-b px-5 py-3.5">
+      <div className="flex flex-wrap items-center gap-3 border-b px-5 py-3.5">
         <span className="flex size-10 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm">
           <ListChecksIcon className="size-6" />
         </span>
-        <div>
+        <div className="flex-1">
           <h1 className="font-heading text-2xl font-semibold tracking-tight">Chores</h1>
           <p className="text-muted-foreground text-sm">{heading}</p>
         </div>
+        <ToggleGroup
+          type="single"
+          variant="outline"
+          value={view}
+          onValueChange={(v) => v && setView(v as "today" | "week")}
+        >
+          <ToggleGroupItem value="today">Today</ToggleGroupItem>
+          <ToggleGroupItem value="week">Week</ToggleGroupItem>
+        </ToggleGroup>
       </div>
+
+      <div className="flex flex-wrap items-center gap-2 border-b px-5 py-2.5">
+        <ChoreFilterBar
+          filters={filters}
+          onChange={setFilters}
+          members={members}
+          routines={routines}
+        />
+      </div>
+
+      {view === "week" && (
+        <div className="thin-scrollbar flex gap-2 overflow-x-auto border-b px-5 py-2.5">
+          {weekDays.map(({ date, total, done }) => {
+            const { dow, day } = dayStripLabel(date)
+            const isActive = date === activeDate
+            const isToday = date === today
+            return (
+              <button
+                key={date}
+                type="button"
+                onClick={() => setSelectedDate(date)}
+                aria-pressed={isActive}
+                className={cn(
+                  "flex min-w-16 flex-col items-center gap-0.5 rounded-2xl border px-3 py-2 transition-colors",
+                  isActive ? "border-primary bg-primary/10" : "hover:bg-muted/40",
+                )}
+              >
+                <span className="text-muted-foreground text-xs font-medium uppercase">{dow}</span>
+                <span className={cn("text-lg font-semibold leading-none", isToday && "text-primary")}>
+                  {day}
+                </span>
+                <span className="text-muted-foreground text-[11px]">
+                  {total === 0 ? "—" : `${done}/${total}`}
+                </span>
+              </button>
+            )
+          })}
+        </div>
+      )}
 
       <div className="thin-scrollbar flex-1 overflow-auto p-5">
         {isLoading ? (
@@ -195,144 +328,226 @@ export function ChoreBoard({ familyId }: { familyId: string }) {
             <Loader2Icon className="size-5 animate-spin" />
             Loading chores…
           </div>
-        ) : memberCards.length === 0 && unassigned.length === 0 && skippedToday.length === 0 ? (
-          <div className="flex h-full flex-col items-center justify-center gap-3 text-center">
-            <span className="bg-muted text-muted-foreground flex size-16 items-center justify-center rounded-2xl">
-              <PartyPopperIcon className="size-8" />
-            </span>
-            <div>
-              <p className="font-heading text-xl font-semibold">No chores today</p>
-              <p className="text-muted-foreground mt-1 text-sm">
-                Add chores from the companion app to see them here.
-              </p>
-            </div>
-          </div>
+        ) : nothingToShow ? (
+          <EmptyState filtered={filtersActive(filters)} />
         ) : (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            {memberCards.map(({ member, items }) => {
-              const groups = groupsFor(items)
-              const doneCount = items.filter((o) =>
-                o.completed_member_ids.includes(member.id),
-              ).length
-              const allDone = doneCount === items.length
+          <div className="flex flex-col gap-4">
+            {overdueItems.length > 0 && (
+              <OverdueSection
+                items={overdueItems}
+                members={members}
+                today={today}
+                canManage={canManage}
+                onToggle={toggle}
+                onSwap={swapTo}
+                onSkip={skip}
+                onReset={resetRotation}
+              />
+            )}
 
-              return (
-                <section
-                  key={member.id}
-                  className="bg-card ring-foreground/5 flex flex-col gap-4 rounded-3xl p-5 shadow-sm ring-1"
-                >
-                  <header className="flex items-center gap-3">
-                    <span
-                      className="flex size-12 items-center justify-center rounded-full text-lg font-semibold text-white"
-                      style={{ backgroundColor: member.color }}
-                    >
-                      {initials(member.name)}
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-lg font-semibold leading-tight">{member.name}</p>
-                      <p className="text-muted-foreground text-sm">
-                        {doneCount} / {items.length} done
-                      </p>
-                    </div>
-                    {allDone && (
-                      <span className="text-2xl" role="img" aria-label="All done">
-                        🎉
-                      </span>
-                    )}
-                  </header>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+              {memberCards.map(({ member, items }) => {
+                const groups = groupsFor(items)
+                const doneCount = items.filter((o) =>
+                  o.completed_member_ids.includes(member.id),
+                ).length
+                const allDone = doneCount === items.length
 
-                  <div className="flex flex-col gap-3">
-                    {groups.map((g) => (
-                      <div key={g.key} className="flex flex-col gap-1.5">
-                        {groups.length > 1 && (
-                          <p className="text-muted-foreground text-xs font-medium uppercase tracking-wide">
-                            {g.name}
-                          </p>
-                        )}
-                        <ul className="flex flex-col gap-2">
-                          {g.items.map((o) => {
-                            const done = o.completed_member_ids.includes(member.id)
-                            return (
-                              <li key={o.task_id}>
-                                <ChoreRow
-                                  occurrence={o}
-                                  currentMemberId={member.id}
-                                  allMembers={members}
-                                  canManage={canManage}
-                                  done={done}
-                                  onToggle={() => toggle(o, member.id, done)}
-                                  onSwap={(mid) => swapTo(o, mid)}
-                                  onSkip={(scope) => skip(o, scope)}
-                                  onReset={() => resetRotation(o)}
-                                />
-                              </li>
-                            )
-                          })}
-                        </ul>
-                      </div>
-                    ))}
-                  </div>
-                </section>
-              )
-            })}
-
-            {unassigned.length > 0 && (
-              <section className="border-muted-foreground/20 flex flex-col gap-3 rounded-3xl border border-dashed p-5">
-                <header>
-                  <p className="text-lg font-semibold leading-tight">Unassigned</p>
-                  <p className="text-muted-foreground text-sm">Assign these to a member to check off.</p>
-                </header>
-                <ul className="flex flex-col gap-2">
-                  {unassigned.map((o) => (
-                    <li
-                      key={o.task_id}
-                      className="flex items-center gap-3 rounded-2xl border px-4 py-3"
-                    >
+                return (
+                  <section
+                    key={member.id}
+                    className="bg-card ring-foreground/5 flex flex-col gap-4 rounded-3xl p-5 shadow-sm ring-1"
+                  >
+                    <header className="flex items-center gap-3">
                       <span
-                        className="size-3 shrink-0 rounded-full"
-                        style={{ backgroundColor: o.effective_color }}
-                      />
-                      <span className="text-muted-foreground truncate">{o.title}</span>
-                    </li>
-                  ))}
-                </ul>
-              </section>
-            )}
-
-            {skippedToday.length > 0 && (
-              <section className="border-muted-foreground/20 flex flex-col gap-3 rounded-3xl border border-dashed p-5">
-                <header>
-                  <p className="text-lg font-semibold leading-tight">Skipped today</p>
-                  <p className="text-muted-foreground text-sm">Excused — no one&apos;s on the hook.</p>
-                </header>
-                <ul className="flex flex-col gap-2">
-                  {skippedToday.map((o) => (
-                    <li
-                      key={o.task_id}
-                      className="flex items-center gap-3 rounded-2xl border px-4 py-3"
-                    >
-                      <BanIcon className="text-muted-foreground size-4 shrink-0" />
-                      <span className="text-muted-foreground flex-1 truncate line-through">
-                        {o.title}
+                        className="flex size-12 items-center justify-center rounded-full text-lg font-semibold text-white"
+                        style={{ backgroundColor: member.color }}
+                      >
+                        {initials(member.name)}
                       </span>
-                      {canManage && (
-                        <button
-                          type="button"
-                          onClick={() => resetRotation(o)}
-                          className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1 text-sm font-medium"
-                        >
-                          <Undo2Icon className="size-3.5" /> Restore
-                        </button>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-lg font-semibold leading-tight">{member.name}</p>
+                        <p className="text-muted-foreground text-sm">
+                          {doneCount} / {items.length} done
+                        </p>
+                      </div>
+                      {allDone && (
+                        <span className="text-2xl" role="img" aria-label="All done">
+                          🎉
+                        </span>
                       )}
-                    </li>
-                  ))}
-                </ul>
-              </section>
-            )}
+                    </header>
+
+                    <div className="flex flex-col gap-3">
+                      {groups.map((g) => (
+                        <div key={g.key} className="flex flex-col gap-1.5">
+                          {groups.length > 1 && (
+                            <p className="text-muted-foreground text-xs font-medium uppercase tracking-wide">
+                              {g.name}
+                            </p>
+                          )}
+                          <ul className="flex flex-col gap-2">
+                            {g.items.map((o) => {
+                              const done = o.completed_member_ids.includes(member.id)
+                              return (
+                                <li key={o.task_id}>
+                                  <ChoreRow
+                                    occurrence={o}
+                                    currentMemberId={member.id}
+                                    allMembers={members}
+                                    canManage={canManage}
+                                    done={done}
+                                    onToggle={() => toggle(o, member.id, done)}
+                                    onSwap={(mid) => swapTo(o, mid)}
+                                    onSkip={(scope) => skip(o, scope)}
+                                    onReset={() => resetRotation(o)}
+                                  />
+                                </li>
+                              )
+                            })}
+                          </ul>
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+                )
+              })}
+
+              {unassigned.length > 0 && (
+                <section className="border-muted-foreground/20 flex flex-col gap-3 rounded-3xl border border-dashed p-5">
+                  <header>
+                    <p className="text-lg font-semibold leading-tight">Unassigned</p>
+                    <p className="text-muted-foreground text-sm">
+                      Assign these to a member to check off.
+                    </p>
+                  </header>
+                  <ul className="flex flex-col gap-2">
+                    {unassigned.map((o) => (
+                      <li
+                        key={o.task_id}
+                        className="flex items-center gap-3 rounded-2xl border px-4 py-3"
+                      >
+                        <span
+                          className="size-3 shrink-0 rounded-full"
+                          style={{ backgroundColor: o.effective_color }}
+                        />
+                        <span className="text-muted-foreground truncate">{o.title}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              )}
+
+              {skippedItems.length > 0 && (
+                <section className="border-muted-foreground/20 flex flex-col gap-3 rounded-3xl border border-dashed p-5">
+                  <header>
+                    <p className="text-lg font-semibold leading-tight">Skipped</p>
+                    <p className="text-muted-foreground text-sm">
+                      Excused — no one&apos;s on the hook.
+                    </p>
+                  </header>
+                  <ul className="flex flex-col gap-2">
+                    {skippedItems.map((o) => (
+                      <li
+                        key={o.task_id}
+                        className="flex items-center gap-3 rounded-2xl border px-4 py-3"
+                      >
+                        <BanIcon className="text-muted-foreground size-4 shrink-0" />
+                        <span className="text-muted-foreground flex-1 truncate line-through">
+                          {o.title}
+                        </span>
+                        {canManage && (
+                          <button
+                            type="button"
+                            onClick={() => resetRotation(o)}
+                            className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1 text-sm font-medium"
+                          >
+                            <Undo2Icon className="size-3.5" /> Restore
+                          </button>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              )}
+            </div>
           </div>
         )}
       </div>
     </div>
+  )
+}
+
+function EmptyState({ filtered }: { filtered: boolean }) {
+  return (
+    <div className="flex h-full flex-col items-center justify-center gap-3 text-center">
+      <span className="bg-muted text-muted-foreground flex size-16 items-center justify-center rounded-2xl">
+        <PartyPopperIcon className="size-8" />
+      </span>
+      <div>
+        <p className="font-heading text-xl font-semibold">
+          {filtered ? "No chores match these filters" : "No chores here"}
+        </p>
+        <p className="text-muted-foreground mt-1 text-sm">
+          {filtered
+            ? "Try clearing a filter to see more."
+            : "Add chores from the companion app to see them here."}
+        </p>
+      </div>
+    </div>
+  )
+}
+
+/** The "Missed" section: un-done chores from earlier days, grouped under one card. */
+function OverdueSection({
+  items,
+  members,
+  today,
+  canManage,
+  onToggle,
+  onSwap,
+  onSkip,
+  onReset,
+}: {
+  items: TaskOccurrenceOut[]
+  members: MemberRow[]
+  today: string
+  canManage: boolean
+  onToggle: (o: TaskOccurrenceOut, memberId: string, done: boolean) => void
+  onSwap: (o: TaskOccurrenceOut, memberId: string) => void
+  onSkip: (o: TaskOccurrenceOut, scope: "occurrence" | "turn") => void
+  onReset: (o: TaskOccurrenceOut) => void
+}) {
+  return (
+    <section className="flex flex-col gap-3 rounded-3xl border border-amber-300/60 bg-amber-50 p-5 dark:border-amber-900/50 dark:bg-amber-950/30">
+      <header className="flex items-center gap-2">
+        <AlertTriangleIcon className="size-5 text-amber-600 dark:text-amber-400" />
+        <p className="text-lg font-semibold leading-tight">Missed ({items.length})</p>
+        <p className="text-muted-foreground ml-auto text-sm">From earlier days — still not done.</p>
+      </header>
+      <ul className="flex flex-col gap-2">
+        {items.map((o) => {
+          // Show one row per still-pending assignee so the right person can clear it.
+          const pending = o.members.filter((m) => !o.completed_member_ids.includes(m.id))
+          return pending.map((m) => (
+            <li key={`${o.task_id}:${m.id}`}>
+              <ChoreRow
+                occurrence={o}
+                currentMemberId={m.id}
+                allMembers={members}
+                canManage={canManage}
+                done={false}
+                dateLabel={`${m.name} · ${dayLabel(o.occurrence_date, today)}`}
+                onToggle={() => onToggle(o, m.id, false)}
+                onSwap={(mid) => onSwap(o, mid)}
+                onSkip={(scope) => onSkip(o, scope)}
+                onReset={() => onReset(o)}
+              />
+            </li>
+          ))
+        })}
+      </ul>
+    </section>
   )
 }
 
@@ -342,6 +557,7 @@ function ChoreRow({
   allMembers,
   canManage,
   done,
+  dateLabel,
   onToggle,
   onSwap,
   onSkip,
@@ -352,6 +568,8 @@ function ChoreRow({
   allMembers: MemberRow[]
   canManage: boolean
   done: boolean
+  /** Optional sub-label (used by the Missed section to show who/when). */
+  dateLabel?: string
   onToggle: () => void
   onSwap: (memberId: string) => void
   onSkip: (scope: "occurrence" | "turn") => void
@@ -367,7 +585,8 @@ function ChoreRow({
   // "skip the whole turn".
   const isRotating = upNext != null
   const showMenu = canManage && isRotating
-  const multiDayTurn = occurrence.rotation_unit !== "occurrence" || occurrence.rotation_interval > 1
+  const multiDayTurn =
+    occurrence.rotation_unit !== "occurrence" || occurrence.rotation_interval > 1
   const swapTargets = allMembers.filter((m) => m.id !== currentMemberId)
 
   return (
@@ -386,9 +605,7 @@ function ChoreRow({
           className="flex size-9 shrink-0 items-center justify-center rounded-xl border-2 transition-all"
           style={style}
         >
-          {done && (
-            <CheckIcon className="size-5 text-white duration-200 animate-in zoom-in-50" />
-          )}
+          {done && <CheckIcon className="size-5 text-white duration-200 animate-in zoom-in-50" />}
         </span>
         <span className="min-w-0 flex-1">
           <span
@@ -399,7 +616,9 @@ function ChoreRow({
           >
             {title}
           </span>
-          {occurrence.is_overridden && !done ? (
+          {dateLabel ? (
+            <span className="text-muted-foreground mt-0.5 block text-xs">{dateLabel}</span>
+          ) : occurrence.is_overridden && !done ? (
             <span className="text-muted-foreground mt-0.5 flex items-center gap-1 text-xs">
               <ArrowLeftRightIcon className="size-3" /> Swapped in
             </span>
@@ -436,7 +655,7 @@ function ChoreRow({
           <DropdownMenuContent align="end" className="w-52">
             {swapTargets.length > 0 && (
               <>
-                <DropdownMenuLabel>Reassign today</DropdownMenuLabel>
+                <DropdownMenuLabel>Reassign</DropdownMenuLabel>
                 {swapTargets.map((m) => (
                   <DropdownMenuItem key={m.id} onClick={() => onSwap(m.id)}>
                     <ArrowLeftRightIcon /> Swap to {m.name}
@@ -446,7 +665,7 @@ function ChoreRow({
               </>
             )}
             <DropdownMenuItem onClick={() => onSkip("occurrence")}>
-              <BanIcon /> Skip today
+              <BanIcon /> Skip this one
             </DropdownMenuItem>
             {multiDayTurn && (
               <DropdownMenuItem onClick={() => onSkip("turn")}>
