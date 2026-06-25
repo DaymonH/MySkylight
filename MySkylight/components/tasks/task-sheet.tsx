@@ -4,7 +4,7 @@ import { useEffect, useState } from "react"
 import { useForm, useWatch, Controller } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
-import { ChevronDownIcon, ChevronUpIcon, Trash2Icon } from "lucide-react"
+import { CheckIcon, ChevronDownIcon, ChevronUpIcon, Trash2Icon } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -33,13 +33,22 @@ import {
 } from "@/components/ui/alert-dialog"
 import {
   bydayRrule,
+  CUSTOM_INTERVAL,
   CUSTOM_WEEKLY,
+  intervalRrule,
+  isCustomInterval,
   parseByday,
+  parseInterval,
+  parseUntil,
+  stripUntil,
   TASK_RRULE_OPTIONS,
   WEEKDAYS,
   weekdayOf,
+  type IntervalUnit,
   type WeekdayCode,
 } from "@/lib/recurrence"
+import { MEMBER_COLORS } from "@/lib/colors"
+import { cn } from "@/lib/utils"
 import type { MemberBrief } from "@/lib/types/calendar"
 import type { RoutineOut, TaskOut } from "@/lib/types/task"
 
@@ -49,13 +58,20 @@ const schema = z.object({
   title: z.string().min(1, "Title is required").max(200),
   description: z.string().optional(),
   routine_id: z.string(),
+  // null = inherit the assignee's / default color (no explicit chore color).
+  color: z.string().regex(/^#[0-9a-fA-F]{6}$/).nullable(),
   start_date: z.string().min(1, "Pick a start date"),
+  // The recurrence *pattern* only (FREQ/INTERVAL/BYDAY); the end date lives in
+  // `end_date` and is spliced in as UNTIL when saving.
   rrule: z.string(),
+  end_date: z.string(), // YYYY-MM-DD, or "" for "repeats forever"
   star_value: z.number().int().min(0).max(999),
   member_ids: z.array(z.string()),
   rotate: z.boolean(),
   rotation_unit: z.enum(["occurrence", "day", "week", "month"]),
   rotation_interval: z.number().int().min(1).max(52),
+  // Empty = anchor the rotation at the start date.
+  rotation_anchor_date: z.string(),
 })
 export type TaskFormValues = z.infer<typeof schema>
 
@@ -85,6 +101,7 @@ function todayYMD() {
 // custom picker stays open while the user edits, regardless of that coincidence.
 const selectRepeatValue = (rrule: string): string => {
   if (TASK_RRULE_OPTIONS.some((o) => o.value === rrule)) return rrule
+  if (isCustomInterval(rrule)) return CUSTOM_INTERVAL
   if (rrule.includes("FREQ=WEEKLY") && rrule.includes("BYDAY=")) return CUSTOM_WEEKLY
   return rrule || "none"
 }
@@ -113,13 +130,16 @@ export function TaskSheet({
       title: "",
       description: "",
       routine_id: defaultRoutineId ?? NO_ROUTINE,
+      color: null,
       start_date: todayYMD(),
       rrule: "none",
+      end_date: "",
       star_value: 1,
       member_ids: [],
       rotate: false,
       rotation_unit: "occurrence",
       rotation_interval: 1,
+      rotation_anchor_date: "",
     },
   })
 
@@ -127,44 +147,70 @@ export function TaskSheet({
   // derived from the rrule) so the picker stays open even when the chosen day-set
   // happens to equal a preset value (e.g. Mon–Fri === the Weekdays preset).
   const [customMode, setCustomMode] = useState(false)
+  // "Every N days/weeks/months…" mode + its number box (a string so it can go
+  // briefly empty while the user retypes; normalised on blur) and chosen unit.
+  const [customIntervalMode, setCustomIntervalMode] = useState(false)
+  const [intervalEvery, setIntervalEvery] = useState("2")
+  const [intervalUnit, setIntervalUnit] = useState<IntervalUnit>("day")
 
   useEffect(() => {
     if (!open) return
     if (editing) {
+      // Split the stored rule into its pattern (for the Select + custom controls)
+      // and its end date (the separate "Ends" control).
+      const stored = editing.rrule ?? ""
+      const pattern = stored ? stripUntil(stored) || "none" : "none"
+      const iv = parseInterval(pattern)
+      const repeatVal = selectRepeatValue(pattern)
       // eslint-disable-next-line react-hooks/set-state-in-effect -- reset picker mode alongside the form reset
-      setCustomMode(selectRepeatValue(editing.rrule ?? "none") === CUSTOM_WEEKLY)
+      setCustomMode(repeatVal === CUSTOM_WEEKLY)
+      setCustomIntervalMode(repeatVal === CUSTOM_INTERVAL)
+      setIntervalEvery(String(iv && iv.n >= 2 ? iv.n : 2))
+      setIntervalUnit(iv?.unit ?? "day")
       reset({
         title: editing.title,
         description: editing.description ?? "",
         routine_id: editing.routine_id ?? NO_ROUTINE,
+        color: editing.color ?? null,
         start_date: editing.start_date,
-        rrule: editing.rrule ?? "none",
+        rrule: pattern,
+        end_date: parseUntil(stored) ?? "",
         star_value: editing.star_value,
         member_ids: editing.members.map((m) => m.id),
         rotate: editing.assignment_strategy === "rotating",
         rotation_unit: editing.rotation_unit ?? "occurrence",
         rotation_interval: editing.rotation_interval ?? 1,
+        rotation_anchor_date: editing.rotation_anchor_date ?? "",
       })
     } else {
       setCustomMode(false)
+      setCustomIntervalMode(false)
+      setIntervalEvery("2")
+      setIntervalUnit("day")
       reset({
         title: "",
         description: "",
         routine_id: defaultRoutineId ?? NO_ROUTINE,
+        color: null,
         start_date: todayYMD(),
         rrule: "none",
+        end_date: "",
         star_value: 1,
         member_ids: [],
         rotate: false,
         rotation_unit: "occurrence",
         rotation_interval: 1,
+        rotation_anchor_date: "",
       })
     }
   }, [open, editing, defaultRoutineId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const rotate = useWatch({ control, name: "rotate" })
   const rotationInterval = useWatch({ control, name: "rotation_interval" })
+  const rotationUnit = useWatch({ control, name: "rotation_unit" })
   const startDate = useWatch({ control, name: "start_date" })
+  const rrulePattern = useWatch({ control, name: "rrule" })
+  const isRecurring = !!rrulePattern && rrulePattern !== "none"
   const unitLabel = (unit: "occurrence" | "day" | "week" | "month") => {
     const plural = rotationInterval !== 1
     if (unit === "occurrence") return plural ? "times it's due" : "time it's due"
@@ -211,6 +257,54 @@ export function TaskSheet({
               />
             </div>
 
+            {/* Color */}
+            <div className="space-y-2">
+              <Label>Color</Label>
+              <Controller
+                name="color"
+                control={control}
+                render={({ field }) => (
+                  <div className="flex flex-wrap items-center gap-2">
+                    {/* "Auto" inherits the assigned member's color (or the default). */}
+                    <button
+                      type="button"
+                      aria-label="Automatic color"
+                      aria-pressed={field.value == null}
+                      onClick={() => field.onChange(null)}
+                      className={cn(
+                        "text-muted-foreground flex size-9 items-center justify-center rounded-full border text-[10px] font-medium transition-transform hover:scale-110",
+                        field.value == null && "ring-foreground ring-offset-background ring-2 ring-offset-2",
+                      )}
+                    >
+                      Auto
+                    </button>
+                    {MEMBER_COLORS.map((c) => {
+                      const selected = field.value?.toLowerCase() === c.toLowerCase()
+                      return (
+                        <button
+                          key={c}
+                          type="button"
+                          aria-label={`Color ${c}`}
+                          aria-pressed={selected}
+                          onClick={() => field.onChange(c)}
+                          className={cn(
+                            "flex size-9 items-center justify-center rounded-full transition-transform hover:scale-110",
+                            selected && "ring-foreground ring-offset-background ring-2 ring-offset-2",
+                          )}
+                          style={{ backgroundColor: c }}
+                        >
+                          {selected && <CheckIcon className="size-4 text-white" />}
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
+              />
+              <p className="text-muted-foreground text-xs">
+                &ldquo;Auto&rdquo; uses the assigned member&apos;s color.
+              </p>
+            </div>
+
             {/* Start date */}
             <div className="space-y-1.5">
               <Label htmlFor="task-start">Starts</Label>
@@ -227,17 +321,34 @@ export function TaskSheet({
                 name="rrule"
                 control={control}
                 render={({ field }) => {
-                  const selectValue = customMode ? CUSTOM_WEEKLY : selectRepeatValue(field.value)
+                  const selectValue = customMode
+                    ? CUSTOM_WEEKLY
+                    : customIntervalMode
+                      ? CUSTOM_INTERVAL
+                      : selectRepeatValue(field.value)
                   const onRepeatChange = (val: string) => {
                     if (val === CUSTOM_WEEKLY) {
                       // Entering custom mode: keep any existing day-set, else seed
                       // with the start date's weekday so it's never an empty rule.
                       setCustomMode(true)
+                      setCustomIntervalMode(false)
                       const existing = parseByday(field.value)
                       const seed = startDate ? weekdayOf(startDate) : "MO"
                       field.onChange(bydayRrule(existing.length ? existing : [seed]))
+                    } else if (val === CUSTOM_INTERVAL) {
+                      // "Every N days/weeks/months…": keep an existing interval, else
+                      // seed at every-2 (1 is just the plain "Every day/week" preset).
+                      setCustomMode(false)
+                      setCustomIntervalMode(true)
+                      const existing = parseInterval(field.value)
+                      const n = existing && existing.n >= 2 ? existing.n : 2
+                      const unit = existing?.unit ?? "day"
+                      setIntervalEvery(String(n))
+                      setIntervalUnit(unit)
+                      field.onChange(intervalRrule(n, unit))
                     } else {
                       setCustomMode(false)
+                      setCustomIntervalMode(false)
                       field.onChange(val)
                     }
                   }
@@ -258,9 +369,80 @@ export function TaskSheet({
                               {o.label}
                             </SelectItem>
                           ))}
+                          <SelectItem value={CUSTOM_INTERVAL}>Every N days/weeks/months…</SelectItem>
                           <SelectItem value={CUSTOM_WEEKLY}>Custom days…</SelectItem>
                         </SelectContent>
                       </Select>
+
+                      {selectValue === CUSTOM_INTERVAL && (
+                        <div className="flex items-center gap-2 pt-1">
+                          <span className="text-sm">Every</span>
+                          <Input
+                            type="number"
+                            min={1}
+                            max={365}
+                            inputMode="numeric"
+                            className="w-20"
+                            aria-label="Interval amount"
+                            value={intervalEvery}
+                            onChange={(e) => {
+                              const raw = e.target.value
+                              setIntervalEvery(raw)
+                              const n = parseInt(raw, 10)
+                              // Update the rule live for valid entries; defer clamping to
+                              // blur so the box can be cleared/retyped without snapping back.
+                              if (!Number.isNaN(n) && n >= 1) {
+                                field.onChange(intervalRrule(Math.min(n, 365), intervalUnit))
+                              }
+                            }}
+                            onBlur={() => {
+                              const n = parseInt(intervalEvery, 10)
+                              const clamped = Number.isNaN(n) || n < 1 ? 2 : Math.min(n, 365)
+                              setIntervalEvery(String(clamped))
+                              field.onChange(intervalRrule(clamped, intervalUnit))
+                            }}
+                          />
+                          <Select
+                            value={intervalUnit}
+                            onValueChange={(u) => {
+                              const unit = u as IntervalUnit
+                              setIntervalUnit(unit)
+                              const n = parseInt(intervalEvery, 10)
+                              field.onChange(
+                                intervalRrule(Number.isNaN(n) || n < 1 ? 2 : n, unit),
+                              )
+                            }}
+                          >
+                            <SelectTrigger className="flex-1">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {(["day", "week", "month"] as const).map((u) => (
+                                <SelectItem key={u} value={u}>
+                                  {(parseInt(intervalEvery, 10) || 1) === 1 ? u : `${u}s`}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )}
+
+                      {isRecurring && (
+                        <div className="flex flex-col gap-1.5 pt-2">
+                          <Label htmlFor="task-end" className="text-muted-foreground text-xs">
+                            Ends (optional)
+                          </Label>
+                          <Input
+                            id="task-end"
+                            type="date"
+                            min={startDate}
+                            {...register("end_date")}
+                          />
+                          <p className="text-muted-foreground text-xs">
+                            Leave blank to repeat forever. The chore stops after this date.
+                          </p>
+                        </div>
+                      )}
 
                       {selectValue === CUSTOM_WEEKLY && (
                         <ToggleGroup
@@ -423,6 +605,26 @@ export function TaskSheet({
                               How often the chore passes to the next person — independent of how often
                               it repeats. Weeks change on Monday, months on the 1st.
                             </p>
+
+                            {/* Anchor only matters for calendar-based cadences (not per-occurrence). */}
+                            {rotationUnit !== "occurrence" && (
+                              <div className="flex flex-col gap-1.5 pt-1">
+                                <Label
+                                  htmlFor="task-rotation-anchor"
+                                  className="text-muted-foreground text-xs"
+                                >
+                                  Rotation starts on (optional)
+                                </Label>
+                                <Input
+                                  id="task-rotation-anchor"
+                                  type="date"
+                                  {...register("rotation_anchor_date")}
+                                />
+                                <p className="text-muted-foreground text-xs">
+                                  Which date the rotation cycle counts from. Defaults to the start date.
+                                </p>
+                              </div>
+                            )}
 
                             <p className="text-muted-foreground pt-1 text-xs font-medium uppercase tracking-wide">
                               Rotation order

@@ -30,6 +30,78 @@ export type WeekdayCode = (typeof WEEKDAYS)[number]["code"]
 // rrule — the form field always holds the assembled FREQ=WEEKLY;BYDAY=… string.
 export const CUSTOM_WEEKLY = "custom-weekly"
 
+// Sentinel for the Repeat select's "Every N days/weeks/months…" mode. The form
+// field holds the assembled FREQ=…;INTERVAL=N string; N=1 collapses to the plain
+// "every day/week/month" preset.
+export const CUSTOM_INTERVAL = "custom-interval"
+
+export type IntervalUnit = "day" | "week" | "month"
+
+const FREQ_FOR_UNIT: Record<IntervalUnit, string> = {
+  day: "DAILY",
+  week: "WEEKLY",
+  month: "MONTHLY",
+}
+
+/** Build an "every N {unit}s" rrule. N=1 collapses to the plain `FREQ=…` preset. */
+export function intervalRrule(n: number, unit: IntervalUnit): string {
+  const interval = Math.max(1, Math.floor(n))
+  const freq = FREQ_FOR_UNIT[unit]
+  return interval === 1 ? `FREQ=${freq}` : `FREQ=${freq};INTERVAL=${interval}`
+}
+
+/**
+ * Read a plain interval rule into `{ n, unit }`. Returns null for weekly *day-set*
+ * rules (BYDAY=…) — those are the separate "Custom days…" mode — and for anything
+ * that isn't daily/weekly/monthly. UNTIL (an end date) is ignored.
+ */
+export function parseInterval(rrule: string | null): { n: number; unit: IntervalUnit } | null {
+  if (!rrule || rrule.includes("BYDAY=")) return null
+  let unit: IntervalUnit | null = null
+  if (rrule.includes("FREQ=DAILY")) unit = "day"
+  else if (rrule.includes("FREQ=WEEKLY")) unit = "week"
+  else if (rrule.includes("FREQ=MONTHLY")) unit = "month"
+  if (!unit) return null
+  const m = rrule.match(/INTERVAL=(\d+)/)
+  return { n: m ? Math.max(1, parseInt(m[1], 10)) : 1, unit }
+}
+
+/** True for an explicit "every N units" (N ≥ 2) — distinct from the named presets. */
+export function isCustomInterval(rrule: string | null): boolean {
+  const p = parseInterval(rrule)
+  return p !== null && p.n >= 2
+}
+
+// ── End date (RRULE UNTIL) ──────────────────────────────────────────────────
+// The "pattern" (FREQ/INTERVAL/BYDAY) and the optional end date are edited as two
+// separate controls; we keep UNTIL out of the form's rrule field and only splice
+// it in when assembling the value to save. UNTIL is written as a bare YYYYMMDD
+// date — the backend anchors recurrence at a naive `start_date` midnight, so a
+// date-form UNTIL stays naive-compatible (a trailing 'Z' would make dateutil
+// reject it against the naive DTSTART) and is inclusive of that day.
+
+/** Strip any UNTIL/COUNT clause, returning the bare recurrence pattern. */
+export function stripUntil(rrule: string): string {
+  return rrule
+    .split(";")
+    .filter((p) => !/^UNTIL=/i.test(p) && !/^COUNT=/i.test(p))
+    .join(";")
+}
+
+/** Pull the UNTIL date out of an rrule as YYYY-MM-DD, or null if open-ended. */
+export function parseUntil(rrule: string | null): string | null {
+  if (!rrule) return null
+  const m = rrule.match(/UNTIL=(\d{4})(\d{2})(\d{2})/)
+  return m ? `${m[1]}-${m[2]}-${m[3]}` : null
+}
+
+/** Append/replace UNTIL on a pattern from a YYYY-MM-DD date (null clears it). */
+export function withUntil(rrule: string, untilYMD: string | null): string {
+  const base = stripUntil(rrule)
+  if (!untilYMD) return base
+  return `${base};UNTIL=${untilYMD.replace(/-/g, "")}`
+}
+
 /** Pull the BYDAY day codes out of a weekly rrule, in canonical Mon→Sun order. */
 export function parseByday(rrule: string | null): WeekdayCode[] {
   if (!rrule) return []
@@ -62,16 +134,34 @@ export function describeTaskRrule(rrule: string | null): string {
   if (rrule.includes("FREQ=WEEKLY") && rrule.includes("BYDAY=")) {
     const days = parseByday(rrule)
     if (days.length) {
-      return WEEKDAYS.filter((d) => days.includes(d.code))
+      const list = WEEKDAYS.filter((d) => days.includes(d.code))
         .map((d) => d.label)
         .join(", ")
+      return withEnd(list, rrule)
     }
   }
-  if (rrule.includes("FREQ=DAILY")) return "Daily"
-  if (rrule.includes("FREQ=WEEKLY")) return "Weekly"
-  if (rrule.includes("FREQ=MONTHLY")) return "Monthly"
-  if (rrule.includes("FREQ=YEARLY")) return "Yearly"
+  const iv = parseInterval(rrule)
+  if (iv) {
+    const base =
+      iv.n > 1
+        ? `Every ${iv.n} ${iv.unit}s`
+        : { day: "Daily", week: "Weekly", month: "Monthly" }[iv.unit]
+    return withEnd(base, rrule)
+  }
+  if (rrule.includes("FREQ=YEARLY")) return withEnd("Yearly", rrule)
   return "Repeats"
+}
+
+/** Suffix a recurrence label with "· until <date>" when the rrule has an end. */
+function withEnd(label: string, rrule: string): string {
+  const until = parseUntil(rrule)
+  if (!until) return label
+  const [y, m, d] = until.split("-").map(Number)
+  const when = new Date(y, m - 1, d).toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+  })
+  return `${label} · until ${when}`
 }
 
 // Coarse recurrence buckets for the chores "timeframe" filter. We only need the

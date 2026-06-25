@@ -113,6 +113,28 @@ frontend (FE) pieces, and **acceptance criteria** (AC) that define "done".
   companion `FamilyMenu` now links **Chores** (the do/check view) separately from **Manage tasks** (the
   CRUD page). No backend change — `GET …/tasks/occurrences?from&to` already served arbitrary ranges.
   `next build` + typecheck + eslint clean; 25 backend task tests still green. Live two-device smoke pending.
+- **Update (2026-06-25) — richer task editor (FE):** closed five gaps between the `Task` model and what the
+  editor exposed. **(1) Color** — a swatch picker (`MEMBER_COLORS`, + "Auto" = inherit the assignee's
+  color) wired to the long-unused `Task.color`. **(2) End date** — an optional "Ends" date on recurring
+  chores, spliced into the rrule as `UNTIL=YYYYMMDD` (kept date-form so it stays naive-compatible with the
+  backend's `start_date`-anchored DTSTART; verified inclusive against dateutil). **(3) Every N
+  days/weeks/months** — one "Custom interval…" mode (number + unit) replacing the days-only control, →
+  `FREQ=DAILY|WEEKLY|MONTHLY;INTERVAL=N`. **(5) Manual task ordering** — ↑/↓ buttons on each task row write
+  sequential `sort_order` (drag still deferred, like the roster/list reorders). **(6) Rotation anchor
+  date** — exposes `rotation_anchor_date` for calendar-based cadences (re-phase a week/month rotation
+  without moving the start). The editor now splits the stored rrule into *pattern* + *end date* and
+  recombines on save; `describeTaskRrule` reads back "Every N weeks · until Jul 10". Helpers consolidated in
+  `lib/recurrence.ts` (`intervalRrule`/`parseInterval`/`isCustomInterval`, `withUntil`/`parseUntil`/`stripUntil`).
+  No backend change (model already had every field). `next build` + tsc + eslint clean.
+- **Future (F01 backlog):**
+  - **Per-chore icon / emoji** — Skylight's chores carry playful glyphs; needs a `Task.icon` column +
+    migration and a picker, then render on the board/list. (BE + FE.)
+  - **Chore reminders & overdue nudges** — push/notify when a chore is due or has been missed (e.g. morning
+    "your chores" ping, evening "still undone" nudge). Belongs with the Phase 9 notifications track (Web
+    Push; reuse the Event `Reminder` plumbing). Backend would schedule per-occurrence; FE needs the PWA
+    push opt-in. (BE + FE, larger.)
+  - **Parent approval / proof on completion** — optional gate so a kid's check-off needs a parent confirm
+    (and/or a photo). Touches the completion model + rewards (stars on approval). (BE + FE.)
 - _Phase 3_
 
 ### F02 — Color Coding

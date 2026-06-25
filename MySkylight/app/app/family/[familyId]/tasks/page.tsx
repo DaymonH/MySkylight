@@ -5,6 +5,8 @@ import { useQuery } from "@tanstack/react-query"
 import { toast } from "sonner"
 import {
   CheckIcon,
+  ChevronDownIcon,
+  ChevronUpIcon,
   FolderPlusIcon,
   ListChecksIcon,
   PencilIcon,
@@ -44,7 +46,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
-import { describeRotation, describeTaskRrule } from "@/lib/recurrence"
+import { describeRotation, describeTaskRrule, withUntil } from "@/lib/recurrence"
 import { cn } from "@/lib/utils"
 import type { MemberBrief } from "@/lib/types/calendar"
 import type { RoutineOut, TaskCreatePayload, TaskOut } from "@/lib/types/task"
@@ -58,6 +60,13 @@ interface MembershipResponse {
 function initials(name: string) {
   const parts = name.trim().split(/\s+/)
   return ((parts[0]?.[0] ?? "") + (parts[1]?.[0] ?? "")).toUpperCase() || "?"
+}
+
+/** Return a copy of `list` with items at `i` and `j` swapped. */
+function swapped<T>(list: T[], i: number, j: number): T[] {
+  const next = [...list]
+  ;[next[i], next[j]] = [next[j], next[i]]
+  return next
 }
 
 export default function TasksPage({ params }: { params: Promise<{ familyId: string }> }) {
@@ -84,6 +93,14 @@ export default function TasksPage({ params }: { params: Promise<{ familyId: stri
   const updateTask = useUpdateTask(familyId)
   const deleteTask = useDeleteTask(familyId)
   const createRoutine = useCreateRoutine(familyId)
+
+  // Reorder tasks within a routine / the Anytime group by writing sequential
+  // sort_order to any task whose position changed (lists sort by sort_order, title).
+  function persistOrder(ordered: TaskOut[]) {
+    ordered.forEach((t, idx) => {
+      if (t.sort_order !== idx) updateTask.mutate({ taskId: t.id, data: { sort_order: idx } })
+    })
+  }
 
   const [sheetOpen, setSheetOpen] = useState(false)
   const [editing, setEditing] = useState<TaskOut | undefined>()
@@ -114,17 +131,24 @@ export default function TasksPage({ params }: { params: Promise<{ familyId: stri
   }
 
   async function handleSubmit(values: TaskFormValues) {
+    const rotating = values.rotate && values.member_ids.length >= 2
     const data: TaskCreatePayload = {
       title: values.title.trim(),
       description: values.description?.trim() ? values.description.trim() : null,
       routine_id: values.routine_id === NO_ROUTINE ? null : values.routine_id,
+      color: values.color,
       start_date: values.start_date,
-      rrule: values.rrule === "none" ? null : values.rrule,
+      // Splice the optional end date back into the pattern as UNTIL.
+      rrule: values.rrule === "none" ? null : withUntil(values.rrule, values.end_date || null),
       // Rotation needs at least two members; otherwise it's just a fixed assignee.
-      assignment_strategy:
-        values.rotate && values.member_ids.length >= 2 ? "rotating" : "fixed",
+      assignment_strategy: rotating ? "rotating" : "fixed",
       rotation_unit: values.rotation_unit,
       rotation_interval: values.rotation_interval,
+      // Anchor only applies to a calendar-based rotation cadence; clear it otherwise.
+      rotation_anchor_date:
+        rotating && values.rotation_unit !== "occurrence"
+          ? values.rotation_anchor_date || null
+          : null,
       star_value: values.star_value,
       member_ids: values.member_ids,
     }
@@ -245,6 +269,7 @@ export default function TasksPage({ params }: { params: Promise<{ familyId: stri
               canManage={canManage}
               onAddTask={() => openCreate(routine.id)}
               onEditTask={openEdit}
+              onReorder={persistOrder}
             />
           ))}
 
@@ -254,13 +279,17 @@ export default function TasksPage({ params }: { params: Promise<{ familyId: stri
                 Anytime
               </h2>
               <ul className="flex flex-col gap-2">
-                {ungrouped.map((task) => (
+                {ungrouped.map((task, idx) => (
                   <TaskRow
                     key={task.id}
                     familyId={familyId}
                     task={task}
                     canManage={canManage}
                     onEdit={() => openEdit(task)}
+                    canMoveUp={idx > 0}
+                    canMoveDown={idx < ungrouped.length - 1}
+                    onMoveUp={() => persistOrder(swapped(ungrouped, idx, idx - 1))}
+                    onMoveDown={() => persistOrder(swapped(ungrouped, idx, idx + 1))}
                   />
                 ))}
               </ul>
@@ -291,12 +320,14 @@ function RoutineSection({
   canManage,
   onAddTask,
   onEditTask,
+  onReorder,
 }: {
   familyId: string
   routine: RoutineOut
   canManage: boolean
   onAddTask: () => void
   onEditTask: (task: TaskOut) => void
+  onReorder: (ordered: TaskOut[]) => void
 }) {
   const updateRoutine = useUpdateRoutine(familyId)
   const deleteRoutine = useDeleteRoutine(familyId)
@@ -410,13 +441,17 @@ function RoutineSection({
         </p>
       ) : (
         <ul className="flex flex-col gap-2">
-          {routine.tasks.map((task) => (
+          {routine.tasks.map((task, idx) => (
             <TaskRow
               key={task.id}
               familyId={familyId}
               task={task}
               canManage={canManage}
               onEdit={() => onEditTask(task)}
+              canMoveUp={idx > 0}
+              canMoveDown={idx < routine.tasks.length - 1}
+              onMoveUp={() => onReorder(swapped(routine.tasks, idx, idx - 1))}
+              onMoveDown={() => onReorder(swapped(routine.tasks, idx, idx + 1))}
             />
           ))}
         </ul>
@@ -430,11 +465,19 @@ function TaskRow({
   task,
   canManage,
   onEdit,
+  canMoveUp = false,
+  canMoveDown = false,
+  onMoveUp,
+  onMoveDown,
 }: {
   familyId: string
   task: TaskOut
   canManage: boolean
   onEdit: () => void
+  canMoveUp?: boolean
+  canMoveDown?: boolean
+  onMoveUp?: () => void
+  onMoveDown?: () => void
 }) {
   const color = task.color ?? task.members[0]?.color ?? "#6366f1"
   const isRecurring = !!task.rrule
@@ -477,6 +520,33 @@ function TaskRow({
           </span>
         ))}
       </div>
+
+      {canManage && (onMoveUp || onMoveDown) && (
+        <div className="flex flex-col">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            className="text-muted-foreground hover:text-foreground size-6"
+            aria-label={`Move ${task.title} up`}
+            disabled={!canMoveUp}
+            onClick={onMoveUp}
+          >
+            <ChevronUpIcon />
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            className="text-muted-foreground hover:text-foreground size-6"
+            aria-label={`Move ${task.title} down`}
+            disabled={!canMoveDown}
+            onClick={onMoveDown}
+          >
+            <ChevronDownIcon />
+          </Button>
+        </div>
+      )}
 
       {canManage && (
         <Button
