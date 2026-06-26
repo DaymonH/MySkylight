@@ -3,6 +3,7 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import {
+  BookOpenIcon,
   CalendarDaysIcon,
   GiftIcon,
   ListChecksIcon,
@@ -18,6 +19,7 @@ const TABS = [
   { href: "/device/chores", label: "Tasks", icon: ListChecksIcon },
   { href: "/device/lists", label: "Lists", icon: ListTodoIcon },
   { href: "/device/meals", label: "Meals", icon: UtensilsCrossedIcon },
+  { href: "/device/recipes", label: "Recipes", icon: BookOpenIcon },
   { href: "/device/rewards", label: "Rewards", icon: GiftIcon },
 ]
 
