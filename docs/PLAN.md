@@ -261,6 +261,10 @@ Each phase is independently shippable and has an **exit criteria**. Detailed tas
 - **Accessibility & kiosk**: large tap targets, high-contrast device theme, screen wake-lock,
   prevent accidental navigation in kiosk mode.
 - **Observability**: structured logging, request IDs, a simple `/health` + `/version`.
+- **Performance**: findings + prioritized plan in [PERFORMANCE.md](./PERFORMANCE.md) (2026-06-25
+  discovery pass). Headline: latency is dominated by the cross-internet Netlify→Pi hop and
+  SSE-as-invalidation refetches, plus 24/7 kiosk re-render churn — *not* the DB. Top quick win:
+  add the missing `members.family_id` index.
 - **Deployment**: Docker Compose; SQLite file on a mounted volume; nightly DB backup task.
 
 ---
@@ -275,7 +279,7 @@ Each phase is independently shippable and has an **exit criteria**. Detailed tas
 | **CalDAV quirks (Apple)** | Flaky sync | Use a battle-tested CalDAV client lib. **Read-only only** (write-back descoped 2026-06-15), which sidesteps the riskiest CalDAV write/ETag-conflict paths. (Yahoo descoped.) |
 | **Next.js 16 is pre-GA-ish / breaking** | FE churn | Follow bundled docs in `node_modules/next/dist/docs/`; pin versions. |
 | **Clerk dependency / pricing / outage** | Auth is third-party | Verify JWTs networklessly (cached JWKS) so brief Clerk outages don't break verified sessions; webhook + JIT user sync; keep identity isolated so it's swappable. |
-| **SQLite write concurrency** | Many devices writing | WAL mode; serialize writes; fine for household scale. |
+| **SQLite write concurrency** | Many devices writing | WAL mode; serialize writes; fine for household scale. Postgres migration evaluated & deferred — see [`HomeServerAPI/skylight-api/docs/postgres-migration.md`](../../HomeServerAPI/skylight-api/docs/postgres-migration.md) for the trade-offs and revisit triggers. |
 | **iOS Web Push requires home screen install** | Notifications don't work on iOS if PWA not installed | Require "Add to Home Screen" before enabling push; detect `navigator.standalone`; show prompt if not installed. iOS 16.4+ only. |
 | **SSE drops on iOS background** | Real-time updates miss while app is backgrounded | Reconnect SSE on `visibilitychange` (foreground event); TanStack Query refetch on focus covers the gap. |
 | **No install banner on iOS Safari** | iOS users may not know to install the PWA | Show an in-app "Install" prompt with Add to Home Screen instructions when `navigator.standalone` is false and browser is iOS Safari. |

@@ -8,6 +8,7 @@ The app lives in **`MySkylight/`**; the FastAPI backend is a separate repo (see 
 - **`docs/PLAN.md`** — architecture, stack, phased roadmap, decisions
 - **`docs/FEATURES.md`** — per-feature specs with stable `Fxx` IDs + acceptance criteria
 - **`docs/TRACKER.md`** — phase-by-phase checklist; **Appendix A** = FE granular checklist, **Appendix B** = FE conventions + the *actual* route tree
+- **`docs/PERFORMANCE.md`** — perf findings + prioritized plan (cross-repo; 2026-06-25 discovery pass)
 
 > **Touching data shapes / API payloads? Start here, don't reverse-engineer:** read **`docs/PLAN.md`
 > §5 (Data model)** + **§6 (API surface)**, then the backend's source-of-truth models at
