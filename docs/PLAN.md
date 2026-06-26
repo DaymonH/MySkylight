@@ -145,6 +145,7 @@ Both talk to one **FastAPI + SQLite** backend. Changes on a phone appear on the 
 ```
 Family 1───* Membership *───1 User
 Family 1───* Member            (a person shown on the calendar; may or may not have a User login)
+Family 1───* Invitation        (pending invite; optional member_id → claim an existing Member on accept)
 Family 1───* Device            (linked screen; settings: sleep, orientation, default view)
 Family 1───* Calendar 1───* Event
 Event  *───* Member            (assignment → color coding)          [EventAssignment]
@@ -176,6 +177,24 @@ Key design points:
   or a set of recipes can be aggregated (summing/merging like items) into grocery `ListItem`s.
 - **Color** resolves in priority order: event override → assigned member color → calendar color.
 - **Soft delete + AuditLog** so shared-household edits are traceable.
+
+### Implementation cheat-sheet — load-bearing FKs & invariants
+
+The map above is *conceptual*; these are the exact names/rules you need to actually write code, so you
+don't have to reverse-engineer them. **Source of truth = `HomeServerAPI/skylight-api/app/models/*.py`** —
+this table just saves you the dig.
+
+| Concern | Where it lives | The load-bearing detail |
+|---|---|---|
+| Tenant scope | `family_id` on every core table | `Family` is the boundary — filter by it on every query. |
+| Profile ↔ login | `Member.user_id` → `User.id`, **nullable** | A `Member` (persona) can exist with **no** login. `Member` ≠ `User`. This is the linchpin for "pre-make a profile, attach a login later." |
+| Persona provisioning | `app/services/members.py::ensure_member_for_user` | Idempotent; one `Member` per `User` per family. Called on family-create (owner) + invite-accept. |
+| Claim a profile via invite | `Invitation.member_id` (nullable, F13) | When set, accept *claims* that unclaimed `Member` (sets its `user_id`) instead of creating a duplicate — so its chore assignments carry over. |
+| Chore assignment | `TaskAssignment(task_id, member_id, sort_order)` | Chores attach to **`member_id`**, never to a `User`. `sort_order` = rotation roster order (F27). |
+| Chore completion | `TaskCompletion(task_id, member_id, occurrence_date)` (unique) | One row per member per occurrence date; tracks streaks without exploding rows. |
+| Rotation override | `TaskRotationOverride(task_id, occurrence_date, member_id?)` (F27) | Per-occurrence swap; `member_id` NULL = skip ("not my week"). |
+| Soft delete | `deleted_at` via `SoftDeleteMixin` (most tables) | Rows are **never** hard-deleted — **always** filter `deleted_at IS NULL` in reads. |
+| Recurrence | `rrule` on `Event`/`Task`, anchored at `start_date` | Per-occurrence overrides; rotating assignee computed as `roster[occurrence_index % n]`. |
 
 ---
 
