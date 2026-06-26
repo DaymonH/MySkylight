@@ -196,6 +196,10 @@ this table just saves you the dig.
 | Soft delete | `deleted_at` via `SoftDeleteMixin` (most tables) | Rows are **never** hard-deleted — **always** filter `deleted_at IS NULL` in reads. |
 | Recurrence | `rrule` on `Event`/`Task`, anchored at `start_date` | Per-occurrence overrides; rotating assignee computed as `roster[occurrence_index % n]`. |
 
+> **Full schema at a glance:** a generated, always-current SQL dump of every table + index lives at
+> **`HomeServerAPI/skylight-api/docs/schema.sql`** (built from the migration chain; regenerate with
+> `make schema`). Read it when you need exact column types/constraints without opening each model.
+
 ---
 
 ## 6. API surface (REST `/api/v1`, + realtime channel)
