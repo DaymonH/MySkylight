@@ -1,6 +1,6 @@
 "use client"
 
-import { useRef, useState } from "react"
+import { useState } from "react"
 import { toast } from "sonner"
 import {
   CheckIcon,
@@ -16,6 +16,7 @@ import { encodeUpload } from "@/lib/file-to-base64"
 import { useExtractEventsFromFlyer } from "@/hooks/use-magic-import"
 import { useCreateEvent } from "@/hooks/use-calendars"
 import { Button } from "@/components/ui/button"
+import { FileDropZone } from "@/components/ui/file-drop-zone"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -27,7 +28,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import type { EventDraft, EventExtractionResult } from "@/lib/types/magic-import"
+import type {
+  EventDraft,
+  EventExtractionResult,
+} from "@/lib/types/magic-import"
 
 type RowStatus = "idle" | "saving" | "saved" | "error"
 
@@ -48,7 +52,7 @@ function toDatetimeLocal(iso: string): string {
   const d = new Date(iso)
   const pad = (n: number) => String(n).padStart(2, "0")
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(
-    d.getMinutes(),
+    d.getMinutes()
   )}`
 }
 
@@ -87,10 +91,15 @@ export function FlyerImportDialog({
   return <ImportFlow familyId={familyId} onClose={onClose} />
 }
 
-function ImportFlow({ familyId, onClose }: { familyId: string; onClose: () => void }) {
+function ImportFlow({
+  familyId,
+  onClose,
+}: {
+  familyId: string
+  onClose: () => void
+}) {
   const [rows, setRows] = useState<Row[] | null>(null)
   const [notes, setNotes] = useState<string | null>(null)
-  const fileRef = useRef<HTMLInputElement>(null)
 
   const extract = useExtractEventsFromFlyer(familyId)
   const createEvent = useCreateEvent(familyId)
@@ -99,7 +108,10 @@ function ImportFlow({ familyId, onClose }: { familyId: string; onClose: () => vo
   function handleResult(res: EventExtractionResult) {
     setNotes(res.notes)
     if (res.events.length === 0) {
-      toast.info(res.notes ?? "No events found — try a clearer photo or add one manually.")
+      toast.info(
+        res.notes ??
+          "No events found — try a clearer photo or add one manually."
+      )
       return
     }
     setRows(res.events.map(draftToRow))
@@ -121,7 +133,9 @@ function ImportFlow({ familyId, onClose }: { familyId: string; onClose: () => vo
   }
 
   function updateRow(idx: number, patch: Partial<Row>) {
-    setRows((rs) => rs && rs.map((r, i) => (i === idx ? { ...r, ...patch } : r)))
+    setRows(
+      (rs) => rs && rs.map((r, i) => (i === idx ? { ...r, ...patch } : r))
+    )
   }
 
   async function saveAll() {
@@ -151,8 +165,10 @@ function ImportFlow({ familyId, onClose }: { familyId: string; onClose: () => vo
       }
     }
     setSaving(false)
-    if (saved > 0) toast.success(`Added ${saved} event${saved === 1 ? "" : "s"}`)
-    if (failed > 0) toast.error(`${failed} couldn't be saved — review and retry.`)
+    if (saved > 0)
+      toast.success(`Added ${saved} event${saved === 1 ? "" : "s"}`)
+    if (failed > 0)
+      toast.error(`${failed} couldn't be saved — review and retry.`)
     else if (saved > 0) onClose()
   }
 
@@ -166,27 +182,32 @@ function ImportFlow({ familyId, onClose }: { familyId: string; onClose: () => vo
               <SparklesIcon className="size-5" /> Import events from a flyer
             </DialogTitle>
             <DialogDescription>
-              Snap a photo or upload a PDF — we&apos;ll pull out the dates for you to review before
-              anything is added.
+              Snap, upload, drag in, or paste a flyer (image or PDF) —
+              we&apos;ll pull out the dates for you to review before anything is
+              added.
             </DialogDescription>
           </DialogHeader>
           <div className="flex flex-col items-center gap-3 p-5">
-            <input
-              ref={fileRef}
-              type="file"
+            <FileDropZone
               accept="image/*,application/pdf"
-              capture="environment"
-              className="hidden"
-              onChange={(e) => onPickFile(e.target.files?.[0])}
-            />
-            <Button
-              onClick={() => fileRef.current?.click()}
+              onFile={onPickFile}
               disabled={extract.isPending}
-              className="w-full"
             >
-              {extract.isPending ? <Loader2Icon className="animate-spin" /> : <ImageIcon />}
-              {extract.isPending ? "Reading…" : "Choose a photo or PDF"}
-            </Button>
+              {extract.isPending ? (
+                <>
+                  <Loader2Icon className="size-6 animate-spin text-muted-foreground" />
+                  <span className="text-muted-foreground">Reading…</span>
+                </>
+              ) : (
+                <>
+                  <ImageIcon className="size-6 text-muted-foreground" />
+                  <span className="font-medium">Choose a photo or PDF</span>
+                  <span className="text-xs text-muted-foreground">
+                    or drag &amp; drop, or paste an image
+                  </span>
+                </>
+              )}
+            </FileDropZone>
           </div>
         </DialogContent>
       </Dialog>
@@ -194,7 +215,9 @@ function ImportFlow({ familyId, onClose }: { familyId: string; onClose: () => vo
   }
 
   // ── Review step ───────────────────────────────────────────────────────────────
-  const pending = rows.filter((r) => r.status !== "saved" && r.title.trim()).length
+  const pending = rows.filter(
+    (r) => r.status !== "saved" && r.title.trim()
+  ).length
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="flex max-h-[85vh] flex-col gap-0 p-0 sm:max-w-lg">
@@ -203,14 +226,14 @@ function ImportFlow({ familyId, onClose }: { familyId: string; onClose: () => vo
             <SparklesIcon className="size-5" /> Review events
           </DialogTitle>
           <DialogDescription>
-            Check the dates and titles, then add them to the calendar. Highlighted fields were
-            guessed — give them a look.
+            Check the dates and titles, then add them to the calendar.
+            Highlighted fields were guessed — give them a look.
           </DialogDescription>
         </DialogHeader>
 
         <div className="thin-scrollbar flex-1 overflow-y-auto p-5">
           {notes && (
-            <p className="text-muted-foreground mb-3 flex items-center gap-1.5 text-xs">
+            <p className="mb-3 flex items-center gap-1.5 text-xs text-muted-foreground">
               <TriangleAlertIcon className="size-3.5 shrink-0" /> {notes}
             </p>
           )}
@@ -218,7 +241,7 @@ function ImportFlow({ familyId, onClose }: { familyId: string; onClose: () => vo
             {rows.map((row, idx) => (
               <li
                 key={idx}
-                className="ring-foreground/5 flex flex-col gap-2 rounded-2xl p-3 shadow-sm ring-1"
+                className="flex flex-col gap-2 rounded-2xl p-3 shadow-sm ring-1 ring-foreground/5"
               >
                 <div className="flex items-center gap-2">
                   <Input
@@ -229,15 +252,20 @@ function ImportFlow({ familyId, onClose }: { familyId: string; onClose: () => vo
                     className="flex-1"
                   />
                   {row.status === "saved" ? (
-                    <CheckIcon className="size-5 shrink-0 text-green-600" aria-label="Saved" />
+                    <CheckIcon
+                      className="size-5 shrink-0 text-green-600"
+                      aria-label="Saved"
+                    />
                   ) : (
                     <Button
                       type="button"
                       variant="ghost"
                       size="icon-sm"
                       aria-label="Remove event"
-                      onClick={() => setRows((rs) => rs && rs.filter((_, i) => i !== idx))}
-                      className="text-muted-foreground hover:text-destructive shrink-0"
+                      onClick={() =>
+                        setRows((rs) => rs && rs.filter((_, i) => i !== idx))
+                      }
+                      className="shrink-0 text-muted-foreground hover:text-destructive"
                     >
                       <XIcon />
                     </Button>
@@ -252,7 +280,7 @@ function ImportFlow({ familyId, onClose }: { familyId: string; onClose: () => vo
                     aria-label="Start"
                     className="w-auto flex-1"
                   />
-                  <span className="text-muted-foreground text-xs">to</span>
+                  <span className="text-xs text-muted-foreground">to</span>
                   <Input
                     type="datetime-local"
                     value={row.end}
@@ -270,7 +298,9 @@ function ImportFlow({ familyId, onClose }: { familyId: string; onClose: () => vo
                 />
                 <Textarea
                   value={row.description}
-                  onChange={(e) => updateRow(idx, { description: e.target.value })}
+                  onChange={(e) =>
+                    updateRow(idx, { description: e.target.value })
+                  }
                   placeholder="Notes / details"
                   aria-label="Description"
                   className="min-h-0 resize-none"
@@ -282,7 +312,9 @@ function ImportFlow({ familyId, onClose }: { familyId: string; onClose: () => vo
                     <input
                       type="checkbox"
                       checked={row.all_day}
-                      onChange={(e) => updateRow(idx, { all_day: e.target.checked })}
+                      onChange={(e) =>
+                        updateRow(idx, { all_day: e.target.checked })
+                      }
                     />
                     All day
                   </label>
@@ -308,7 +340,12 @@ function ImportFlow({ familyId, onClose }: { familyId: string; onClose: () => vo
         </div>
 
         <DialogFooter className="gap-2 border-t p-5">
-          <Button type="button" variant="outline" className="flex-1" onClick={onClose}>
+          <Button
+            type="button"
+            variant="outline"
+            className="flex-1"
+            onClick={onClose}
+          >
             {rows.some((r) => r.status === "saved") ? "Done" : "Cancel"}
           </Button>
           <Button
@@ -318,7 +355,9 @@ function ImportFlow({ familyId, onClose }: { familyId: string; onClose: () => vo
             disabled={saving || pending === 0}
           >
             {saving ? <Loader2Icon className="animate-spin" /> : <CheckIcon />}
-            {pending > 0 ? `Add ${pending} event${pending === 1 ? "" : "s"}` : "All added"}
+            {pending > 0
+              ? `Add ${pending} event${pending === 1 ? "" : "s"}`
+              : "All added"}
           </Button>
         </DialogFooter>
       </DialogContent>

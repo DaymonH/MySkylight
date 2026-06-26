@@ -32,7 +32,12 @@ import {
 import { AddMealDialog } from "@/components/meals/add-meal-dialog"
 import { GroceryBuildDialog } from "@/components/meals/grocery-build-dialog"
 import { RecipeImportDialog } from "@/components/meals/recipe-import-dialog"
-import { RecipeSheet, type RecipeFormValues, toRecipePayload } from "@/components/meals/recipe-sheet"
+import { RecipeDetailSheet } from "@/components/meals/recipe-detail-sheet"
+import {
+  RecipeSheet,
+  type RecipeFormValues,
+  toRecipePayload,
+} from "@/components/meals/recipe-sheet"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -44,7 +49,13 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { cn } from "@/lib/utils"
-import { MEAL_SLOTS, type AggregatedLine, type MealPlanOut, type MealSlot, type RecipeOut } from "@/lib/types/meal"
+import {
+  MEAL_SLOTS,
+  type AggregatedLine,
+  type MealPlanOut,
+  type MealSlot,
+  type RecipeOut,
+} from "@/lib/types/meal"
 
 interface MembershipResponse {
   id: string
@@ -79,7 +90,11 @@ function isoDate(d: Date): string {
   return `${d.getFullYear()}-${m}-${day}`
 }
 
-export default function MealsPage({ params }: { params: Promise<{ familyId: string }> }) {
+export default function MealsPage({
+  params,
+}: {
+  params: Promise<{ familyId: string }>
+}) {
   const { familyId } = use(params)
   const api = useApi()
   useRealtime(familyId)
@@ -92,12 +107,19 @@ export default function MealsPage({ params }: { params: Promise<{ familyId: stri
   const canManage = role === "owner" || role === "adult"
 
   const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date()))
-  const days = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)), [weekStart])
+  const days = useMemo(
+    () => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)),
+    [weekStart]
+  )
   const weekStartISO = isoDate(weekStart)
   const weekEndISO = isoDate(addDays(weekStart, 6))
   const todayISO = isoDate(new Date())
 
-  const { data: meals = [], isLoading: mealsLoading } = useMealPlans(familyId, weekStartISO, weekEndISO)
+  const { data: meals = [], isLoading: mealsLoading } = useMealPlans(
+    familyId,
+    weekStartISO,
+    weekEndISO
+  )
   const { data: recipes = [], isLoading: recipesLoading } = useRecipes(familyId)
 
   const aggregate = useAggregateGrocery(familyId)
@@ -112,10 +134,24 @@ export default function MealsPage({ params }: { params: Promise<{ familyId: stri
     return map
   }, [meals])
 
-  const [addCell, setAddCell] = useState<{ date: string; slot: MealSlot; label: string } | null>(null)
-  const [recipeSheet, setRecipeSheet] = useState<{ open: boolean; editing?: RecipeOut }>({ open: false })
+  const [addCell, setAddCell] = useState<{
+    date: string
+    slot: MealSlot
+    label: string
+  } | null>(null)
+  const [recipeSheet, setRecipeSheet] = useState<{
+    open: boolean
+    editing?: RecipeOut
+  }>({ open: false })
+  const [detail, setDetail] = useState<{ open: boolean; recipe?: RecipeOut }>({
+    open: false,
+  })
   const [importOpen, setImportOpen] = useState(false)
-  const [build, setBuild] = useState<{ open: boolean; lines: AggregatedLine[]; name: string }>({
+  const [build, setBuild] = useState<{
+    open: boolean
+    lines: AggregatedLine[]
+    name: string
+  }>({
     open: false,
     lines: [],
     name: "",
@@ -123,7 +159,7 @@ export default function MealsPage({ params }: { params: Promise<{ familyId: stri
 
   const weekLabel = `${weekStart.toLocaleDateString(undefined, { month: "short", day: "numeric" })} – ${addDays(
     weekStart,
-    6,
+    6
   ).toLocaleDateString(undefined, { month: "short", day: "numeric" })}`
 
   function openBuild(lines: AggregatedLine[], name: string) {
@@ -139,8 +175,9 @@ export default function MealsPage({ params }: { params: Promise<{ familyId: stri
       { from_date: weekStartISO, to_date: weekEndISO },
       {
         onSuccess: (lines) => openBuild(lines, `Groceries (${weekLabel})`),
-        onError: () => toast.error("Couldn't aggregate this week's ingredients."),
-      },
+        onError: () =>
+          toast.error("Couldn't aggregate this week's ingredients."),
+      }
     )
   }
 
@@ -150,16 +187,19 @@ export default function MealsPage({ params }: { params: Promise<{ familyId: stri
       {
         onSuccess: (lines) => openBuild(lines, `${recipe.name} groceries`),
         onError: () => toast.error("Couldn't aggregate this recipe."),
-      },
+      }
     )
   }
 
   return (
     <div className="thin-scrollbar mx-auto flex w-full max-w-3xl flex-col gap-5 overflow-y-auto p-4 sm:p-6">
       <header className="flex flex-col gap-1">
-        <h1 className="font-heading text-xl font-semibold tracking-tight">Meals &amp; recipes</h1>
-        <p className="text-muted-foreground text-sm">
-          Plan the week, save recipes, and turn them into a grocery list in a couple taps.
+        <h1 className="font-heading text-xl font-semibold tracking-tight">
+          Meals &amp; recipes
+        </h1>
+        <p className="text-sm text-muted-foreground">
+          Plan the week, save recipes, and turn them into a grocery list in a
+          couple taps.
         </p>
       </header>
 
@@ -176,16 +216,32 @@ export default function MealsPage({ params }: { params: Promise<{ familyId: stri
         {/* ── Weekly planner ─────────────────────────────────────────────── */}
         <TabsContent value="week" className="flex flex-col gap-4">
           <div className="flex flex-wrap items-center gap-2">
-            <Button variant="outline" size="icon-sm" aria-label="Previous week" onClick={() => setWeekStart((w) => addDays(w, -7))}>
+            <Button
+              variant="outline"
+              size="icon-sm"
+              aria-label="Previous week"
+              onClick={() => setWeekStart((w) => addDays(w, -7))}
+            >
               <ChevronLeftIcon />
             </Button>
-            <Button variant="ghost" size="sm" onClick={() => setWeekStart(startOfWeek(new Date()))}>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setWeekStart(startOfWeek(new Date()))}
+            >
               This week
             </Button>
-            <Button variant="outline" size="icon-sm" aria-label="Next week" onClick={() => setWeekStart((w) => addDays(w, 7))}>
+            <Button
+              variant="outline"
+              size="icon-sm"
+              aria-label="Next week"
+              onClick={() => setWeekStart((w) => addDays(w, 7))}
+            >
               <ChevronRightIcon />
             </Button>
-            <span className="text-muted-foreground ml-1 text-sm font-medium">{weekLabel}</span>
+            <span className="ml-1 text-sm font-medium text-muted-foreground">
+              {weekLabel}
+            </span>
             {canManage && (
               <Button
                 size="sm"
@@ -213,26 +269,36 @@ export default function MealsPage({ params }: { params: Promise<{ familyId: stri
                   <div
                     key={dayISO}
                     className={cn(
-                      "bg-card ring-foreground/5 rounded-2xl p-3 shadow-sm ring-1",
-                      isToday && "ring-primary/40 ring-2",
+                      "rounded-2xl bg-card p-3 shadow-sm ring-1 ring-foreground/5",
+                      isToday && "ring-2 ring-primary/40"
                     )}
                   >
                     <div className="mb-2 flex items-baseline gap-2 px-1">
                       <span className="font-heading font-semibold">
                         {day.toLocaleDateString(undefined, { weekday: "long" })}
                       </span>
-                      <span className="text-muted-foreground text-xs">
-                        {day.toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+                      <span className="text-xs text-muted-foreground">
+                        {day.toLocaleDateString(undefined, {
+                          month: "short",
+                          day: "numeric",
+                        })}
                       </span>
-                      {isToday && <Badge variant="secondary" className="ml-auto">Today</Badge>}
+                      {isToday && (
+                        <Badge variant="secondary" className="ml-auto">
+                          Today
+                        </Badge>
+                      )}
                     </div>
 
                     <div className="flex flex-col divide-y">
                       {MEAL_SLOTS.map((slot) => {
                         const cellMeals = byCell.get(`${dayISO}|${slot}`) ?? []
                         return (
-                          <div key={slot} className="flex items-center gap-2 py-1.5">
-                            <span className="text-muted-foreground w-20 shrink-0 text-xs font-medium uppercase tracking-wide">
+                          <div
+                            key={slot}
+                            className="flex items-center gap-2 py-1.5"
+                          >
+                            <span className="w-20 shrink-0 text-xs font-medium tracking-wide text-muted-foreground uppercase">
                               {SLOT_LABELS[slot]}
                             </span>
                             <div className="flex flex-1 flex-wrap items-center gap-1.5">
@@ -259,7 +325,7 @@ export default function MealsPage({ params }: { params: Promise<{ familyId: stri
                                     })
                                   }
                                   aria-label={`Add ${SLOT_LABELS[slot]} for ${dayISO}`}
-                                  className="text-muted-foreground hover:border-primary hover:text-primary flex size-6 items-center justify-center rounded-full border border-dashed transition-colors"
+                                  className="flex size-6 items-center justify-center rounded-full border border-dashed text-muted-foreground transition-colors hover:border-primary hover:text-primary"
                                 >
                                   <PlusIcon className="size-3.5" />
                                 </button>
@@ -283,7 +349,11 @@ export default function MealsPage({ params }: { params: Promise<{ familyId: stri
               <Button size="sm" onClick={() => setRecipeSheet({ open: true })}>
                 <PlusIcon /> New recipe
               </Button>
-              <Button size="sm" variant="outline" onClick={() => setImportOpen(true)}>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setImportOpen(true)}
+              >
                 <SparklesIcon /> Add with AI
               </Button>
             </div>
@@ -297,13 +367,15 @@ export default function MealsPage({ params }: { params: Promise<{ familyId: stri
             </div>
           ) : recipes.length === 0 ? (
             <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed py-12 text-center">
-              <div className="bg-muted text-muted-foreground flex size-12 items-center justify-center rounded-2xl">
+              <div className="flex size-12 items-center justify-center rounded-2xl bg-muted text-muted-foreground">
                 <BookOpenIcon className="size-6" />
               </div>
               <div>
                 <p className="font-medium">No recipes yet</p>
-                <p className="text-muted-foreground text-sm">
-                  {canManage ? "Add a recipe with structured ingredients." : "Nothing saved yet."}
+                <p className="text-sm text-muted-foreground">
+                  {canManage
+                    ? "Add a recipe with structured ingredients."
+                    : "Nothing saved yet."}
                 </p>
               </div>
             </div>
@@ -314,6 +386,7 @@ export default function MealsPage({ params }: { params: Promise<{ familyId: stri
                   key={recipe.id}
                   recipe={recipe}
                   canManage={canManage}
+                  onOpen={() => setDetail({ open: true, recipe })}
                   onEdit={() => setRecipeSheet({ open: true, editing: recipe })}
                   onAddToGroceries={() => buildRecipeGroceries(recipe)}
                   aggregating={aggregate.isPending}
@@ -338,6 +411,22 @@ export default function MealsPage({ params }: { params: Promise<{ familyId: stri
         familyId={familyId}
         state={recipeSheet}
         onClose={() => setRecipeSheet({ open: false })}
+      />
+
+      <RecipeDetailSheet
+        open={detail.open}
+        onClose={() => setDetail((d) => ({ ...d, open: false }))}
+        recipe={detail.recipe ?? null}
+        canManage={canManage}
+        onEdit={() => {
+          const recipe = detail.recipe
+          setDetail((d) => ({ ...d, open: false }))
+          if (recipe) setRecipeSheet({ open: true, editing: recipe })
+        }}
+        onAddToGroceries={() => {
+          if (detail.recipe) buildRecipeGroceries(detail.recipe)
+        }}
+        aggregating={aggregate.isPending}
       />
 
       <RecipeImportDialog
@@ -376,7 +465,7 @@ function MealChip({
     <span
       className={cn(
         "flex items-center gap-1 rounded-full px-2.5 py-1 text-sm",
-        meal.recipe ? "bg-primary/10 text-primary" : "bg-muted text-foreground",
+        meal.recipe ? "bg-primary/10 text-primary" : "bg-muted text-foreground"
       )}
     >
       {onCalendar && <CalendarPlusIcon className="size-3 opacity-70" />}
@@ -389,9 +478,13 @@ function MealChip({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <button type="button" className="group flex items-center" aria-label={`${meal.display_title} options`}>
+        <button
+          type="button"
+          className="group flex items-center"
+          aria-label={`${meal.display_title} options`}
+        >
           {chip}
-          <MoreVerticalIcon className="text-muted-foreground -ml-0.5 size-3.5 opacity-0 transition-opacity group-hover:opacity-100" />
+          <MoreVerticalIcon className="-ml-0.5 size-3.5 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start">
@@ -403,7 +496,8 @@ function MealChip({
             })
           }
         >
-          <CalendarPlusIcon /> {onCalendar ? "Update on calendar" : "Add to calendar"}
+          <CalendarPlusIcon />{" "}
+          {onCalendar ? "Update on calendar" : "Add to calendar"}
         </DropdownMenuItem>
         <DropdownMenuItem
           variant="destructive"
@@ -425,26 +519,54 @@ function MealChip({
 function RecipeCard({
   recipe,
   canManage,
+  onOpen,
   onEdit,
   onAddToGroceries,
   aggregating,
 }: {
   recipe: RecipeOut
   canManage: boolean
+  onOpen: () => void
   onEdit: () => void
   onAddToGroceries: () => void
   aggregating: boolean
 }) {
   return (
-    <div className="bg-card ring-foreground/5 flex flex-col gap-2 rounded-2xl p-3 shadow-sm ring-1">
+    <div
+      role="button"
+      tabIndex={0}
+      aria-label={`View ${recipe.name}`}
+      onClick={onOpen}
+      onKeyDown={(e) => {
+        // Only the card itself — let the nested buttons handle their own keys.
+        if (
+          (e.key === "Enter" || e.key === " ") &&
+          e.target === e.currentTarget
+        ) {
+          e.preventDefault()
+          onOpen()
+        }
+      }}
+      className="flex cursor-pointer flex-col gap-2 rounded-2xl bg-card p-3 shadow-sm ring-1 ring-foreground/5 transition-shadow outline-none hover:shadow-md hover:ring-primary/30 focus-visible:ring-2 focus-visible:ring-ring"
+    >
       <div className="flex items-start gap-2">
+        {recipe.image_url && (
+          // eslint-disable-next-line @next/next/no-img-element -- arbitrary external recipe URL; next/image would need per-host config
+          <img
+            src={recipe.image_url}
+            alt=""
+            className="size-12 shrink-0 rounded-xl object-cover"
+          />
+        )}
         <div className="min-w-0 flex-1">
-          <p className="truncate font-semibold leading-tight">{recipe.name}</p>
-          <p className="text-muted-foreground text-xs">
-            {recipe.ingredients.length} ingredient{recipe.ingredients.length === 1 ? "" : "s"}
+          <p className="truncate leading-tight font-semibold">{recipe.name}</p>
+          <p className="text-xs text-muted-foreground">
+            {recipe.ingredients.length} ingredient
+            {recipe.ingredients.length === 1 ? "" : "s"}
             {recipe.servings ? ` · serves ${recipe.servings}` : ""}
             {(() => {
-              const total = (recipe.prep_minutes ?? 0) + (recipe.cook_minutes ?? 0)
+              const total =
+                (recipe.prep_minutes ?? 0) + (recipe.cook_minutes ?? 0)
               return total > 0 ? ` · ${total} min` : ""
             })()}
           </p>
@@ -454,8 +576,11 @@ function RecipeCard({
             variant="ghost"
             size="icon-sm"
             aria-label={`Edit ${recipe.name}`}
-            onClick={onEdit}
-            className="text-muted-foreground hover:text-foreground shrink-0"
+            onClick={(e) => {
+              e.stopPropagation()
+              onEdit()
+            }}
+            className="shrink-0 text-muted-foreground hover:text-foreground"
           >
             <PencilIcon />
           </Button>
@@ -477,7 +602,10 @@ function RecipeCard({
           variant="outline"
           size="sm"
           className="mt-auto"
-          onClick={onAddToGroceries}
+          onClick={(e) => {
+            e.stopPropagation()
+            onAddToGroceries()
+          }}
           disabled={aggregating || recipe.ingredients.length === 0}
         >
           <ShoppingCartIcon /> Add to groceries
@@ -513,8 +641,9 @@ function RecipeSheetContainer({
             onClose()
             toast.success("Recipe saved")
           },
-          onError: () => toast.error("Couldn't save the recipe. Please try again."),
-        },
+          onError: () =>
+            toast.error("Couldn't save the recipe. Please try again."),
+        }
       )
     } else {
       createRecipe.mutate(payload, {
@@ -522,7 +651,8 @@ function RecipeSheetContainer({
           onClose()
           toast.success("Recipe created")
         },
-        onError: () => toast.error("Couldn't create the recipe. Please try again."),
+        onError: () =>
+          toast.error("Couldn't create the recipe. Please try again."),
       })
     }
   }

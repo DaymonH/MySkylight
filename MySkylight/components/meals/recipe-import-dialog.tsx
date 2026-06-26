@@ -1,12 +1,15 @@
 "use client"
 
-import { useRef, useState } from "react"
+import { useState } from "react"
 import { toast } from "sonner"
 import { ImageIcon, LinkIcon, Loader2Icon, SparklesIcon } from "lucide-react"
 
 import { ApiError } from "@/lib/api-client"
 import { encodeUpload } from "@/lib/file-to-base64"
-import { useExtractRecipeFromImage, useExtractRecipeFromLink } from "@/hooks/use-magic-import"
+import {
+  useExtractRecipeFromImage,
+  useExtractRecipeFromLink,
+} from "@/hooks/use-magic-import"
 import { useCreateRecipe } from "@/hooks/use-meals"
 import {
   RecipeSheet,
@@ -14,6 +17,7 @@ import {
   toRecipePayload,
 } from "@/components/meals/recipe-sheet"
 import { Button } from "@/components/ui/button"
+import { FileDropZone } from "@/components/ui/file-drop-zone"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import {
@@ -24,7 +28,10 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import type { RecipeDraft, RecipeExtractionResult } from "@/lib/types/magic-import"
+import type {
+  RecipeDraft,
+  RecipeExtractionResult,
+} from "@/lib/types/magic-import"
 
 function draftToForm(d: RecipeDraft): RecipeFormValues {
   return {
@@ -69,10 +76,15 @@ export function RecipeImportDialog({
   return <ImportFlow familyId={familyId} onClose={onClose} />
 }
 
-function ImportFlow({ familyId, onClose }: { familyId: string; onClose: () => void }) {
+function ImportFlow({
+  familyId,
+  onClose,
+}: {
+  familyId: string
+  onClose: () => void
+}) {
   const [prefill, setPrefill] = useState<RecipeFormValues | null>(null)
   const [url, setUrl] = useState("")
-  const fileRef = useRef<HTMLInputElement>(null)
 
   const extractImage = useExtractRecipeFromImage(familyId)
   const extractLink = useExtractRecipeFromLink(familyId)
@@ -107,7 +119,10 @@ function ImportFlow({ familyId, onClose }: { familyId: string; onClose: () => vo
     if (!u) return
     extractLink.mutate(
       { url: u },
-      { onSuccess: handleResult, onError: (err) => toast.error(aiErrorMessage(err)) },
+      {
+        onSuccess: handleResult,
+        onError: (err) => toast.error(aiErrorMessage(err)),
+      }
     )
   }
 
@@ -125,7 +140,8 @@ function ImportFlow({ familyId, onClose }: { familyId: string; onClose: () => vo
               toast.success("Recipe added")
               onClose()
             },
-            onError: () => toast.error("Couldn't save the recipe. Please try again."),
+            onError: () =>
+              toast.error("Couldn't save the recipe. Please try again."),
           })
         }
       />
@@ -140,8 +156,8 @@ function ImportFlow({ familyId, onClose }: { familyId: string; onClose: () => vo
             <SparklesIcon className="size-5" /> Add a recipe with AI
           </DialogTitle>
           <DialogDescription>
-            Snap a photo of a recipe or paste a link — we&apos;ll fill in the details for you to
-            review.
+            Snap a photo of a recipe or paste a link — we&apos;ll fill in the
+            details for you to review.
           </DialogDescription>
         </DialogHeader>
 
@@ -157,26 +173,29 @@ function ImportFlow({ familyId, onClose }: { familyId: string; onClose: () => vo
             </TabsList>
           </div>
 
-          <TabsContent value="photo" className="flex flex-col items-center gap-3 p-5">
-            <input
-              ref={fileRef}
-              type="file"
-              accept="image/*"
-              capture="environment"
-              className="hidden"
-              onChange={(e) => onPickPhoto(e.target.files?.[0])}
-            />
-            <p className="text-muted-foreground text-center text-sm">
+          <TabsContent
+            value="photo"
+            className="flex flex-col items-center gap-3 p-5"
+          >
+            <p className="text-center text-sm text-muted-foreground">
               A clear photo of the recipe card or page works best.
             </p>
-            <Button onClick={() => fileRef.current?.click()} disabled={busy} className="w-full">
+            <FileDropZone accept="image/*" onFile={onPickPhoto} disabled={busy}>
               {extractImage.isPending ? (
-                <Loader2Icon className="animate-spin" />
+                <>
+                  <Loader2Icon className="size-6 animate-spin text-muted-foreground" />
+                  <span className="text-muted-foreground">Reading…</span>
+                </>
               ) : (
-                <ImageIcon />
+                <>
+                  <ImageIcon className="size-6 text-muted-foreground" />
+                  <span className="font-medium">Choose a photo</span>
+                  <span className="text-xs text-muted-foreground">
+                    or drag &amp; drop, or paste an image
+                  </span>
+                </>
               )}
-              {extractImage.isPending ? "Reading…" : "Choose a photo"}
-            </Button>
+            </FileDropZone>
           </TabsContent>
 
           <TabsContent value="link" className="flex flex-col gap-3 p-5">
@@ -191,8 +210,16 @@ function ImportFlow({ familyId, onClose }: { familyId: string; onClose: () => vo
                 onKeyDown={(e) => e.key === "Enter" && onSubmitLink()}
               />
             </div>
-            <Button onClick={onSubmitLink} disabled={busy || !url.trim()} className="w-full">
-              {extractLink.isPending ? <Loader2Icon className="animate-spin" /> : <SparklesIcon />}
+            <Button
+              onClick={onSubmitLink}
+              disabled={busy || !url.trim()}
+              className="w-full"
+            >
+              {extractLink.isPending ? (
+                <Loader2Icon className="animate-spin" />
+              ) : (
+                <SparklesIcon />
+              )}
               {extractLink.isPending ? "Reading…" : "Get recipe"}
             </Button>
           </TabsContent>
