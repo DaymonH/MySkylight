@@ -213,6 +213,11 @@ this table just saves you the dig.
 Realtime: `GET /api/v1/stream` (SSE) or `WS /api/v1/ws` — authenticated, scoped to a family,
 emits typed change events for live device updates.
 
+> The list above is the *conceptual* surface (some items are aspirational/descoped). For the
+> **actual, always-current endpoint map** — every route with method · path · auth · handler —
+> see **`HomeServerAPI/skylight-api/docs/api.md`** (generated from the live FastAPI app; regenerate
+> with `make api`). Realtime is implemented as `GET /api/v1/families/{family_id}/stream` (SSE).
+
 ---
 
 ## 7. Phased roadmap

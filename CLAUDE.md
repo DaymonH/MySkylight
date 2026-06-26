@@ -12,7 +12,8 @@ The app lives in **`MySkylight/`**; the FastAPI backend is a separate repo (see 
 > **Touching data shapes / API payloads? Start here, don't reverse-engineer:** read **`docs/PLAN.md`
 > §5 (Data model)** + **§6 (API surface)**, then the backend's source-of-truth models at
 > **`../../HomeServerAPI/skylight-api/app/models/*.py`** for exact fields. The backend `CLAUDE.md`
-> covers the API/auth/realtime contract.
+> covers the API/auth/realtime contract. For the **exact current endpoint list** (method · path · auth ·
+> handler), see the generated **`../../HomeServerAPI/skylight-api/docs/api.md`**.
 
 **When you finish a feature, tick it in `docs/TRACKER.md` and update `docs/FEATURES.md`.** These are the source of truth — keep them current.
 
