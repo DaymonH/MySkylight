@@ -7,6 +7,7 @@ import {
   ChevronLeftIcon,
   ChevronRightIcon,
   PlusIcon,
+  SparklesIcon,
 } from "lucide-react"
 import { useApi } from "@/hooks/use-api"
 import {
@@ -26,6 +27,7 @@ import { DayView } from "./day-view"
 import { ScheduleView } from "./schedule-view"
 import { CountdownStrip } from "./countdown-strip"
 import { EventSheet } from "./event-sheet"
+import { FlyerImportDialog } from "./flyer-import-dialog"
 import { CalendarSkeleton } from "./calendar-skeleton"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -146,6 +148,7 @@ export function CalendarView({
   const [sheetOpen, setSheetOpen] = useState(false)
   const [defaultDate, setDefaultDate] = useState<string | undefined>()
   const [editing, setEditing] = useState<OccurrenceOut | undefined>()
+  const [importOpen, setImportOpen] = useState(false)
 
   const api = useApi()
 
@@ -391,6 +394,12 @@ export function CalendarView({
               ))}
             </TabsList>
           </Tabs>
+          {!isDevice && (
+            <Button variant="outline" size="sm" onClick={() => setImportOpen(true)}>
+              <SparklesIcon />
+              <span className="hidden sm:inline">Import</span>
+            </Button>
+          )}
           <Button size={isDevice ? "lg" : "sm"} onClick={() => openNew()}>
             <PlusIcon />
             <span className={isDevice ? "" : "hidden sm:inline"}>Add</span>
@@ -485,6 +494,12 @@ export function CalendarView({
         members={members}
         defaultDate={defaultDate}
         editing={editing}
+      />
+
+      <FlyerImportDialog
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        familyId={familyId}
       />
     </div>
   )

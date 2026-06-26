@@ -91,6 +91,8 @@ interface RecipeSheetProps {
   isPending: boolean
   isDeleting?: boolean
   editing?: RecipeOut
+  /** Seed the form for a NEW recipe (create mode) — used by Magic Import review. */
+  prefill?: RecipeFormValues
 }
 
 export function RecipeSheet({
@@ -101,6 +103,7 @@ export function RecipeSheet({
   isPending,
   isDeleting,
   editing,
+  prefill,
 }: RecipeSheetProps) {
   const {
     register,
@@ -131,9 +134,9 @@ export function RecipeSheet({
                 }))
               : [{ name: "", quantity: "", unit: "" }],
           }
-        : BLANK,
+        : (prefill ?? BLANK),
     )
-  }, [open, editing]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [open, editing, prefill]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <Sheet open={open} onOpenChange={(o) => !o && onClose()}>

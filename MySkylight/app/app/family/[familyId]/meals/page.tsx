@@ -12,6 +12,7 @@ import {
   PencilIcon,
   PlusIcon,
   ShoppingCartIcon,
+  SparklesIcon,
   Trash2Icon,
   UtensilsCrossedIcon,
 } from "lucide-react"
@@ -30,6 +31,7 @@ import {
 } from "@/hooks/use-meals"
 import { AddMealDialog } from "@/components/meals/add-meal-dialog"
 import { GroceryBuildDialog } from "@/components/meals/grocery-build-dialog"
+import { RecipeImportDialog } from "@/components/meals/recipe-import-dialog"
 import { RecipeSheet, type RecipeFormValues, toRecipePayload } from "@/components/meals/recipe-sheet"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -112,6 +114,7 @@ export default function MealsPage({ params }: { params: Promise<{ familyId: stri
 
   const [addCell, setAddCell] = useState<{ date: string; slot: MealSlot; label: string } | null>(null)
   const [recipeSheet, setRecipeSheet] = useState<{ open: boolean; editing?: RecipeOut }>({ open: false })
+  const [importOpen, setImportOpen] = useState(false)
   const [build, setBuild] = useState<{ open: boolean; lines: AggregatedLine[]; name: string }>({
     open: false,
     lines: [],
@@ -276,9 +279,14 @@ export default function MealsPage({ params }: { params: Promise<{ familyId: stri
         {/* ── Recipe library ─────────────────────────────────────────────── */}
         <TabsContent value="recipes" className="flex flex-col gap-4">
           {canManage && (
-            <Button size="sm" className="self-start" onClick={() => setRecipeSheet({ open: true })}>
-              <PlusIcon /> New recipe
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              <Button size="sm" onClick={() => setRecipeSheet({ open: true })}>
+                <PlusIcon /> New recipe
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => setImportOpen(true)}>
+                <SparklesIcon /> Add with AI
+              </Button>
+            </div>
           )}
 
           {recipesLoading ? (
@@ -330,6 +338,12 @@ export default function MealsPage({ params }: { params: Promise<{ familyId: stri
         familyId={familyId}
         state={recipeSheet}
         onClose={() => setRecipeSheet({ open: false })}
+      />
+
+      <RecipeImportDialog
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        familyId={familyId}
       />
 
       <GroceryBuildDialog
