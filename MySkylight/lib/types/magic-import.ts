@@ -25,6 +25,7 @@ export interface IngredientDraft {
   name: string
   quantity: number | null
   unit: string | null
+  section: string | null
   sort_order: number
 }
 
@@ -34,6 +35,8 @@ export interface RecipeDraft {
   instructions: string | null
   image_url: string | null
   servings: number | null
+  prep_minutes: number | null
+  cook_minutes: number | null
   tags: string[]
   ingredients: IngredientDraft[]
   confidence: number

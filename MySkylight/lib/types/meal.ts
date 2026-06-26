@@ -9,6 +9,7 @@ export interface RecipeIngredient {
   name: string
   quantity: number | null
   unit: string | null
+  section: string | null
   sort_order: number
 }
 
@@ -16,6 +17,7 @@ export interface RecipeIngredientInput {
   name: string
   quantity?: number | null
   unit?: string | null
+  section?: string | null
   sort_order?: number
 }
 
@@ -33,6 +35,9 @@ export interface RecipeOut {
   instructions: string | null
   image_url: string | null
   servings: number | null
+  prep_minutes: number | null
+  cook_minutes: number | null
+  source_url: string | null
   tags: string[]
   ingredients: RecipeIngredient[]
   created_at: string
@@ -45,6 +50,9 @@ export interface RecipeCreatePayload {
   instructions?: string | null
   image_url?: string | null
   servings?: number | null
+  prep_minutes?: number | null
+  cook_minutes?: number | null
+  source_url?: string | null
   tags?: string[]
   ingredients?: RecipeIngredientInput[]
 }

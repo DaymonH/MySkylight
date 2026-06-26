@@ -18,6 +18,7 @@ import { useCreateEvent } from "@/hooks/use-calendars"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
 import {
   Dialog,
   DialogContent,
@@ -32,6 +33,8 @@ type RowStatus = "idle" | "saving" | "saved" | "error"
 
 interface Row {
   title: string
+  location: string
+  description: string
   start: string // datetime-local
   end: string
   all_day: boolean
@@ -52,6 +55,8 @@ function toDatetimeLocal(iso: string): string {
 function draftToRow(d: EventDraft): Row {
   return {
     title: d.title,
+    location: d.location ?? "",
+    description: d.description ?? "",
     start: toDatetimeLocal(d.start_dt),
     end: toDatetimeLocal(d.end_dt),
     all_day: d.all_day,
@@ -131,6 +136,8 @@ function ImportFlow({ familyId, onClose }: { familyId: string; onClose: () => vo
       try {
         await createEvent.mutateAsync({
           title: row.title.trim(),
+          location: row.location.trim() || undefined,
+          description: row.description.trim() || undefined,
           start_dt: new Date(row.start).toISOString(),
           end_dt: new Date(row.end).toISOString(),
           all_day: row.all_day,
@@ -254,6 +261,21 @@ function ImportFlow({ familyId, onClose }: { familyId: string; onClose: () => vo
                     className="w-auto flex-1"
                   />
                 </div>
+
+                <Input
+                  value={row.location}
+                  onChange={(e) => updateRow(idx, { location: e.target.value })}
+                  placeholder="Location"
+                  aria-label="Location"
+                />
+                <Textarea
+                  value={row.description}
+                  onChange={(e) => updateRow(idx, { description: e.target.value })}
+                  placeholder="Notes / details"
+                  aria-label="Description"
+                  className="min-h-0 resize-none"
+                  rows={2}
+                />
 
                 <div className="flex flex-wrap items-center gap-2">
                   <label className="flex items-center gap-1.5 text-sm">

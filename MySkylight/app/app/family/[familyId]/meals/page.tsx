@@ -443,6 +443,10 @@ function RecipeCard({
           <p className="text-muted-foreground text-xs">
             {recipe.ingredients.length} ingredient{recipe.ingredients.length === 1 ? "" : "s"}
             {recipe.servings ? ` · serves ${recipe.servings}` : ""}
+            {(() => {
+              const total = (recipe.prep_minutes ?? 0) + (recipe.cook_minutes ?? 0)
+              return total > 0 ? ` · ${total} min` : ""
+            })()}
           </p>
         </div>
         {canManage && (

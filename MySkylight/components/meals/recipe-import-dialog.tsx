@@ -32,15 +32,19 @@ function draftToForm(d: RecipeDraft): RecipeFormValues {
     description: d.description ?? "",
     instructions: d.instructions ?? "",
     image_url: d.image_url ?? "",
+    source_url: d.source_url ?? "",
     servings: d.servings != null ? String(d.servings) : "",
+    prep_minutes: d.prep_minutes != null ? String(d.prep_minutes) : "",
+    cook_minutes: d.cook_minutes != null ? String(d.cook_minutes) : "",
     tags: d.tags.join(", "),
     ingredients: d.ingredients.length
       ? d.ingredients.map((i) => ({
           name: i.name,
           quantity: i.quantity != null ? String(i.quantity) : "",
           unit: i.unit ?? "",
+          section: i.section ?? "",
         }))
-      : [{ name: "", quantity: "", unit: "" }],
+      : [{ name: "", quantity: "", unit: "", section: "" }],
   }
 }
 

@@ -1,7 +1,7 @@
 "use client"
 
-import { useEffect } from "react"
-import { useFieldArray, useForm } from "react-hook-form"
+import { Fragment, useEffect } from "react"
+import { useFieldArray, useForm, useWatch } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
 import { GripVerticalIcon, PlusIcon, Trash2Icon, XIcon } from "lucide-react"
@@ -31,13 +31,17 @@ const schema = z.object({
   description: z.string().optional(),
   instructions: z.string().optional(),
   image_url: z.string().max(1000).optional(),
+  source_url: z.string().max(1000).optional(),
   servings: z.string().optional(),
+  prep_minutes: z.string().optional(),
+  cook_minutes: z.string().optional(),
   tags: z.string().optional(),
   ingredients: z.array(
     z.object({
       name: z.string().max(200).optional(),
       quantity: z.string().optional(),
       unit: z.string().max(50).optional(),
+      section: z.string().max(100).optional(),
     }),
   ),
 })
@@ -48,9 +52,12 @@ const BLANK: RecipeFormValues = {
   description: "",
   instructions: "",
   image_url: "",
+  source_url: "",
   servings: "",
+  prep_minutes: "",
+  cook_minutes: "",
   tags: "",
-  ingredients: [{ name: "", quantity: "", unit: "" }],
+  ingredients: [{ name: "", quantity: "", unit: "", section: "" }],
 }
 
 function toNumberOrNull(s?: string): number | null {
@@ -67,7 +74,10 @@ export function toRecipePayload(v: RecipeFormValues): RecipeCreatePayload {
     description: v.description?.trim() || null,
     instructions: v.instructions?.trim() || null,
     image_url: v.image_url?.trim() || null,
+    source_url: v.source_url?.trim() || null,
     servings: toNumberOrNull(v.servings),
+    prep_minutes: toNumberOrNull(v.prep_minutes),
+    cook_minutes: toNumberOrNull(v.cook_minutes),
     tags: (v.tags ?? "")
       .split(",")
       .map((t) => t.trim())
@@ -78,6 +88,7 @@ export function toRecipePayload(v: RecipeFormValues): RecipeCreatePayload {
         name: i.name!.trim(),
         quantity: toNumberOrNull(i.quantity),
         unit: i.unit?.trim() || null,
+        section: i.section?.trim() || null,
         sort_order: idx,
       })),
   }
@@ -115,6 +126,10 @@ export function RecipeSheet({
 
   const { fields, append, remove } = useFieldArray({ control, name: "ingredients" })
 
+  // Live ingredient values drive the grouped section subheadings as the user types.
+  const watchedIngredients = useWatch({ control, name: "ingredients" })
+  const sectionAt = (i: number) => (watchedIngredients?.[i]?.section ?? "").trim()
+
   useEffect(() => {
     if (!open) return
     reset(
@@ -124,15 +139,19 @@ export function RecipeSheet({
             description: editing.description ?? "",
             instructions: editing.instructions ?? "",
             image_url: editing.image_url ?? "",
+            source_url: editing.source_url ?? "",
             servings: editing.servings != null ? String(editing.servings) : "",
+            prep_minutes: editing.prep_minutes != null ? String(editing.prep_minutes) : "",
+            cook_minutes: editing.cook_minutes != null ? String(editing.cook_minutes) : "",
             tags: editing.tags.join(", "),
             ingredients: editing.ingredients.length
               ? editing.ingredients.map((i) => ({
                   name: i.name,
                   quantity: i.quantity != null ? String(i.quantity) : "",
                   unit: i.unit ?? "",
+                  section: i.section ?? "",
                 }))
-              : [{ name: "", quantity: "", unit: "" }],
+              : [{ name: "", quantity: "", unit: "", section: "" }],
           }
         : (prefill ?? BLANK),
     )
@@ -164,10 +183,31 @@ export function RecipeSheet({
                   placeholder="4"
                 />
               </div>
-              <div className="flex-[2] space-y-1.5">
-                <Label htmlFor="recipe-tags">Tags</Label>
-                <Input id="recipe-tags" {...register("tags")} placeholder="vegetarian, quick" />
+              <div className="flex-1 space-y-1.5">
+                <Label htmlFor="recipe-prep">Prep (min)</Label>
+                <Input
+                  id="recipe-prep"
+                  type="number"
+                  min={0}
+                  {...register("prep_minutes")}
+                  placeholder="15"
+                />
               </div>
+              <div className="flex-1 space-y-1.5">
+                <Label htmlFor="recipe-cook">Cook (min)</Label>
+                <Input
+                  id="recipe-cook"
+                  type="number"
+                  min={0}
+                  {...register("cook_minutes")}
+                  placeholder="30"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="recipe-tags">Tags</Label>
+              <Input id="recipe-tags" {...register("tags")} placeholder="vegetarian, quick" />
             </div>
 
             <div className="space-y-1.5">
@@ -175,55 +215,90 @@ export function RecipeSheet({
               <Input id="recipe-image" {...register("image_url")} placeholder="https://…" />
             </div>
 
+            <div className="space-y-1.5">
+              <Label htmlFor="recipe-source">Source URL</Label>
+              <Input
+                id="recipe-source"
+                {...register("source_url")}
+                placeholder="https://… (where this recipe came from)"
+              />
+            </div>
+
             {/* Ingredients */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <Label>Ingredients</Label>
-                <span className="text-muted-foreground text-xs">qty · unit · name</span>
+                <span className="text-muted-foreground text-xs">qty · unit · name · section</span>
               </div>
               <div className="flex flex-col gap-2">
-                {fields.map((field, idx) => (
-                  <div key={field.id} className="flex items-center gap-2">
-                    <GripVerticalIcon className="text-muted-foreground/40 size-4 shrink-0" />
-                    <Input
-                      type="number"
-                      min={0}
-                      step="any"
-                      className="w-16 px-2"
-                      placeholder="2"
-                      aria-label="Quantity"
-                      {...register(`ingredients.${idx}.quantity`)}
-                    />
-                    <Input
-                      className="w-20 px-2"
-                      placeholder="cups"
-                      aria-label="Unit"
-                      {...register(`ingredients.${idx}.unit`)}
-                    />
-                    <Input
-                      className="flex-1"
-                      placeholder="Flour"
-                      aria-label="Ingredient name"
-                      {...register(`ingredients.${idx}.name`)}
-                    />
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon-sm"
-                      aria-label="Remove ingredient"
-                      onClick={() => remove(idx)}
-                      className="text-muted-foreground hover:text-destructive shrink-0"
-                    >
-                      <XIcon />
-                    </Button>
-                  </div>
-                ))}
+                {fields.map((field, idx) => {
+                  const section = sectionAt(idx)
+                  const showHeader =
+                    section.length > 0 && section !== (idx > 0 ? sectionAt(idx - 1) : "")
+                  return (
+                    <Fragment key={field.id}>
+                      {showHeader && (
+                        <p className="text-muted-foreground mt-1 px-1 text-xs font-semibold tracking-wide uppercase">
+                          {section}
+                        </p>
+                      )}
+                      <div className="flex items-center gap-2">
+                        <GripVerticalIcon className="text-muted-foreground/40 size-4 shrink-0" />
+                        <Input
+                          type="number"
+                          min={0}
+                          step="any"
+                          className="w-14 px-2"
+                          placeholder="2"
+                          aria-label="Quantity"
+                          {...register(`ingredients.${idx}.quantity`)}
+                        />
+                        <Input
+                          className="w-16 px-2"
+                          placeholder="cups"
+                          aria-label="Unit"
+                          {...register(`ingredients.${idx}.unit`)}
+                        />
+                        <Input
+                          className="flex-1"
+                          placeholder="Flour"
+                          aria-label="Ingredient name"
+                          {...register(`ingredients.${idx}.name`)}
+                        />
+                        <Input
+                          className="w-24 px-2"
+                          placeholder="Section"
+                          aria-label="Ingredient section"
+                          {...register(`ingredients.${idx}.section`)}
+                        />
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-sm"
+                          aria-label="Remove ingredient"
+                          onClick={() => remove(idx)}
+                          className="text-muted-foreground hover:text-destructive shrink-0"
+                        >
+                          <XIcon />
+                        </Button>
+                      </div>
+                    </Fragment>
+                  )
+                })}
               </div>
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
-                onClick={() => append({ name: "", quantity: undefined, unit: "" })}
+                onClick={() =>
+                  append({
+                    name: "",
+                    quantity: "",
+                    unit: "",
+                    // Carry the last row's section so adding within a group keeps it grouped.
+                    section: fields.length ? sectionAt(fields.length - 1) : "",
+                  })
+                }
               >
                 <PlusIcon /> Add ingredient
               </Button>
