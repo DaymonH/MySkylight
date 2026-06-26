@@ -4,7 +4,7 @@ Every feature advertised on the Skylight Calendar site, mapped to our implementa
 stable **ID** (referenced by [TRACKER.md](./TRACKER.md)), our approach, the backend (BE) and
 frontend (FE) pieces, and **acceptance criteria** (AC) that define "done".
 
-**Legend:** ⭐ = Calendar Plus (paid) feature · 🔌 = external integration · 🤖 = AI/DeepSeek
+**Legend:** ⭐ = Calendar Plus (paid) feature · 🔌 = external integration · 🤖 = AI (Gemini Flash-Lite)
 
 ---
 
@@ -358,8 +358,8 @@ frontend (FE) pieces, and **acceptance criteria** (AC) that define "done".
   `components/meals/recipe-sheet.tsx` editor with dynamic qty·unit·name ingredient rows). A glanceable
   device board `components/meals/meal-board.tsx` at `/device/meals`. `recipe.*`/`mealplan.*` wired into
   `use-realtime.ts`; linked from `FamilyMenu` + `DeviceNav`. 9 backend tests (`tests/test_meals.py`,
-  suite **81 green**); `tsc` + `next build` clean. **Deferred:** AI recipe gen + URL/photo import land
-  with Phase 6 (F17); live two-device smoke.
+  suite **81 green**); `tsc` + `next build` clean. **Deferred:** AI recipe gen + **photo/URL import via
+  Gemini 3.1 Flash-Lite** land with Phase 6 (F17 — see PLAN §2 D3); live two-device smoke.
 - _Phase 5 (AI recipe gen lands with Phase 6)_
 
 ### F16 — Photo Screensaver ⭐ — ⏸ PARKED (kept for later)
@@ -507,15 +507,33 @@ frontend (FE) pieces, and **acceptance criteria** (AC) that define "done".
 
 > _"Forward emails and PDFs, or upload photos of lists/flyers to automatically add dates and details."_
 
-- **Approach:** Ingest via email-forwarding address / PDF / image upload → **OCR/text extraction** →
-  **DeepSeek** structured extraction → **draft events/list items** the user reviews & confirms.
-  (DeepSeek is text-first, so OCR feeds it text — see PLAN §2.) The **same ingest pipeline also drafts
-  recipes** from a URL or photo (Hearth-style "Smart Companion") feeding the F15 recipe library / F28
-  grocery aggregation.
-- **BE:** `MagicImportJob`; ingest endpoints (`/magic-import` upload + inbound-email webhook);
-  OCR stage (PDF text/Tesseract); `ai/provider.py` (DeepSeek) → strict JSON drafts; confirm → create.
-- **FE:** Upload/forward UI; "review extracted events" screen with edit-before-save.
-- **AC:** A flyer photo yields a correctly-dated draft event the user can tweak and save.
+- **Approach (provider switched to Gemini 3.1 Flash-Lite, 2026-06-25 — see PLAN §2 D3):** Ingest via
+  image/PDF upload (and, later, an inbound-email address) → **`gemini-3.1-flash-lite`** (a vision LLM)
+  does **OCR + structured extraction in one call** → **draft events / list items** the user reviews &
+  confirms. **No OCR pre-stage** (Tesseract/`pypdf` dropped — Gemini reads images and PDFs natively).
+  The **same provider also drafts recipes** from a **photo or a link** (URL-context tool), feeding the
+  F15 recipe library / F28 grocery aggregation.
+- **BE:** `MagicImportJob` (state machine ingested→extracted→confirmed); ingest endpoints
+  (`/magic-import` upload; inbound-email webhook deferred); `ai/provider.py` `GeminiProvider` →
+  `response_schema` (Pydantic) JSON drafts; confirm → create real events/list-items/recipes.
+- **FE:** Upload/snap UI; "review extracted events" screen with edit-before-save (drafts never
+  auto-commit).
+- **AC:** A flyer photo yields a correctly-dated draft event the user can tweak and save; a recipe photo
+  **or URL** yields an editable recipe draft.
+- **Status (2026-06-25):** ☑ **Backend + FE built; live verification pending.** **BE:**
+  `app/ai/provider.py` (`GeminiProvider` + `get_provider()` DI seam, 15s timeout under the proxy),
+  `app/ai/normalize.py` (date/tz: year-inference, all-day fallback, 1 h default), `app/schemas/magic_import.py`
+  (drafts mirror `EventCreate`/`RecipeCreate`), `app/routers/magic_import.py`
+  (`POST /families/{id}/magic-import/{events, recipes/image, recipes/link}`; 503 unconfigured,
+  415/413/400 input guards; recipe-link uses a two-call url-context→`response_schema` fallback).
+  **Stateless** — no `MagicImportJob`, no migration; confirm **reuses the existing `POST /events` /
+  `POST /recipes`**. 14 tests in `tests/test_magic_import.py` (suite **155 green**); `docs/api.md`
+  regenerated. **FE:** `hooks/use-magic-import.ts`, `lib/file-to-base64.ts` (canvas downscale → base64),
+  `components/calendar/flyer-import-dialog.tsx` (toolbar **Import** on `/app`; multi-event review with
+  per-row save + `year/time guessed` badges) and `components/meals/recipe-import-dialog.tsx`
+  (Photo | Link → reuse `RecipeSheet` prefilled). `tsc` + `next build` + eslint clean. **Remaining:**
+  live smoke with a real `GEMINI_API_KEY` (SDK surface verified against `google-genai 2.10`:
+  model id, nested `response_schema`, `Tool(url_context=…)`).
 - _Phase 6_
 
 ---

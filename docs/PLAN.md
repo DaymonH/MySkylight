@@ -37,16 +37,22 @@ Both talk to one **FastAPI + SQLite** backend. Changes on a phone appear on the 
 |---|----------|--------|-----------|
 | D1 | Mobile strategy | **Responsive Next.js + PWA** (one app, `/device` + `/app`) | One codebase/deploy; installable on phones; native app can come later. |
 | D2 | External calendar sync | **Internal-first**; later phase adds **read-only pull** from Google + Apple/iCloud (+ ICS). No write-back. | Fastest path to a working product; read-only sidesteps the heaviest, riskiest work (two-way push, conflict resolution). Outlook/Cozi/Yahoo descoped. |
-| D3 | AI / Smart features | **DeepSeek** (OpenAI-compatible API) | Used for Magic Import parsing + smart recipe generation. Behind a thin provider interface so it's swappable. |
+| D3 | AI / Smart features | **Gemini 3.1 Flash-Lite** (vision LLM, `google-genai` SDK) | Magic Import (flyer→events; recipe-from-photo/link) + smart recipe generation. The vision model does OCR + structured extraction in one call (no OCR pre-stage). Behind a thin provider interface (`ai/provider.py`) so it's swappable. _(Was DeepSeek; switched 2026-06-25 — see notes.)_ |
 | D4 | Authentication | **Clerk** (identity only) | Clerk owns login, sessions, social/MFA. Backend verifies Clerk JWTs; **Family, roles & invitations stay in our DB** (we did *not* adopt Clerk Organizations). |
 
 ### Decision notes
-- **DeepSeek is text-first.** `api.deepseek.com` exposes `deepseek-chat` (V3) and
-  `deepseek-reasoner` (R1) — both text. **Magic Import** (photos/PDFs/flyers) therefore needs an
-  **OCR/extraction pre-stage** (PDF text via `pypdf`; scanned images/photos via an OCR engine such
-  as Tesseract/PaddleOCR) → then DeepSeek does the structured event extraction. The LLM layer is
-  isolated behind one interface (`ai/provider.py`) so a vision model can be swapped in later. Revalidate
-  DeepSeek's vision support when Phase 6 starts.
+- **AI provider = Gemini 3.1 Flash-Lite (decided 2026-06-25; was DeepSeek).** When Phase 6 was
+  revalidated, DeepSeek's hosted API still had **no vision/image input** — which would have forced an
+  OCR pre-stage (Tesseract/PaddleOCR + `pypdf`). Instead we use a **vision LLM that does OCR +
+  structured extraction in a single call**: `gemini-3.1-flash-lite` (~$0.10/$0.40 per 1M tokens —
+  negligible at family volume) via the `google-genai` SDK. It ingests **images and PDFs natively**,
+  supports **native structured output** (`response_mime_type="application/json"` + a Pydantic
+  `response_schema`), and has a **URL-context tool** (≤20 URLs/req) so a recipe can be imported from a
+  **link** as well as a photo. The **OCR pre-stage is dropped.** The LLM layer stays isolated behind one
+  interface (`ai/provider.py`) so the provider remains swappable (self-hosting DeepSeek-OCR on the
+  owner's RTX 2080 PC was viable, but all-API was chosen for simplicity). **Open item for build:**
+  confirm whether URL-context + `response_schema` combine in one call; if not, two-step (URL-context
+  fetch → second call with schema). `GEMINI_API_KEY` lives in the backend `.env`.
 - **Clerk handles identity only.** Clerk authenticates individual users (email, social, MFA, sessions).
   Our backend is a **resource server**: it verifies Clerk-issued JWTs via Clerk's **JWKS** (networkless) and
   maps the `sub` (Clerk user id) to our `User`. User lifecycle syncs through **Clerk webhooks** (Svix-verified
@@ -90,7 +96,7 @@ Both talk to one **FastAPI + SQLite** backend. Changes on a phone appear on the 
   rollovers, and (later) external-sync polling.
 - **Files**: local filesystem for photo uploads (screensaver), abstracted behind a storage
   interface for an S3-compatible backend later.
-- **AI**: DeepSeek via the OpenAI-compatible SDK, behind `ai/provider.py`.
+- **AI**: **Gemini 3.1 Flash-Lite** (vision LLM) via the `google-genai` SDK, behind `ai/provider.py`. Images/PDFs + native structured output + URL-context (recipe links); no OCR pre-stage.
 - **Recurrence**: `python-dateutil` (RRULE) + `icalendar` for `.ics` import/export.
 - **Testing**: `pytest` + `httpx` async client.
 
@@ -118,13 +124,13 @@ Both talk to one **FastAPI + SQLite** backend. Changes on a phone appear on the 
             │           photos · albums · weather · sync · magic-import · settings      │
             │                                                                           │
             │  Services: AuthN/Z · Recurrence(RRULE) · Realtime bus · Scheduler ·       │
-            │            Storage · Weather client · AI(DeepSeek) · Sync engine(later)   │
+            │            Storage · Weather client · AI(Gemini) · Sync engine(later)     │
             │                                                                           │
             │  Data: SQLAlchemy + Alembic  ──►  SQLite                                   │
             └───────────────────────────────────────────────────────────────────────────┘
                          │ external (Phase 6/7)        │
                          ▼                             ▼
-     Clerk (identity·JWT·webhooks) · DeepSeek/OCR · Google·Apple/iCloud (read-only) · Weather
+     Clerk (identity·JWT·webhooks) · Gemini Flash-Lite (vision) · Google·Apple/iCloud (read-only) · Weather
 ```
 
 ### Multi-tenancy & auth model
@@ -233,7 +239,7 @@ Each phase is independently shippable and has an **exit criteria**. Detailed tas
 | **3** | Tasks & routines | **Tasks Manager**: chores/tasks, assignment, recurring chores, **Routines** (morning/bedtime checklists), completion + streaks | A kid checks off a morning routine on the device; parent sees it on mobile. |
 | **4** | Lists & groceries | **Custom Lists** (to-dos/groceries), items, check/categorize/assign. _(Grocery → Instacart **descoped**.)_ | Shared grocery list edits sync across surfaces. |
 | **5** | Calendar Plus I | **Rewards** (star economy), **Rotating Chores** (F27, auto-rotate assignee), **Meal Planning** (slots → calendar), **Recipes** (manual/upload, structured ingredients), **Recipe → Grocery** (F28, aggregated list), **Photo Screensaver** (albums, idle slideshow) | Stars awarded on chore completion + redeemed; a rotating chore cycles members daily; meals show on calendar; a meal plan builds an aggregated grocery list; idle device shows album slideshow. |
-| **6** | Smart / AI | **Magic Import** (email/PDF/photo → OCR → DeepSeek → draft events → confirm), **Smart recipe** generation | Forwarded flyer becomes a reviewed, saved event; recipe generated from a prompt. |
+| **6** | Smart / AI | **Magic Import** (flyer photo/PDF → **Gemini Flash-Lite** → draft events → confirm), **Recipe quick-add** (photo **or link** → recipe draft → save), **Smart recipe** generation | A snapped/forwarded flyer becomes a reviewed, saved event; a recipe photo or URL becomes a saved recipe; a recipe is generated from a prompt. |
 | **7** | External sync | **ICS import/export** (F25, ✅) + **read-only pull** from **Google** (API) and **Apple/iCloud** (CalDAV) to display in-app. _(Outlook/Cozi/Yahoo descoped; write-back descoped — read-only only.)_ | A Google/iCloud event appears in MySkylight read-only; a calendar imports/exports as `.ics`. |
 | **8** | Device & system | **Device Linking** (pairing, multi-screen), **Sleep Mode**, orientation, default views | Two paired screens share data; screen sleeps/wakes on schedule. |
 | **9** | Polish & hardening | Web **push notifications** + reminder delivery, offline/PWA caching, a11y, kiosk wake-lock, perf, backups, deploy | Reminder fires as a push; app usable offline; Lighthouse PWA passes; one-command deploy. |
@@ -274,7 +280,8 @@ Each phase is independently shippable and has an **exit criteria**. Detailed tas
 | Risk / question | Impact | Mitigation |
 |---|---|---|
 | ~~Cozi has no public API~~ | ~~Can't truly two-way sync~~ | **Descoped (2026-06-15)** — household doesn't use Cozi. (F25's URL `.ics` import remains if ever needed.) |
-| **DeepSeek has no public vision API** | Magic Import on photos | OCR pre-stage; keep AI layer swappable; revalidate at Phase 6. |
+| ~~DeepSeek has no public vision API~~ | ~~Magic Import on photos~~ | **Resolved (2026-06-25)** — switched provider to **Gemini 3.1 Flash-Lite** (vision LLM; OCR + extraction in one call); OCR pre-stage dropped. See §2 D3. |
+| **Gemini URL-context + structured output combinability** | Recipe-from-link path | Not confirmed in docs; resolve empirically at build. Fallback: two-step (URL-context fetch → second call with `response_schema`). |
 | ~~Instacart API is partner-gated (US-only)~~ | ~~Grocery 1-tap order~~ | **Descoped** — feature dropped (owner doesn't use Instacart), so the risk no longer applies. |
 | **CalDAV quirks (Apple)** | Flaky sync | Use a battle-tested CalDAV client lib. **Read-only only** (write-back descoped 2026-06-15), which sidesteps the riskiest CalDAV write/ETag-conflict paths. (Yahoo descoped.) |
 | **Next.js 16 is pre-GA-ish / breaking** | FE churn | Follow bundled docs in `node_modules/next/dist/docs/`; pin versions. |

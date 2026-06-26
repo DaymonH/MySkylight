@@ -27,11 +27,11 @@ Update the **Progress summary** counts when you complete a phase. Tags: `[INFRA]
 |     3 | Tasks & routines                       |   ☑    |                           10 / 10                           |
 |     4 | Lists (groceries; Instacart descoped)  |   ☑    |                           7 / 7                             |
 |     5 | Calendar Plus I (rewards/chores/meals/grocery; F16 photos parked) |   ◐    |       19 / 21                |
-|     6 | Smart / AI (DeepSeek)                  |   ☐    |                           0 / 11                            |
+|     6 | Smart / AI (Gemini Flash-Lite)         |   ◐    |                           9 / 14                            |
 |     7 | External sync (Google + Apple, **read-only**; F19/F21/F22 descoped) |   ◐    |        12 / 15              |
 |     8 | Device & system                        |   ☐    |                           0 / 10                            |
 |     9 | Polish & hardening (+ F29 Walmart hand-off) |   ☐    |                      0 / 17                            |
-|       | **Total**                              |        |                        **106 / 148**                        |
+|       | **Total**                              |        |                        **115 / 151**                        |
 
 ---
 
@@ -237,21 +237,40 @@ revisit later; see its FEATURES entry).
 
 ---
 
-## Phase 6 — Smart / AI (DeepSeek) `☐` → F17, F15(AI)
+## Phase 6 — Smart / AI (Gemini Flash-Lite) `◐` (backend done; FE review UIs pending) → F17, F15(AI)
 
-Goal: Magic Import + smart recipe generation. **Revalidate DeepSeek vision support first (see PLAN §2).**
+Goal: Magic Import (flyer→events) + recipe quick-add (photo/link→recipe) + smart recipe generation.
+**Provider decided 2026-06-25: `gemini-3.1-flash-lite` (vision LLM), replacing DeepSeek — the vision
+model does OCR + extraction in one call, so the OCR pre-stage is dropped. See PLAN §2 D3.**
 
-- [ ] `[AI]` `ai/provider.py` — DeepSeek client (OpenAI-compatible), JSON-mode, prompt templates, swappable
-- [ ] `[BE]` `MagicImportJob` model + state machine (ingested→extracted→confirmed)
-- [ ] `[BE]` Ingest: image/PDF upload endpoint + inbound-email webhook address
-- [ ] `[BE]` OCR/extraction stage: PDF text (`pypdf`), images via OCR (Tesseract/PaddleOCR)
-- [ ] `[AI]` DeepSeek structured extraction → draft events/list items (strict JSON schema)
-- [ ] `[BE]` Confirm endpoint → create real events/items from drafts — **F17**
-- [ ] `[AI]` Smart recipe generation/parse via DeepSeek — **F15**
-- [ ] `[FE]` Upload/forward UI + "review extracted events" edit-before-save screen
-- [ ] `[FE]` "Generate recipe" in recipe library
-- [ ] `[ ] ` Tests: extraction JSON validation, confirm→create, failure/低-confidence handling
-- [ ] `[ ] ` AC: a flyer photo yields a correctly-dated, editable draft event
+**Foundation**
+
+- [x] `[AI]` `app/ai/provider.py` — `GeminiProvider` (`google-genai` SDK): `response_schema` structured output, image+PDF parts, URL-context tool, prompt templates; `get_provider()` DI seam (503 + test-mock point). `GEMINI_API_KEY`/`GEMINI_MODEL` in config; `google-genai>=2.0` dep
+- [x] `[BE]` Shared Pydantic draft schemas (`EventDraft[]`, `RecipeDraft`) in `app/schemas/magic_import.py` + pure date/tz normalizer `app/ai/normalize.py`. **`MagicImportJob` model + state machine deferred** — only needed for the async inbound-email path; v1 is **stateless** (extract → review → reuse create)
+- [x] `[BE]` Ingest endpoints: `POST /families/{id}/magic-import/{events, recipes/image, recipes/link}` (base64 image/PDF + URL; 503 unconfigured, 415/413/400 input guards). Inbound-email webhook deferred
+
+**Flow 1 — Flyer → calendar events (F17)**
+
+- [x] `[AI]` Gemini image/PDF → `EventDraft[]` (title, start/end, all-day, location, is_countdown). Backend normalizes dates via `family.timezone`: year-inference, all-day fallback, 1h default _(member/color left for the user to set in review — not AI-assigned)_
+- [x] `[BE]` Create real events from approved drafts — **satisfied by reuse of existing `POST /events`** (no new confirm endpoint; draft→create round-trip tested)
+- [ ] `[FE]` Upload/snap UI + "review extracted events" edit-before-save screen (drafts never auto-commit)
+
+**Flow 2 — Recipe photo OR link → recipes DB (F17/F15)**
+
+- [x] `[AI]` Gemini recipe **photo** → `RecipeDraft` (steps, tags, structured ingredients qty/unit/name)
+- [x] `[AI]` Gemini recipe-from-**link** via URL-context tool → `RecipeDraft` _(two-call fallback by default: url-context fetch → text → `response_schema`; one-call combo unverified server-side)_
+- [x] `[BE]` Create `Recipe` + `RecipeIngredient[]` — **reuse of existing `POST /recipes`** (round-trip tested); feeds F15 library / F28 aggregation
+- [ ] `[FE]` "Add from photo / paste a link" entry in the recipe library + review-before-save
+
+**Smart recipe generation (F15)** _(optional follow-on — not in current scope)_
+
+- [ ] `[AI]` Generate/parse a recipe from a text prompt via Gemini → `RecipeDraft`
+- [ ] `[FE]` "Generate recipe" in the recipe library
+
+**Tests & AC**
+
+- [x] `[ ] ` Tests: 14 in `tests/test_magic_import.py` — 503 unconfigured, role-gate, happy event/recipe, empty extraction, mime/size guards skip provider, provider-error→502, URL two-call fallback, pure normalizer, draft→create round-trip. Backend suite **155 green**
+- [~] `[ ] ` AC: backend proven (extraction + draft→create round-trip green); **FE review screens + live smoke pending** (Stages 6–7 / owner's real `GEMINI_API_KEY`)
 
 ---
 
@@ -360,8 +379,9 @@ Goal: notifications, offline, accessibility, performance, deploy.
 - Native mobile (Expo/React Native) deferred — PWA first; API stays client-agnostic (PLAN §9).
 - ~~Instacart~~ (**descoped** — owner doesn't use it; F05 dropped from Phase 4) → grocery hand-off
   instead lands as **F29** (personal Walmart UI automation, Phase 9 — spike at
-  `GithubProjects/WalmartGrocerySync`). DeepSeek vision (Phase 6) still has a research spike before its
-  phase — keep expectations realistic and ship graceful fallbacks. _(Cozi's spike is moot — F21 descoped.)_
+  `GithubProjects/WalmartGrocerySync`). **Phase 6 AI provider decided 2026-06-25: Gemini 3.1 Flash-Lite**
+  (vision LLM) — the DeepSeek-vision research spike is resolved and the OCR pre-stage is dropped (see
+  PLAN §2 D3). _(Cozi's spike is moot — F21 descoped.)_
 - External sync (Phase 7) is **read-only**: Google + Apple/iCloud events are pulled in to display only;
   MySkylight never writes back. Outlook (F19), Cozi (F21), and Yahoo (F22) are descoped (decided 2026-06-15).
 
