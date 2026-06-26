@@ -534,6 +534,14 @@ frontend (FE) pieces, and **acceptance criteria** (AC) that define "done".
   (Photo | Link → reuse `RecipeSheet` prefilled). `tsc` + `next build` + eslint clean. **Remaining:**
   live smoke with a real `GEMINI_API_KEY` (SDK surface verified against `google-genai 2.10`:
   model id, nested `response_schema`, `Tool(url_context=…)`).
+- **Enriched fields (2026-06-25 follow-on):** widened what the import captures and saves so a wide
+  range of flyers/recipes round-trip in full. **Events** now keep the AI-extracted `description` +
+  `location` (model already had the columns; the flyer review UI now shows + saves them — no
+  migration). **Recipes** gained `prep_minutes`, `cook_minutes`, `source_url` (recipes) and a per-
+  ingredient `section` grouping header (`recipe_ingredients`) — **migration `017`** (bare nullable
+  columns), plumbed through `RawRecipe`/`RecipeDraft` + the extraction prompt, the `RecipeSheet` form
+  (time inputs, source URL, grouped-ingredient editing with live section subheadings), and the recipe
+  card (total-time display). Suite **155 green**; `schema.sql` regenerated.
 - _Phase 6_
 
 ---
