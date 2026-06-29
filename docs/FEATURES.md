@@ -509,6 +509,14 @@ frontend (FE) pieces, and **acceptance criteria** (AC) that define "done".
   **requires** one for every chore before the plan can be generated/applied (amber “estimate?” + a gated
   button); **Apply persists** the chosen estimates back onto the tasks so they stick.
   `BalanceItemIn.effort` → `minutes` (1–1440). Suite **172** green.
+- **Update (2026-06-29) — balanced chores start today-onward (BE):** each managed (rotate/fixed) chore's
+  `start_date` is now **re-anchored to its soonest occurrence on/after today** (`_placements` sets
+  `start_date = occ[0]`, the first horizon occurrence ≥ today, for the weekday / day-of-month / keep
+  candidates alike). Because a task's series is anchored at `start_date`, this makes the chore's
+  **pre-today occurrences stop generating** — so applying a plan cleanly wipes the old/backlog
+  (overdue/"Missed") schedule and everything begins from the current day. Rotation phase alignment still
+  holds (with `start_date = occ[0]`, `k0 = 0` so the chosen starter lands on the first occurrence). No
+  schema/API change; +1 test (`test_apply_reanchors_start_to_today_and_clears_past`); suite **173** green.
 
 ### F28 — Recipe → Grocery List (ingredient aggregation) ⭐
 
