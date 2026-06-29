@@ -13,6 +13,7 @@ import {
   PencilIcon,
   PlusIcon,
   RepeatIcon,
+  SparklesIcon,
   StarIcon,
   Trash2Icon,
   XIcon,
@@ -32,6 +33,7 @@ import {
   useUpdateTask,
 } from "@/hooks/use-tasks"
 import { NO_ROUTINE, TaskSheet, type TaskFormValues } from "@/components/tasks/task-sheet"
+import { BalanceSheet } from "@/components/tasks/balance-sheet"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
@@ -104,6 +106,7 @@ export default function TasksPage({ params }: { params: Promise<{ familyId: stri
   }
 
   const [sheetOpen, setSheetOpen] = useState(false)
+  const [balanceOpen, setBalanceOpen] = useState(false)
   const [editing, setEditing] = useState<TaskOut | undefined>()
   const [defaultRoutineId, setDefaultRoutineId] = useState<string | undefined>()
   const [addingRoutine, setAddingRoutine] = useState(false)
@@ -217,6 +220,11 @@ export default function TasksPage({ params }: { params: Promise<{ familyId: stri
             {addingRoutine ? <XIcon /> : <FolderPlusIcon />}
             {addingRoutine ? "Cancel" : "Add routine"}
           </Button>
+          {tasks.some((t) => t.rrule) && (
+            <Button size="sm" variant="ghost" onClick={() => setBalanceOpen(true)}>
+              <SparklesIcon /> Balance chores
+            </Button>
+          )}
         </div>
       )}
 
@@ -310,6 +318,14 @@ export default function TasksPage({ params }: { params: Promise<{ familyId: stri
         members={members}
         defaultRoutineId={defaultRoutineId}
         editing={editing}
+      />
+
+      <BalanceSheet
+        open={balanceOpen}
+        onClose={() => setBalanceOpen(false)}
+        familyId={familyId}
+        members={members}
+        tasks={tasks}
       />
     </div>
   )

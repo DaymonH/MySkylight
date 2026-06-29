@@ -454,6 +454,40 @@ frontend (FE) pieces, and **acceptance criteria** (AC) that define "done".
   deferred — only worth it if fairness disputes ever matter.
 - _Depends on **F01** (Tasks). Phase 5._
 
+### F30 — Chore Load Balancer ⭐
+
+> _Families set **how often** each chore happens but find it hard to decide **which day** it lands on and
+> **who starts** so the load is spread out and no one gets buried. This auto-plans those two levers._
+
+- **Approach:** Chore frequency (`rrule` `FREQ`/`INTERVAL`) is left untouched; the balancer only sets the
+  two free levers per chore — the **day** (`rrule` `BYDAY` for weekly, day-of-month for monthly) and the
+  **rotation phase / who-starts** (member order). A short in-app wizard asks who's sharing, which days are
+  available, and per chore an effort weight (light/medium/heavy) + a mode (**Split** = rotate · **Fix** =
+  always one person · **Leave** = keep as-is but count its load). It then searches day + who-starts to
+  minimize an imbalance cost, and shows a **before→after** preview before applying.
+- **Optimizer (pure, no DB):** `app/services/chore_balancer.py` simulates the next 4 weeks on **actual
+  dates and weeks** (not horizon-averages — averaging would hide that a weekly-rotating chore alternates
+  each week) and scores: per-person fairness, per-week balance (the staggering lever), per-day clump
+  (spreads chores across days), per-person-per-day (anti-burying), and a peak tie-breaker. Greedy seed +
+  hill-climbing with random restarts; deterministic per `seed` so "Regenerate" gives a different layout
+  and Apply reproduces exactly what the preview showed.
+- **BE:** reuses the real recurrence/rotation engine so the preview matches the device. Balancer-managed
+  chores are normalized to `occurrence`/1 rotation re-anchored at the horizon, with member order chosen so
+  the engine assigns the picked starter to the first occurrence. No new tables/columns — only existing
+  `Task` fields are written. Endpoints (owner/adult): `POST …/tasks/balance-plan` (compute + preview),
+  `POST …/tasks/balance-plan/apply` (one-transaction bulk apply, emits `task.updated`).
+- **FE:** a 3-step "Balance chores ✨" wizard sheet (`components/tasks/balance-sheet.tsx`) off the Tasks &
+  routines page — people/days → per-chore effort+mode → preview (per-person weekly load before→after, a
+  typical-week heatmap, the busiest-day metric, and the per-chore change list) with Regenerate / Apply.
+- **AC:** a lopsided "everything falls to one person" setup rebalances toward even; two weekly chores land
+  on different days each starting with a different person; applying reproduces the previewed per-person
+  load exactly; frequency is never changed; pinned ("keep its day") and fixed chores are respected.
+- **Status (2026-06-29):** ☑ Full-stack done. **BE:** `chore_balancer.py` optimizer +
+  `compute_balance_plan`/`apply_balance_plan` in `app/services/tasks.py`, schemas + 2 endpoints; 7 tests
+  in `tests/test_balance.py` (suite **172** green), incl. an apply-matches-preview round-trip; `api.md`
+  regenerated (90 routes). **FE:** balance wizard + `useBalancePlan`/`useApplyBalancePlan` hooks; `tsc` +
+  lint clean. Builds on **F27**'s rotation engine.
+
 ### F28 — Recipe → Grocery List (ingredient aggregation) ⭐
 
 > _Inspired by **Skylight**'s "advanced grocery integration" (auto-calculates ingredient quantities for
@@ -739,7 +773,7 @@ frontend (FE) pieces, and **acceptance criteria** (AC) that define "done".
 |     2 | F23, F24, F06, F07, F08, F02, F26                    |
 |     3 | F01                                                  |
 |     4 | F04 _(F05 Instacart descoped)_                       |
-|     5 | F14, F15, F27, F28 _(F16 parked → revisit later)_    |
+|     5 | F14, F15, F27, F28, **F30** _(F16 parked → revisit later)_ |
 |     6 | F17, F15 (AI recipes + URL/photo recipe import)      |
 |     7 | **F25** ☑, **F18** (Google), **F20** (Apple) _(F19/F21/F22 descoped)_ |
 |     8 | F09, F12                                             |

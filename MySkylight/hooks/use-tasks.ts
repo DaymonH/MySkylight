@@ -3,6 +3,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useApi } from "@/hooks/use-api"
 import type {
+  BalanceApplyResult,
+  BalancePlan,
+  BalancePlanRequest,
+} from "@/lib/types/balance"
+import type {
   RotationOverrideOut,
   RotationOverrideScope,
   RoutineCreatePayload,
@@ -258,6 +263,39 @@ export function useClearRotationOverride(familyId: string) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["task-occurrences", familyId] })
       qc.invalidateQueries({ queryKey: ["task-streak", familyId] })
+    },
+  })
+}
+
+// ── Chore balancer ────────────────────────────────────────────────────────────
+
+/**
+ * Compute (without applying) a balanced day / who-starts plan plus a before→after
+ * preview. Pure-DB on the server, so it returns the plan right away; bump the
+ * request's `seed` to ask for a different balanced layout ("regenerate").
+ */
+export function useBalancePlan(familyId: string) {
+  const api = useApi()
+  return useMutation({
+    mutationFn: (req: BalancePlanRequest) =>
+      api.post<BalancePlan>(`/families/${familyId}/tasks/balance-plan`, req),
+  })
+}
+
+/**
+ * Apply the balanced plan for these inputs (deterministic per seed) in one write,
+ * then refresh tasks + occurrences so the new days/assignees show up everywhere.
+ */
+export function useApplyBalancePlan(familyId: string) {
+  const api = useApi()
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (req: BalancePlanRequest) =>
+      api.post<BalanceApplyResult>(`/families/${familyId}/tasks/balance-plan/apply`, req),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["tasks", familyId] })
+      qc.invalidateQueries({ queryKey: ["routines", familyId] })
+      qc.invalidateQueries({ queryKey: ["task-occurrences", familyId] })
     },
   })
 }

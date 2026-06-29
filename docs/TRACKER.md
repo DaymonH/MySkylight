@@ -186,7 +186,7 @@ Goal: shared lists. _(Instacart hand-off dropped — see below.)_
 
 ---
 
-## Phase 5 — Calendar Plus I `◐` (F14 ☑, F27 ☑, F15+F28 ☑; **F16 photos ⏸ parked**) → F14, F15, F27, F28
+## Phase 5 — Calendar Plus I `◐` (F14 ☑, F27 ☑, F15+F28 ☑, F30 ☑; **F16 photos ⏸ parked**) → F14, F15, F27, F28, F30
 
 Goal: rewards economy, meal planning + recipes (photo screensaver F16 parked — needs file storage,
 revisit later; see its FEATURES entry).
@@ -207,6 +207,13 @@ revisit later; see its FEATURES entry).
 - [x] `[BE]` **Rotation overrides: swap / skip / "not my week"** — **F27** _(2026-06-21: `TaskRotationOverride(task_id, occurrence_date, member_id nullable)`, migration `014`. Reassign (member set) or skip (NULL); revert = delete. Resolver applies via the override hook + returns `is_overridden`/`is_skipped`; swap targets = any active family member; `compute_streak` uses the effective assignee. Endpoints `GET`/`PUT`/`DELETE …/tasks/{id}/overrides[/{date}]` (owner/adult), `scope="turn"` fans across the bucket; emits `task.override_*`. 7 new tests, suite **135 green**)_
 - [x] `[FE]` **Swap/skip/reset dropdown on the device chore board** — **F27** _(`chore-board.tsx`: per-rotating-chore menu (owner/adult), "Skipped today" section with Restore, "Swapped in" marker; `useSetRotationOverride`/`useClearRotationOverride` in `use-tasks.ts`. `tsc` + lint clean)_
 - [ ] `[ ]` **Deferred:** true roster-change stability — add/remove/reorder roster still re-phases the cycle; overrides let you correct individual turns, but materializing resolved assignments (for fairness disputes) is unbuilt — **F27**
+
+**Chore load balancer — F30 `☑`** _(extends F27; auto-picks day + who-starts to even the load)_
+
+- [x] `[BE]` Pure optimizer `app/services/chore_balancer.py` — scores per-person fairness, per-week + per-day balance, day-spread (clump), anti-burying (person-day), peak; greedy + hill-climb w/ restarts, deterministic per `seed` — **F30** _(2026-06-29; scores on **actual dates/weeks** so weekly-rotating staggering is rewarded, not washed out by averaging)_
+- [x] `[BE]` `compute_balance_plan` / `apply_balance_plan` in `services/tasks.py` reuse the real recurrence + rotation engine (preview matches the device); managed chores normalized to `occurrence`/1 re-anchored at the horizon, member order chosen so the picked starter takes the first occurrence; no new tables/columns — **F30** _(endpoints `POST …/tasks/balance-plan` + `…/balance-plan/apply` (owner/adult), bulk apply in one txn, emits `task.updated`; `api.md` → 90 routes)_
+- [x] `[BE]` Tests: spread across days + stagger starters, even a lopsided load, fixed/keep/lock modes, **apply reproduces the previewed per-person load** — **F30** _(7 in `tests/test_balance.py`; suite **172 green**)_
+- [x] `[FE]` 3-step "Balance chores ✨" wizard off the Tasks page (`components/tasks/balance-sheet.tsx`): people + days → per-chore effort (light/med/heavy) + mode (Split/Fix/Leave) + keep-day → before→after preview (weekly load, typical-week heatmap, busiest-day, change list) w/ Regenerate + Apply — **F30** _(`useBalancePlan`/`useApplyBalancePlan` in `use-tasks.ts`; `lib/types/balance.ts`; `tsc` + lint clean)_
 
 **Meal planning & recipes — F15 / F28 `☑`**
 
