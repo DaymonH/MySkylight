@@ -4,6 +4,7 @@ import { use, useState, useEffect, useRef } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { toast } from "sonner"
 import {
+  CalendarDaysIcon,
   CheckIcon,
   ChevronDownIcon,
   ChevronUpIcon,
@@ -46,7 +47,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
-import { describeRotation, describeTaskRrule, withUntil } from "@/lib/recurrence"
+import { describeRotation, describeTaskRrule, scheduleDetail, withUntil } from "@/lib/recurrence"
 import { cn } from "@/lib/utils"
 import type { MemberBrief } from "@/lib/types/calendar"
 import type { RoutineOut, TaskCreatePayload, TaskOut } from "@/lib/types/task"
@@ -487,6 +488,13 @@ function TaskRow({
       <span className="size-3 shrink-0 rounded-full" style={{ backgroundColor: color }} />
       <div className="min-w-0 flex-1">
         <p className="truncate font-medium leading-tight">{task.title}</p>
+        {task.description && (
+          <p className="text-muted-foreground mt-0.5 truncate text-xs">{task.description}</p>
+        )}
+        <p className="text-muted-foreground mt-0.5 flex items-center gap-1 text-xs">
+          <CalendarDaysIcon className="size-3 shrink-0" />
+          <span className="truncate">{scheduleDetail(task)}</span>
+        </p>
         <div className="mt-1 flex flex-wrap items-center gap-1.5">
           <Badge variant="secondary">{describeTaskRrule(task.rrule)}</Badge>
           {task.assignment_strategy === "rotating" && (

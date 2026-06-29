@@ -164,6 +164,55 @@ function withEnd(label: string, rrule: string): string {
   return `${label} · until ${when}`
 }
 
+// ── Schedule detail for task rows ───────────────────────────────────────────
+// Pairs with describeTaskRrule (the recurrence chip): the chip says *how often*,
+// this says *when* — the date a task starts (or is due, for one-offs) and the
+// weekday / day-of-month a plain recurrence lands on, derived from start_date
+// when the pattern itself carries no explicit day-set (BYDAY).
+
+/** Format a YYYY-MM-DD as "Jun 15, 2026" (parsed local to avoid TZ drift). */
+export function formatTaskDate(ymd: string): string {
+  const [y, m, d] = ymd.split("-").map(Number)
+  return new Date(y, m - 1, d).toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  })
+}
+
+/** Full weekday name for a YYYY-MM-DD, e.g. "Monday". */
+function weekdayName(ymd: string): string {
+  const [y, m, d] = ymd.split("-").map(Number)
+  return new Date(y, m - 1, d).toLocaleDateString(undefined, { weekday: "long" })
+}
+
+/** Ordinal day-of-month for a YYYY-MM-DD, e.g. "15th". */
+function dayOfMonthOrdinal(ymd: string): string {
+  const day = Number(ymd.split("-")[2])
+  const suffixes = ["th", "st", "nd", "rd"]
+  const v = day % 100
+  const suffix = suffixes[(v - 20) % 10] ?? suffixes[v] ?? suffixes[0]
+  return `${day}${suffix}`
+}
+
+/**
+ * One-line plain-English schedule for a task row — the start (or due) date, plus
+ * the weekday/day-of-month a plain recurrence lands on when the recurrence chip
+ * doesn't already list specific days (BYDAY). For a one-off it's just the date.
+ */
+export function scheduleDetail(task: { start_date: string; rrule: string | null }): string {
+  if (!task.rrule) return formatTaskDate(task.start_date)
+  const parts: string[] = []
+  // Name the day only when the pattern has no explicit day-set of its own.
+  if (!task.rrule.includes("BYDAY=")) {
+    const iv = parseInterval(task.rrule)
+    if (iv?.unit === "week") parts.push(`on ${weekdayName(task.start_date)}s`)
+    else if (iv?.unit === "month") parts.push(`on the ${dayOfMonthOrdinal(task.start_date)}`)
+  }
+  parts.push(`from ${formatTaskDate(task.start_date)}`)
+  return parts.join(" · ")
+}
+
 // Coarse recurrence buckets for the chores "timeframe" filter. We only need the
 // FREQ — interval/byday detail is irrelevant to "show me the weekly chores".
 export type ChoreFrequency = "one-off" | "daily" | "weekly" | "monthly"
