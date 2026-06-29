@@ -11,8 +11,8 @@ import {
 } from "lucide-react"
 
 import {
+  useCleanupDuplicateEvents,
   useDisconnectExternalAccount,
-  useResyncExternalAccount,
   useSetCalendarSync,
   useSyncExternalAccount,
 } from "@/hooks/use-external-calendars"
@@ -61,7 +61,7 @@ export function ExternalAccountCard({
   account: ExternalAccountOut
 }) {
   const syncAccount = useSyncExternalAccount(familyId)
-  const resyncAccount = useResyncExternalAccount(familyId)
+  const cleanupDuplicates = useCleanupDuplicateEvents(familyId)
   const disconnect = useDisconnectExternalAccount(familyId)
   const setSync = useSetCalendarSync(familyId)
 
@@ -93,13 +93,15 @@ export function ExternalAccountCard({
     })
   }
 
-  function handleResync() {
-    resyncAccount.mutate(account.id, {
-      onSuccess: () =>
-        toast.success("Cleaning up…", {
-          description:
-            "Re-checking the source and removing leftover duplicates. Your calendar will refresh in a moment.",
-        }),
+  function handleCleanup() {
+    cleanupDuplicates.mutate(undefined, {
+      onSuccess: (res) =>
+        res.removed === 0
+          ? toast.success("No leftover duplicates found")
+          : toast.success(
+              `Removed ${res.removed} duplicate event${res.removed === 1 ? "" : "s"}`,
+              { description: "Your calendar will refresh in a moment." },
+            ),
       onError: (e) => {
         if (e instanceof ApiError && e.message) {
           toast.error("Clean-up failed", { description: e.message })
@@ -241,11 +243,11 @@ export function ExternalAccountCard({
               variant="ghost"
               size="sm"
               className="text-muted-foreground"
-              onClick={handleResync}
-              disabled={resyncAccount.isPending}
-              title="Re-check the source and remove leftover duplicate events"
+              onClick={handleCleanup}
+              disabled={cleanupDuplicates.isPending}
+              title="Remove leftover duplicate copies of synced events"
             >
-              {resyncAccount.isPending ? (
+              {cleanupDuplicates.isPending ? (
                 <Loader2Icon className="animate-spin" />
               ) : (
                 <WandSparklesIcon />

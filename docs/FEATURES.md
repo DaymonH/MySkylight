@@ -629,7 +629,18 @@ frontend (FE) pieces, and **acceptance criteria** (AC) that define "done".
     **background task** (its own session, like the scheduler) and returns **202** immediately — so the heavy
     CalDAV pull never hits the proxy timeout — then the realtime nudge refreshes the device when it finishes.
     +5 tests in `tests/test_external.py` (reconcile drop, incremental keeps, window guard, resync 202+queues,
-    resync 404); suite **162 green**. _Note: this clears stale rows within one calendar; if "duplicates" are
+    resync 404); suite **162 green**.
+- **Update (2026-06-29) — catch-all duplicate cleanup (the reconcile couldn't reach these):** reconcile only
+    prunes rows still linked (`external_calendar_id` + matching uid prefix) to a synced calendar. An earlier
+    migration left some mirror rows **unlinked / stale-linked**: they carry a provider uid (so the UI treats
+    them read-only — the user can't delete them) yet still render via the `external_calendar_id IS NULL`
+    branch, and reconcile can't see them — so "Clean up duplicates" (the resync) left them. New
+    `external_sync.cleanup_duplicate_mirror_events` + `POST …/external/cleanup-duplicates` (owner/adult): a
+    **pure-DB** pass that groups the family's *visible* mirror events by identity (title+start+end+all-day)
+    and, per group >1, keeps one copy (prefers the still-synced-linked one, else most-recently-updated) and
+    soft-deletes the rest. Skips toggled-off calendars' hidden events; mirrors are re-pullable so it's safe;
+    synchronous so it **returns the count removed** (the "Clean up duplicates" button now calls this and toasts
+    "Removed N"). +3 tests (collapse unlinked dupes, leave toggled-off alone, endpoint count); suite **165 green**. _Note: this clears stale rows within one calendar; if "duplicates" are
     instead two `ExternalCalendar` rows for the same real calendar (a reconnect that re-keyed the calendar
     id), "Sync now" reports "0 removed" and the extra calendar is toggled off instead — see TRACKER follow-up._
 - **Setup:** needs a Google Cloud OAuth client (ID/secret); for personal/self-hosted use, OAuth

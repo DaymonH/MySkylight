@@ -107,3 +107,22 @@ export function useResyncExternalAccount(familyId: string) {
       ),
   })
 }
+
+/**
+ * Collapse leftover duplicate read-only mirror events to one copy each — the
+ * catch-all for stale rows an old migration left behind that the sync reconcile
+ * can't reach. Pure DB on the server, so it returns the count removed right away.
+ */
+export function useCleanupDuplicateEvents(familyId: string) {
+  const api = useApi()
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: () =>
+      api.post<{ removed: number }>(
+        `/families/${familyId}/external/cleanup-duplicates`,
+      ),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["occurrences", familyId] })
+    },
+  })
+}
