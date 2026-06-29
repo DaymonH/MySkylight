@@ -16,7 +16,6 @@ import {
   Loader2Icon,
   PartyPopperIcon,
   RepeatIcon,
-  StarIcon,
   Undo2Icon,
 } from "lucide-react"
 import { toast } from "sonner"
@@ -634,7 +633,7 @@ function ChoreRow({
   onSkip: (scope: "occurrence" | "turn") => void
   onReset: () => void
 }) {
-  const { title, effective_color: color, up_next: upNext, star_value: stars } = occurrence
+  const { title, effective_color: color, up_next: upNext } = occurrence
   const style: CSSProperties = done
     ? { backgroundColor: color, borderColor: color }
     : { borderColor: color }
@@ -696,17 +695,6 @@ function ChoreRow({
           >
             <ClockIcon className="size-3.5" />
             {bucketLabel(minutes)}
-          </span>
-        )}
-        {!!stars && stars > 0 && (
-          <span
-            className={cn(
-              "flex shrink-0 items-center gap-1 text-sm font-semibold text-amber-500",
-              done && "opacity-40",
-            )}
-          >
-            <StarIcon className="size-4 fill-amber-400 text-amber-400" />
-            {stars}
           </span>
         )}
       </button>
@@ -791,7 +779,9 @@ function WeekGrid({
   onReset: (o: TaskOccurrenceOut) => void
 }) {
   return (
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7">
+    // 1 column stacked on narrow screens, a clean 7-across week on tablet/kiosk
+    // widths. 7 is prime, so any in-between count would wrap to a lonely cell.
+    <div className="grid grid-cols-1 gap-3 lg:grid-cols-7">
       {weekDates.map((date) => (
         <WeekDayColumn
           key={date}
@@ -871,7 +861,7 @@ function WeekDayColumn({
   return (
     <section
       className={cn(
-        "bg-card ring-foreground/5 flex flex-col gap-2 rounded-2xl p-3 shadow-sm ring-1",
+        "bg-card ring-foreground/5 flex min-w-0 flex-col gap-2 rounded-2xl p-3 shadow-sm ring-1",
         isToday && "ring-primary/50 ring-2",
       )}
     >
@@ -923,7 +913,9 @@ function WeekDayColumn({
                 className="size-2.5 shrink-0 rounded-full"
                 style={{ backgroundColor: o.effective_color }}
               />
-              <span className="text-muted-foreground truncate text-sm">{o.title}</span>
+              <span className="text-muted-foreground min-w-0 flex-1 truncate text-sm">
+                {o.title}
+              </span>
             </li>
           ))}
           {skipped.map((o) => (
@@ -932,7 +924,7 @@ function WeekDayColumn({
               className="flex items-center gap-2 rounded-xl border border-dashed px-2.5 py-1.5"
             >
               <BanIcon className="text-muted-foreground size-3.5 shrink-0" />
-              <span className="text-muted-foreground flex-1 truncate text-sm line-through">
+              <span className="text-muted-foreground min-w-0 flex-1 truncate text-sm line-through">
                 {o.title}
               </span>
               {canManage && (
@@ -978,13 +970,13 @@ function WeekChoreRow({
   onSkip: (scope: "occurrence" | "turn") => void
   onReset: () => void
 }) {
-  const { title, star_value: stars, up_next: upNext } = occurrence
+  const { title, up_next: upNext } = occurrence
   // The box doubles as the checkbox and the "who" cue: the assignee's initials in
   // their colour until done, then a check.
   const box: CSSProperties = done
     ? { backgroundColor: member.color, borderColor: member.color }
     : { borderColor: member.color, color: member.color }
-  const hasMeta = (minutes != null && minutes > 0) || stars > 0
+  const hasMeta = minutes != null && minutes > 0
 
   // Same swap/skip affordance as the Today view: only for a rotating chore (up_next
   // set) and only for owners/adults. A multi-day turn also offers "skip the turn".
@@ -1001,7 +993,7 @@ function WeekChoreRow({
         aria-pressed={done}
         title={title}
         className={cn(
-          "flex flex-1 items-center gap-2 rounded-xl border px-2.5 py-1.5 text-left transition-colors",
+          "flex min-w-0 flex-1 items-center gap-2 rounded-xl border px-2.5 py-1.5 text-left transition-colors",
           "focus-visible:ring-ring/40 focus-visible:outline-none focus-visible:ring-2",
           done ? "bg-muted/40" : "hover:bg-muted/40",
         )}
@@ -1022,19 +1014,9 @@ function WeekChoreRow({
             {title}
           </span>
           {hasMeta && (
-            <span className="text-muted-foreground mt-0.5 flex items-center gap-2 text-[11px]">
-              {minutes != null && minutes > 0 && (
-                <span className="flex items-center gap-0.5">
-                  <ClockIcon className="size-3" />
-                  {bucketLabel(minutes)}
-                </span>
-              )}
-              {stars > 0 && (
-                <span className="flex items-center gap-0.5 text-amber-500">
-                  <StarIcon className="size-3 fill-amber-400 text-amber-400" />
-                  {stars}
-                </span>
-              )}
+            <span className="text-muted-foreground mt-0.5 flex items-center gap-0.5 text-[11px]">
+              <ClockIcon className="size-3" />
+              {bucketLabel(minutes)}
             </span>
           )}
         </span>
