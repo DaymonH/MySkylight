@@ -8,6 +8,9 @@ import {
   ArrowLeftRightIcon,
   BanIcon,
   CheckIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  ClockIcon,
   EllipsisVerticalIcon,
   ListChecksIcon,
   Loader2Icon,
@@ -51,12 +54,16 @@ import {
   isOverdue,
   matchesStatus,
   matchesStatusForMember,
-  occurrenceDone,
+  relativeWeekLabel,
   todayYMD,
   weekDatesYMD,
+  weekRangeLabel,
   weekRangeYMD,
+  type CompletionStatus,
 } from "@/lib/chores"
 import { classifyFrequency, type ChoreFrequency } from "@/lib/recurrence"
+import { bucketLabel } from "@/components/tasks/time-wheel"
+import type { MemberBrief } from "@/lib/types/calendar"
 import type { TaskOccurrenceOut } from "@/lib/types/task"
 
 interface MemberRow {
@@ -104,16 +111,21 @@ export function ChoreBoard({ familyId }: { familyId: string }) {
   const today = todayYMD()
 
   const [view, setView] = useState<"today" | "week">("today")
-  const [selectedDate, setSelectedDate] = useState(today)
+  // Whole-week offset from the current week (0 = this week, 1 = next, -1 = last).
+  const [weekOffset, setWeekOffset] = useState(0)
   const [filters, setFilters] = useState<ChoreFilters>(DEFAULT_FILTERS)
 
-  const week = weekRangeYMD(today)
-  // Main window: just today, or the whole current week.
+  // The week currently in view (shifted by the prev/next buttons).
+  const weekAnchor = addDaysYMD(today, weekOffset * 7)
+  const week = weekRangeYMD(weekAnchor)
+  const weekDates = weekDatesYMD(weekAnchor)
+  // Main window: just today, or the whole viewed week.
   const mainFrom = view === "today" ? today : week.start
   const mainTo = view === "today" ? today : week.end
-  // "Missed" is everything still un-done *before* the main window — before today in
-  // day view, before the week's Sunday in week view (so within-week misses live in
-  // the day strip instead of being double-counted here).
+  // "Missed" only makes sense relative to today: it's un-done chores from *before*
+  // the main window. We show it in day view and on the current week, but not when
+  // paging to other weeks (a future week has nothing to "miss" yet).
+  const showMissed = view === "today" || weekOffset === 0
   const overdueAnchor = view === "today" ? today : week.start
   const overdueFrom = addDaysYMD(overdueAnchor, -OVERDUE_LOOKBACK_DAYS)
   const overdueTo = addDaysYMD(overdueAnchor, -1)
@@ -126,7 +138,12 @@ export function ChoreBoard({ familyId }: { familyId: string }) {
   const { data: routines = [] } = useRoutines(familyId)
   const { data: tasks = [] } = useTasks(familyId)
   const { data: mainOccs = [], isLoading } = useTaskOccurrences(familyId, mainFrom, mainTo)
-  const { data: pastOccs = [] } = useTaskOccurrences(familyId, overdueFrom, overdueTo)
+  const { data: pastOccs = [] } = useTaskOccurrences(
+    familyId,
+    overdueFrom,
+    overdueTo,
+    showMissed,
+  )
 
   const complete = useCompleteTask(familyId)
   const uncomplete = useUncompleteTask(familyId)
@@ -147,6 +164,13 @@ export function ChoreBoard({ familyId }: { familyId: string }) {
     [tasks],
   )
 
+  // task_id → estimated minutes (F30). Occurrences don't carry the estimate, so we
+  // join it from the task list to show each chore's time bucket on its card.
+  const minutesByTaskId = useMemo(
+    () => new Map<string, number | null>(tasks.map((t) => [t.id, t.estimated_minutes])),
+    [tasks],
+  )
+
   // routine_id → sort_order, so cards group chores in routine order ("Anytime" last).
   const routineOrder = useMemo(() => {
     const m = new Map<string, { name: string; sort: number }>()
@@ -159,21 +183,19 @@ export function ChoreBoard({ familyId }: { familyId: string }) {
     () => applyFilters(mainOccs, filters, freqByTaskId),
     [mainOccs, filters, freqByTaskId],
   )
-  // The day actually shown on the cards (today view pins to today).
-  const activeDate = view === "today" ? today : selectedDate
+  // Today view pins to today's chores (the rich per-member cards).
   const dayOccs = useMemo(
-    () => filteredMain.filter((o) => o.occurrence_date === activeDate),
-    [filteredMain, activeDate],
+    () => filteredMain.filter((o) => o.occurrence_date === today),
+    [filteredMain, today],
   )
 
-  // Per-day done/total for the week strip (respects active filters).
-  const weekDays = useMemo(() => {
-    if (view !== "week") return []
-    return weekDatesYMD(today).map((d) => {
-      const items = filteredMain.filter((o) => o.occurrence_date === d)
-      return { date: d, total: items.length, done: items.filter(occurrenceDone).length }
-    })
-  }, [view, filteredMain, today])
+  // Week view: every day's chores bucketed by date, so all seven show at once.
+  const occsByDate = useMemo(() => {
+    const m = new Map<string, TaskOccurrenceOut[]>()
+    for (const d of weekDatesYMD(week.start)) m.set(d, [])
+    for (const o of filteredMain) m.get(o.occurrence_date)?.push(o)
+    return m
+  }, [filteredMain, week.start])
 
   const overdueItems = useMemo(
     () =>
@@ -254,13 +276,15 @@ export function ChoreBoard({ familyId }: { familyId: string }) {
           month: "long",
           day: "numeric",
         })
-      : dayLabel(activeDate, today)
+      : `${relativeWeekLabel(weekOffset)} · ${weekRangeLabel(week.start, week.end)}`
 
-  const nothingToShow =
-    memberCards.length === 0 &&
-    unassigned.length === 0 &&
-    skippedItems.length === 0 &&
-    overdueItems.length === 0
+  // In week view the whole week is the body, so it's empty only when no day has
+  // anything; in today view it's the today cards plus the Missed section.
+  const bodyEmpty =
+    view === "today"
+      ? memberCards.length === 0 && unassigned.length === 0 && skippedItems.length === 0
+      : filteredMain.length === 0
+  const nothingToShow = bodyEmpty && overdueItems.length === 0
 
   return (
     <div className="flex h-full flex-col">
@@ -276,7 +300,11 @@ export function ChoreBoard({ familyId }: { familyId: string }) {
           type="single"
           variant="outline"
           value={view}
-          onValueChange={(v) => v && setView(v as "today" | "week")}
+          onValueChange={(v) => {
+            if (!v) return
+            setView(v as "today" | "week")
+            setWeekOffset(0) // always re-anchor on the current week when toggling
+          }}
         >
           <ToggleGroupItem value="today">Today</ToggleGroupItem>
           <ToggleGroupItem value="week">Week</ToggleGroupItem>
@@ -293,32 +321,38 @@ export function ChoreBoard({ familyId }: { familyId: string }) {
       </div>
 
       {view === "week" && (
-        <div className="thin-scrollbar flex gap-2 overflow-x-auto border-b px-5 py-2.5">
-          {weekDays.map(({ date, total, done }) => {
-            const { dow, day } = dayStripLabel(date)
-            const isActive = date === activeDate
-            const isToday = date === today
-            return (
-              <button
-                key={date}
-                type="button"
-                onClick={() => setSelectedDate(date)}
-                aria-pressed={isActive}
-                className={cn(
-                  "flex min-w-16 flex-col items-center gap-0.5 rounded-2xl border px-3 py-2 transition-colors",
-                  isActive ? "border-primary bg-primary/10" : "hover:bg-muted/40",
-                )}
-              >
-                <span className="text-muted-foreground text-xs font-medium uppercase">{dow}</span>
-                <span className={cn("text-lg font-semibold leading-none", isToday && "text-primary")}>
-                  {day}
-                </span>
-                <span className="text-muted-foreground text-[11px]">
-                  {total === 0 ? "—" : `${done}/${total}`}
-                </span>
-              </button>
-            )
-          })}
+        <div className="flex items-center gap-2 border-b px-5 py-2.5">
+          <button
+            type="button"
+            onClick={() => setWeekOffset((w) => w - 1)}
+            aria-label="Previous week"
+            className="text-muted-foreground hover:bg-muted/40 hover:text-foreground focus-visible:ring-ring/40 flex size-9 items-center justify-center rounded-xl border transition-colors focus-visible:outline-none focus-visible:ring-2"
+          >
+            <ChevronLeftIcon className="size-5" />
+          </button>
+          <button
+            type="button"
+            onClick={() => setWeekOffset((w) => w + 1)}
+            aria-label="Next week"
+            className="text-muted-foreground hover:bg-muted/40 hover:text-foreground focus-visible:ring-ring/40 flex size-9 items-center justify-center rounded-xl border transition-colors focus-visible:outline-none focus-visible:ring-2"
+          >
+            <ChevronRightIcon className="size-5" />
+          </button>
+          <p className="font-medium">
+            {relativeWeekLabel(weekOffset)}
+            <span className="text-muted-foreground ml-2 text-sm font-normal">
+              {weekRangeLabel(week.start, week.end)}
+            </span>
+          </p>
+          {weekOffset !== 0 && (
+            <button
+              type="button"
+              onClick={() => setWeekOffset(0)}
+              className="text-primary hover:bg-primary/10 ml-auto rounded-xl px-3 py-1.5 text-sm font-medium transition-colors"
+            >
+              This week
+            </button>
+          )}
         </div>
       )}
 
@@ -338,6 +372,7 @@ export function ChoreBoard({ familyId }: { familyId: string }) {
                 members={members}
                 today={today}
                 canManage={canManage}
+                minutesByTaskId={minutesByTaskId}
                 onToggle={toggle}
                 onSwap={swapTo}
                 onSkip={skip}
@@ -345,6 +380,7 @@ export function ChoreBoard({ familyId }: { familyId: string }) {
               />
             )}
 
+            {view === "today" ? (
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
               {memberCards.map(({ member, items }) => {
                 const groups = groupsFor(items)
@@ -397,6 +433,7 @@ export function ChoreBoard({ familyId }: { familyId: string }) {
                                     allMembers={members}
                                     canManage={canManage}
                                     done={done}
+                                    minutes={minutesByTaskId.get(o.task_id) ?? null}
                                     onToggle={() => toggle(o, member.id, done)}
                                     onSwap={(mid) => swapTo(o, mid)}
                                     onSkip={(scope) => skip(o, scope)}
@@ -471,6 +508,22 @@ export function ChoreBoard({ familyId }: { familyId: string }) {
                 </section>
               )}
             </div>
+            ) : (
+              <WeekGrid
+                weekDates={weekDates}
+                today={today}
+                occsByDate={occsByDate}
+                members={members}
+                status={filters.status}
+                routineOrder={routineOrder}
+                minutesByTaskId={minutesByTaskId}
+                canManage={canManage}
+                onToggle={toggle}
+                onSwap={swapTo}
+                onSkip={skip}
+                onReset={resetRotation}
+              />
+            )}
           </div>
         )}
       </div>
@@ -504,6 +557,7 @@ function OverdueSection({
   members,
   today,
   canManage,
+  minutesByTaskId,
   onToggle,
   onSwap,
   onSkip,
@@ -513,6 +567,7 @@ function OverdueSection({
   members: MemberRow[]
   today: string
   canManage: boolean
+  minutesByTaskId: Map<string, number | null>
   onToggle: (o: TaskOccurrenceOut, memberId: string, done: boolean) => void
   onSwap: (o: TaskOccurrenceOut, memberId: string) => void
   onSkip: (o: TaskOccurrenceOut, scope: "occurrence" | "turn") => void
@@ -537,6 +592,7 @@ function OverdueSection({
                 allMembers={members}
                 canManage={canManage}
                 done={false}
+                minutes={minutesByTaskId.get(o.task_id) ?? null}
                 dateLabel={`${m.name} · ${dayLabel(o.occurrence_date, today)}`}
                 onToggle={() => onToggle(o, m.id, false)}
                 onSwap={(mid) => onSwap(o, mid)}
@@ -557,6 +613,7 @@ function ChoreRow({
   allMembers,
   canManage,
   done,
+  minutes,
   dateLabel,
   onToggle,
   onSwap,
@@ -568,6 +625,8 @@ function ChoreRow({
   allMembers: MemberRow[]
   canManage: boolean
   done: boolean
+  /** Estimated time bucket (F30), shown as a chip; null when no estimate is set. */
+  minutes: number | null
   /** Optional sub-label (used by the Missed section to show who/when). */
   dateLabel?: string
   onToggle: () => void
@@ -628,6 +687,17 @@ function ChoreRow({
             </span>
           ) : null}
         </span>
+        {minutes != null && minutes > 0 && (
+          <span
+            className={cn(
+              "text-muted-foreground flex shrink-0 items-center gap-1 text-xs font-medium",
+              done && "opacity-40",
+            )}
+          >
+            <ClockIcon className="size-3.5" />
+            {bucketLabel(minutes)}
+          </span>
+        )}
         {!!stars && stars > 0 && (
           <span
             className={cn(
@@ -650,6 +720,335 @@ function ChoreRow({
               className="text-muted-foreground hover:bg-muted/40 hover:text-foreground focus-visible:ring-ring/40 flex items-center justify-center rounded-2xl border px-2.5 transition-colors focus-visible:outline-none focus-visible:ring-2"
             >
               <EllipsisVerticalIcon className="size-5" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-52">
+            {swapTargets.length > 0 && (
+              <>
+                <DropdownMenuLabel>Reassign</DropdownMenuLabel>
+                {swapTargets.map((m) => (
+                  <DropdownMenuItem key={m.id} onClick={() => onSwap(m.id)}>
+                    <ArrowLeftRightIcon /> Swap to {m.name}
+                  </DropdownMenuItem>
+                ))}
+                <DropdownMenuSeparator />
+              </>
+            )}
+            <DropdownMenuItem onClick={() => onSkip("occurrence")}>
+              <BanIcon /> Skip this one
+            </DropdownMenuItem>
+            {multiDayTurn && (
+              <DropdownMenuItem onClick={() => onSkip("turn")}>
+                <BanIcon /> Skip this whole turn
+              </DropdownMenuItem>
+            )}
+            {occurrence.is_overridden && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={onReset}>
+                  <Undo2Icon /> Reset to rotation
+                </DropdownMenuItem>
+              </>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
+    </div>
+  )
+}
+
+/**
+ * Week view: a column per day so the whole week is visible at once (no tab-per-day).
+ * Each column lists that day's chores as compact, tap-to-complete rows — one row per
+ * assigned member, so you can see who's on the hook and check off your own. Swap/skip
+ * stays on the Today view and the companion app, keeping the dense grid readable.
+ */
+function WeekGrid({
+  weekDates,
+  today,
+  occsByDate,
+  members,
+  status,
+  routineOrder,
+  minutesByTaskId,
+  canManage,
+  onToggle,
+  onSwap,
+  onSkip,
+  onReset,
+}: {
+  weekDates: string[]
+  today: string
+  occsByDate: Map<string, TaskOccurrenceOut[]>
+  members: MemberRow[]
+  status: CompletionStatus
+  routineOrder: Map<string, { name: string; sort: number }>
+  minutesByTaskId: Map<string, number | null>
+  canManage: boolean
+  onToggle: (o: TaskOccurrenceOut, memberId: string, done: boolean) => void
+  onSwap: (o: TaskOccurrenceOut, memberId: string) => void
+  onSkip: (o: TaskOccurrenceOut, scope: "occurrence" | "turn") => void
+  onReset: (o: TaskOccurrenceOut) => void
+}) {
+  return (
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7">
+      {weekDates.map((date) => (
+        <WeekDayColumn
+          key={date}
+          date={date}
+          today={today}
+          items={occsByDate.get(date) ?? []}
+          members={members}
+          status={status}
+          routineOrder={routineOrder}
+          minutesByTaskId={minutesByTaskId}
+          canManage={canManage}
+          onToggle={onToggle}
+          onSwap={onSwap}
+          onSkip={onSkip}
+          onReset={onReset}
+        />
+      ))}
+    </div>
+  )
+}
+
+function WeekDayColumn({
+  date,
+  today,
+  items,
+  members,
+  status,
+  routineOrder,
+  minutesByTaskId,
+  canManage,
+  onToggle,
+  onSwap,
+  onSkip,
+  onReset,
+}: {
+  date: string
+  today: string
+  items: TaskOccurrenceOut[]
+  members: MemberRow[]
+  status: CompletionStatus
+  routineOrder: Map<string, { name: string; sort: number }>
+  minutesByTaskId: Map<string, number | null>
+  canManage: boolean
+  onToggle: (o: TaskOccurrenceOut, memberId: string, done: boolean) => void
+  onSwap: (o: TaskOccurrenceOut, memberId: string) => void
+  onSkip: (o: TaskOccurrenceOut, scope: "occurrence" | "turn") => void
+  onReset: (o: TaskOccurrenceOut) => void
+}) {
+  const isToday = date === today
+  const { dow, day } = dayStripLabel(date)
+
+  // Cluster related chores (routine order, then title) without spending vertical
+  // space on routine sub-headers in a narrow column.
+  const sortOf = (o: TaskOccurrenceOut) =>
+    o.routine_id ? (routineOrder.get(o.routine_id)?.sort ?? 0) : Number.MAX_SAFE_INTEGER
+  const sorted = [...items].sort((a, b) => {
+    const sa = sortOf(a)
+    const sb = sortOf(b)
+    return sa === sb ? a.title.localeCompare(b.title) : sa - sb
+  })
+
+  const assigned = sorted.filter((o) => o.members.length > 0 && !o.is_skipped)
+  const unassigned = sorted.filter((o) => o.members.length === 0 && !o.is_skipped)
+  const skipped = sorted.filter((o) => o.is_skipped)
+
+  // done/total over assigned member-rows, ignoring the status filter (so the count
+  // reflects the day's whole load even when filtered to "to-do" or "done").
+  let total = 0
+  let done = 0
+  for (const o of assigned) {
+    for (const m of o.members) {
+      total += 1
+      if (o.completed_member_ids.includes(m.id)) done += 1
+    }
+  }
+
+  return (
+    <section
+      className={cn(
+        "bg-card ring-foreground/5 flex flex-col gap-2 rounded-2xl p-3 shadow-sm ring-1",
+        isToday && "ring-primary/50 ring-2",
+      )}
+    >
+      <header className="flex items-baseline justify-between">
+        <div className="flex items-baseline gap-1.5">
+          <span className="text-muted-foreground text-xs font-medium uppercase">{dow}</span>
+          <span className={cn("text-lg font-semibold leading-none", isToday && "text-primary")}>
+            {day}
+          </span>
+        </div>
+        <span className="text-muted-foreground text-[11px]">
+          {total === 0 ? "—" : `${done}/${total}`}
+        </span>
+      </header>
+
+      {sorted.length === 0 ? (
+        <p className="text-muted-foreground/50 py-3 text-center text-xs">Nothing</p>
+      ) : (
+        <ul className="flex flex-col gap-1.5">
+          {assigned.map((o) =>
+            o.members
+              .filter((m) => matchesStatusForMember(o, m.id, status))
+              .map((m) => {
+                const isDone = o.completed_member_ids.includes(m.id)
+                return (
+                  <li key={`${o.task_id}:${m.id}`}>
+                    <WeekChoreRow
+                      occurrence={o}
+                      member={m}
+                      allMembers={members}
+                      canManage={canManage}
+                      done={isDone}
+                      minutes={minutesByTaskId.get(o.task_id) ?? null}
+                      onToggle={() => onToggle(o, m.id, isDone)}
+                      onSwap={(mid) => onSwap(o, mid)}
+                      onSkip={(scope) => onSkip(o, scope)}
+                      onReset={() => onReset(o)}
+                    />
+                  </li>
+                )
+              }),
+          )}
+          {unassigned.map((o) => (
+            <li
+              key={o.task_id}
+              className="flex items-center gap-2 rounded-xl border px-2.5 py-1.5"
+            >
+              <span
+                className="size-2.5 shrink-0 rounded-full"
+                style={{ backgroundColor: o.effective_color }}
+              />
+              <span className="text-muted-foreground truncate text-sm">{o.title}</span>
+            </li>
+          ))}
+          {skipped.map((o) => (
+            <li
+              key={o.task_id}
+              className="flex items-center gap-2 rounded-xl border border-dashed px-2.5 py-1.5"
+            >
+              <BanIcon className="text-muted-foreground size-3.5 shrink-0" />
+              <span className="text-muted-foreground flex-1 truncate text-sm line-through">
+                {o.title}
+              </span>
+              {canManage && (
+                <button
+                  type="button"
+                  onClick={() => onReset(o)}
+                  aria-label={`Restore ${o.title}`}
+                  className="text-muted-foreground hover:text-foreground shrink-0"
+                >
+                  <Undo2Icon className="size-3.5" />
+                </button>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  )
+}
+
+/** One compact, tap-to-complete chore row in the week grid (one per assignee), with
+ *  a 3-dot menu for swap/skip/reset (shown for rotating chores when the user can manage). */
+function WeekChoreRow({
+  occurrence,
+  member,
+  allMembers,
+  canManage,
+  done,
+  minutes,
+  onToggle,
+  onSwap,
+  onSkip,
+  onReset,
+}: {
+  occurrence: TaskOccurrenceOut
+  member: MemberBrief
+  allMembers: MemberRow[]
+  canManage: boolean
+  done: boolean
+  minutes: number | null
+  onToggle: () => void
+  onSwap: (memberId: string) => void
+  onSkip: (scope: "occurrence" | "turn") => void
+  onReset: () => void
+}) {
+  const { title, star_value: stars, up_next: upNext } = occurrence
+  // The box doubles as the checkbox and the "who" cue: the assignee's initials in
+  // their colour until done, then a check.
+  const box: CSSProperties = done
+    ? { backgroundColor: member.color, borderColor: member.color }
+    : { borderColor: member.color, color: member.color }
+  const hasMeta = (minutes != null && minutes > 0) || stars > 0
+
+  // Same swap/skip affordance as the Today view: only for a rotating chore (up_next
+  // set) and only for owners/adults. A multi-day turn also offers "skip the turn".
+  const showMenu = canManage && upNext != null
+  const multiDayTurn =
+    occurrence.rotation_unit !== "occurrence" || occurrence.rotation_interval > 1
+  const swapTargets = allMembers.filter((m) => m.id !== member.id)
+
+  return (
+    <div className="flex items-stretch gap-1">
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-pressed={done}
+        title={title}
+        className={cn(
+          "flex flex-1 items-center gap-2 rounded-xl border px-2.5 py-1.5 text-left transition-colors",
+          "focus-visible:ring-ring/40 focus-visible:outline-none focus-visible:ring-2",
+          done ? "bg-muted/40" : "hover:bg-muted/40",
+        )}
+      >
+        <span
+          className="flex size-6 shrink-0 items-center justify-center rounded-md border-2 text-[10px] font-bold transition-all"
+          style={box}
+        >
+          {done ? <CheckIcon className="size-3.5 text-white" /> : initials(member.name)}
+        </span>
+        <span className="min-w-0 flex-1">
+          <span
+            className={cn(
+              "block truncate text-sm font-medium",
+              done && "text-muted-foreground line-through",
+            )}
+          >
+            {title}
+          </span>
+          {hasMeta && (
+            <span className="text-muted-foreground mt-0.5 flex items-center gap-2 text-[11px]">
+              {minutes != null && minutes > 0 && (
+                <span className="flex items-center gap-0.5">
+                  <ClockIcon className="size-3" />
+                  {bucketLabel(minutes)}
+                </span>
+              )}
+              {stars > 0 && (
+                <span className="flex items-center gap-0.5 text-amber-500">
+                  <StarIcon className="size-3 fill-amber-400 text-amber-400" />
+                  {stars}
+                </span>
+              )}
+            </span>
+          )}
+        </span>
+      </button>
+
+      {showMenu && (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              aria-label={`Options for ${title}`}
+              className="text-muted-foreground hover:bg-muted/40 hover:text-foreground focus-visible:ring-ring/40 flex shrink-0 items-center justify-center rounded-xl border px-1.5 transition-colors focus-visible:outline-none focus-visible:ring-2"
+            >
+              <EllipsisVerticalIcon className="size-4" />
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-52">

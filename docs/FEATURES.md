@@ -126,6 +126,18 @@ frontend (FE) pieces, and **acceptance criteria** (AC) that define "done".
   companion `FamilyMenu` now links **Chores** (the do/check view) separately from **Manage tasks** (the
   CRUD page). No backend change — `GET …/tasks/occurrences?from&to` already served arbitrary ranges.
   `next build` + typecheck + eslint clean; 25 backend task tests still green. Live two-device smoke pending.
+- **Update (2026-06-29) — device chore board: time buckets, week paging, full-week grid (FE):** three
+  refinements to `components/tasks/chore-board.tsx`. **(1) Time bucket on each card** — every chore row
+  (today cards, Missed rows, and the week grid) now shows a ⏱ chip with its F30 estimate via `bucketLabel`;
+  occurrences don't carry `estimated_minutes`, so it's joined client-side from `useTasks` (no BE change).
+  **(2) Week paging** — a `weekOffset` with ◀ / ▶ and a "This week" reset lets the week view show future
+  (and past) weeks; the **Missed** section is gated to today / the current week only (a future week has
+  nothing to miss yet, so its overdue query is disabled). **(3) Real week view** — replaced the
+  tap-a-day-tab behavior (which felt like a scrollable daily view) with a **7-day grid** (`WeekGrid` /
+  `WeekDayColumn`): every day shows at once as a column with a per-day done/total header and compact
+  tap-to-complete rows (`WeekChoreRow`, one per assignee, the colored initials box doubling as checkbox +
+  who-cue). Each rotating row keeps the **3-dot swap/skip/reset menu** (same affordance as the Today view);
+  `weekRangeLabel`/`relativeWeekLabel` added to `lib/chores.ts`. FE-only; `tsc` + eslint clean.
 - **Update (2026-06-25) — richer task editor (FE):** closed five gaps between the `Task` model and what the
   editor exposed. **(1) Color** — a swatch picker (`MEMBER_COLORS`, + "Auto" = inherit the assignee's
   color) wired to the long-unused `Task.color`. **(2) End date** — an optional "Ends" date on recurring

@@ -66,6 +66,23 @@ export function dayStripLabel(ymd: string): { dow: string; day: number } {
   return { dow: d.toLocaleDateString(undefined, { weekday: "short" }), day: d.getDate() }
 }
 
+/** A week's date span for a header, e.g. "Jun 28 – Jul 4". */
+export function weekRangeLabel(start: string, end: string): string {
+  const opts: Intl.DateTimeFormatOptions = { month: "short", day: "numeric" }
+  return `${parseYMD(start).toLocaleDateString(undefined, opts)} – ${parseYMD(end).toLocaleDateString(
+    undefined,
+    opts,
+  )}`
+}
+
+/** Relative name for a Sunday-aligned week `offset` weeks from the current one. */
+export function relativeWeekLabel(offset: number): string {
+  if (offset === 0) return "This week"
+  if (offset === 1) return "Next week"
+  if (offset === -1) return "Last week"
+  return offset > 0 ? `In ${offset} weeks` : `${-offset} weeks ago`
+}
+
 // ── Per-occurrence completion semantics ───────────────────────────────────────
 
 /** Assigned members who still owe this occurrence (not yet completed). */
