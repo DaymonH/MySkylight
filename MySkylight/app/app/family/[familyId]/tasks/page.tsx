@@ -34,6 +34,7 @@ import {
 } from "@/hooks/use-tasks"
 import { NO_ROUTINE, TaskSheet, type TaskFormValues } from "@/components/tasks/task-sheet"
 import { BalanceSheet } from "@/components/tasks/balance-sheet"
+import { bucketLabel } from "@/components/tasks/time-wheel"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
@@ -154,6 +155,8 @@ export default function TasksPage({ params }: { params: Promise<{ familyId: stri
           ? values.rotation_anchor_date || null
           : null,
       star_value: values.star_value,
+      // 0 in the form means "no estimate" — send null so the column clears.
+      estimated_minutes: values.estimated_minutes > 0 ? values.estimated_minutes : null,
       member_ids: values.member_ids,
     }
     try {
@@ -509,7 +512,10 @@ function TaskRow({
         )}
         <p className="text-muted-foreground mt-0.5 flex items-center gap-1 text-xs">
           <CalendarDaysIcon className="size-3 shrink-0" />
-          <span className="truncate">{scheduleDetail(task)}</span>
+          <span className="truncate">
+            {scheduleDetail(task)}
+            {task.estimated_minutes ? ` · ${bucketLabel(task.estimated_minutes)}` : ""}
+          </span>
         </p>
         <div className="mt-1 flex flex-wrap items-center gap-1.5">
           <Badge variant="secondary">{describeTaskRrule(task.rrule)}</Badge>

@@ -9,7 +9,7 @@ export type BalanceMode = "rotate" | "fixed" | "keep"
 export interface BalanceItemInput {
   task_id: string
   mode: BalanceMode
-  effort: number // 1 = light, 2 = medium, 3 = heavy
+  minutes: number // rough time-to-do; the load weight
   lock_day: boolean
   fixed_member_id?: string | null
 }

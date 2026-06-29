@@ -5,6 +5,8 @@ import { toast } from "sonner"
 import {
   ArrowRightIcon,
   CalendarRangeIcon,
+  ChevronDownIcon,
+  ClockIcon,
   Loader2Icon,
   RefreshCwIcon,
   ScaleIcon,
@@ -27,22 +29,20 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetFooter } from "@/components/ui/sheet"
+import { TimeWheel, TIME_BUCKETS, bucketLabel } from "@/components/tasks/time-wheel"
 import type { MemberBrief } from "@/lib/types/calendar"
 import type { TaskOut } from "@/lib/types/task"
 import type { BalanceMode, BalancePlan, BalancePlanRequest } from "@/lib/types/balance"
 
 interface ChoreConfig {
   mode: BalanceMode
-  effort: number // 1 light · 2 medium · 3 heavy
+  minutes: number // rough time-to-do (the load weight)
   lockDay: boolean
   fixedId: string
 }
 
-const EFFORTS = [
-  { value: "1", label: "Light" },
-  { value: "2", label: "Medium" },
-  { value: "3", label: "Heavy" },
-]
+// Assumed time for a chore with no saved estimate, until the user sets one.
+const DEFAULT_MINUTES = 15
 
 const MODES: { value: BalanceMode; label: string; hint: string }[] = [
   { value: "rotate", label: "Split", hint: "Take turns" },
@@ -90,7 +90,8 @@ export function BalanceSheet({
           t.id,
           {
             mode: "rotate" as BalanceMode,
-            effort: t.star_value >= 1 && t.star_value <= 3 ? t.star_value : 2,
+            // Port in the saved estimate; fall back to a default until the user sets one.
+            minutes: t.estimated_minutes ?? DEFAULT_MINUTES,
             lockDay: false,
             fixedId: t.members[0]?.id ?? allMembers[0] ?? "",
           },
@@ -118,7 +119,7 @@ export function BalanceSheet({
         return {
           task_id: t.id,
           mode: c.mode,
-          effort: c.effort,
+          minutes: Math.max(1, c.minutes || DEFAULT_MINUTES),
           lock_day: c.lockDay,
           fixed_member_id: c.mode === "fixed" ? c.fixedId || selectedMembers[0] : null,
         }
@@ -365,11 +366,13 @@ function Step2({
   selectedMembers: string[]
   memberById: Record<string, MemberBrief>
 }) {
+  const [openId, setOpenId] = useState<string | null>(null)
   return (
     <ul className="flex flex-col gap-3">
       {recurring.map((t) => {
         const c = config[t.id]
         if (!c) return null
+        const noEstimate = t.estimated_minutes == null
         return (
           <li key={t.id} className="bg-card ring-foreground/5 flex flex-col gap-3 rounded-2xl p-3 shadow-sm ring-1">
             <div className="min-w-0">
@@ -378,19 +381,27 @@ function Step2({
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
-              <ToggleGroup
-                type="single"
+              <Button
+                type="button"
                 variant="outline"
                 size="sm"
-                value={String(c.effort)}
-                onValueChange={(v) => v && setChore(t.id, { effort: Number(v) })}
+                onClick={() => setOpenId((id) => (id === t.id ? null : t.id))}
+                className={cn(
+                  "gap-1.5",
+                  noEstimate && "border-amber-400 text-amber-700 dark:text-amber-300",
+                )}
               >
-                {EFFORTS.map((e) => (
-                  <ToggleGroupItem key={e.value} value={e.value} className="px-2.5 text-xs">
-                    {e.label}
-                  </ToggleGroupItem>
-                ))}
-              </ToggleGroup>
+                <ClockIcon className="size-3.5" />
+                {bucketLabel(c.minutes)}
+                <ChevronDownIcon
+                  className={cn("size-3.5 transition-transform", openId === t.id && "rotate-180")}
+                />
+              </Button>
+              {noEstimate && (
+                <span className="text-xs font-medium text-amber-600 dark:text-amber-400">
+                  estimate?
+                </span>
+              )}
 
               <ToggleGroup
                 type="single"
@@ -412,6 +423,16 @@ function Step2({
                 ))}
               </ToggleGroup>
             </div>
+
+            {openId === t.id && (
+              <div className="bg-background rounded-2xl border">
+                <TimeWheel
+                  buckets={TIME_BUCKETS}
+                  value={c.minutes}
+                  onChange={(rep) => setChore(t.id, { minutes: rep })}
+                />
+              </div>
+            )}
 
             {c.mode === "fixed" && (
               <Select value={c.fixedId} onValueChange={(v) => setChore(t.id, { fixedId: v })}>
@@ -493,11 +514,13 @@ function Step3({
             <span className="text-muted-foreground tabular-nums">{p.before_per_week}</span>
             <ArrowRightIcon className="text-muted-foreground size-3.5" />
             <span className="font-semibold tabular-nums">{p.after_per_week}</span>
+            <span className="text-muted-foreground text-xs">min/wk</span>
           </div>
         ))}
         <p className="text-muted-foreground text-xs">
-          Busiest day for one person: {plan.preview.busiest_before} → {plan.preview.busiest_after}.
-          Gap between people: {plan.preview.imbalance_before} → {plan.preview.imbalance_after}.
+          Busiest day for one person: {plan.preview.busiest_before} → {plan.preview.busiest_after}{" "}
+          min. Gap between people: {plan.preview.imbalance_before} →{" "}
+          {plan.preview.imbalance_after} min/wk.
         </p>
       </div>
 

@@ -47,6 +47,7 @@ import {
   type IntervalUnit,
   type WeekdayCode,
 } from "@/lib/recurrence"
+import { TimeWheel, TIME_BUCKETS, UNSET_BUCKET } from "@/components/tasks/time-wheel"
 import { MEMBER_COLORS } from "@/lib/colors"
 import { cn } from "@/lib/utils"
 import type { MemberBrief } from "@/lib/types/calendar"
@@ -66,6 +67,8 @@ const schema = z.object({
   rrule: z.string(),
   end_date: z.string(), // YYYY-MM-DD, or "" for "repeats forever"
   star_value: z.number().int().min(0).max(999),
+  // Rough time-to-do in minutes; 0 means "no estimate" (sent as null).
+  estimated_minutes: z.number().int().min(0).max(1440),
   member_ids: z.array(z.string()),
   rotate: z.boolean(),
   rotation_unit: z.enum(["occurrence", "day", "week", "month"]),
@@ -135,6 +138,7 @@ export function TaskSheet({
       rrule: "none",
       end_date: "",
       star_value: 1,
+      estimated_minutes: 0,
       member_ids: [],
       rotate: false,
       rotation_unit: "occurrence",
@@ -176,6 +180,7 @@ export function TaskSheet({
         rrule: pattern,
         end_date: parseUntil(stored) ?? "",
         star_value: editing.star_value,
+        estimated_minutes: editing.estimated_minutes ?? 0,
         member_ids: editing.members.map((m) => m.id),
         rotate: editing.assignment_strategy === "rotating",
         rotation_unit: editing.rotation_unit ?? "occurrence",
@@ -196,6 +201,7 @@ export function TaskSheet({
         rrule: "none",
         end_date: "",
         star_value: 1,
+        estimated_minutes: 0,
         member_ids: [],
         rotate: false,
         rotation_unit: "occurrence",
@@ -482,6 +488,27 @@ export function TaskSheet({
               />
               <p className="text-muted-foreground text-xs">
                 Stars the member earns each time they check this off. Set 0 for no reward.
+              </p>
+            </div>
+
+            {/* Estimated time (F30 — feeds the chore balancer) */}
+            <div className="space-y-1.5">
+              <Label>How long does it take?</Label>
+              <Controller
+                name="estimated_minutes"
+                control={control}
+                render={({ field }) => (
+                  <div className="rounded-2xl border">
+                    <TimeWheel
+                      buckets={[UNSET_BUCKET, ...TIME_BUCKETS]}
+                      value={field.value}
+                      onChange={field.onChange}
+                    />
+                  </div>
+                )}
+              />
+              <p className="text-muted-foreground text-xs">
+                Spin to pick a range. Used to balance the load fairly when you auto-plan chores.
               </p>
             </div>
 

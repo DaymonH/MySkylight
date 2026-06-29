@@ -22,6 +22,7 @@ export interface TaskOut {
   rotation_interval: number
   rotation_anchor_date: string | null // YYYY-MM-DD; null falls back to start_date
   star_value: number
+  estimated_minutes: number | null // rough time-to-do (F30); weight for the balancer
   created_at: string
   updated_at: string
   // The full roster, in rotation order (matters when rotating).
@@ -91,6 +92,7 @@ export interface TaskCreatePayload {
   rotation_interval?: number
   rotation_anchor_date?: string | null
   star_value?: number
+  estimated_minutes?: number | null
   // Order is the rotation roster order when rotating.
   member_ids?: string[]
 }

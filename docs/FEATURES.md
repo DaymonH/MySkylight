@@ -487,6 +487,15 @@ frontend (FE) pieces, and **acceptance criteria** (AC) that define "done".
   in `tests/test_balance.py` (suite **172** green), incl. an apply-matches-preview round-trip; `api.md`
   regenerated (90 routes). **FE:** balance wizard + `useBalancePlan`/`useApplyBalancePlan` hooks; `tsc` +
   lint clean. Builds on **F27**'s rotation engine.
+- **Update (2026-06-29) — time-based effort via a rolling wheel:** replaced the coarse
+  light/medium/heavy weight with a real **time estimate**, picked from **time buckets** (0–5, 5–10,
+  10–15, 15–20, 20–30, 30–45, 45–60, 1–1.5 hr, 1.5–2 hr, 2+ hr) on a touch-friendly **rolling wheel**
+  (`components/tasks/time-wheel.tsx`, dependency-free scroll-snap). New `Task.estimated_minutes` column
+  (nullable; migration `018`; stores the bucket's representative minutes), set in the task editor and
+  shown on the task row, and used directly as the balancer's load weight — so the preview reads in
+  **min/wk**. The wizard **ports in** each chore's saved estimate (a tap-to-expand wheel per chore) and
+  flags any without one (amber “estimate?”); **Apply persists** the chosen estimates back onto the tasks
+  so they stick. `BalanceItemIn.effort` → `minutes` (1–1440). Suite **172** green.
 
 ### F28 — Recipe → Grocery List (ingredient aggregation) ⭐
 
