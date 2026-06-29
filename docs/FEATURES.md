@@ -607,6 +607,22 @@ frontend (FE) pieces, and **acceptance criteria** (AC) that define "done".
     PATCH/DELETE on a mirror — so a local change can never be silently clobbered on the next pull. FE
     typecheck + lint clean.
   - **TODO:** **live end-to-end** only — needs a real Google Cloud OAuth client + account.
+  - **Update (2026-06-28) — reconcile-on-full-pull (fixes long-lived mirror "duplicates"):** the mirror
+    engine previously only ever *added/updated* rows and *removed* one only on an explicit upstream
+    tombstone — it had **no reconcile-by-absence**, so any row whose key stopped matching the source (events
+    deleted while a sync token was stale, or rows orphaned by an earlier keying/linkage such as the Model-B
+    refactor) lingered forever and re-sync couldn't clear them. `apply_mirror_events` now takes
+    `reconcile`/`window_start`: on a **full** pull (complete snapshot) it soft-deletes any prefixed mirror
+    row the snapshot didn't contain, so the mirror converges to exactly what the source has. It runs **only**
+    on a full pull (an incremental delta would wipe everything); a `window_start` guard protects one-offs
+    ending before the pull's time bound (recurring masters are always in a full pull, so always reconcilable).
+    `EventsPage.time_min` reports the Google window. The user-initiated **"Sync now"** now does a full
+    reconciling pull (`sync_account(force_full=True)`); the 30-min background scheduler stays incremental and
+    self-heals on Google's periodic token expiry (410 → full pull). Shared by Apple/CalDAV (whole-collection
+    snapshot, no window). +3 tests in `tests/test_external.py` (reconcile drop, incremental keeps, window
+    guard); suite **160 green**. _Note: this clears stale rows within one calendar; if "duplicates" are
+    instead two `ExternalCalendar` rows for the same real calendar (a reconnect that re-keyed the calendar
+    id), "Sync now" reports "0 removed" and the extra calendar is toggled off instead — see TRACKER follow-up._
 - **Setup:** needs a Google Cloud OAuth client (ID/secret); for personal/self-hosted use, OAuth
   "testing" mode with the household's own accounts as test users avoids Google's app-verification review.
 - **AC:** ✅ (code-complete) A Google event appears in MySkylight, **read-only and not editable in-app**
