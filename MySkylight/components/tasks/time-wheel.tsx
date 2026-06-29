@@ -114,7 +114,13 @@ export function TimeWheel({
           <button
             key={b.label}
             type="button"
-            onClick={() => ref.current?.scrollTo({ top: i * ITEM_H, behavior: "smooth" })}
+            onClick={() => {
+              // Always commit on tap — even if this row is already centred — so
+              // picking the default bucket still counts as "set".
+              setActive(i)
+              ref.current?.scrollTo({ top: i * ITEM_H, behavior: "smooth" })
+              onChange(b.rep)
+            }}
             className={cn(
               "flex w-full snap-center items-center justify-center text-sm transition-all",
               i === active ? "text-foreground font-semibold" : "text-muted-foreground/50 scale-90",

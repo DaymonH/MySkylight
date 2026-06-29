@@ -494,8 +494,9 @@ frontend (FE) pieces, and **acceptance criteria** (AC) that define "done".
   (nullable; migration `018`; stores the bucket's representative minutes), set in the task editor and
   shown on the task row, and used directly as the balancer's load weight — so the preview reads in
   **min/wk**. The wizard **ports in** each chore's saved estimate (a tap-to-expand wheel per chore) and
-  flags any without one (amber “estimate?”); **Apply persists** the chosen estimates back onto the tasks
-  so they stick. `BalanceItemIn.effort` → `minutes` (1–1440). Suite **172** green.
+  **requires** one for every chore before the plan can be generated/applied (amber “estimate?” + a gated
+  button); **Apply persists** the chosen estimates back onto the tasks so they stick.
+  `BalanceItemIn.effort` → `minutes` (1–1440). Suite **172** green.
 
 ### F28 — Recipe → Grocery List (ingredient aggregation) ⭐
 

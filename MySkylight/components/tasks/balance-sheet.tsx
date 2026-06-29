@@ -36,13 +36,14 @@ import type { BalanceMode, BalancePlan, BalancePlanRequest } from "@/lib/types/b
 
 interface ChoreConfig {
   mode: BalanceMode
-  minutes: number // rough time-to-do (the load weight)
+  minutes: number | null // rough time-to-do (the load weight); null = not set yet
   lockDay: boolean
   fixedId: string
 }
 
-// Assumed time for a chore with no saved estimate, until the user sets one.
-const DEFAULT_MINUTES = 15
+// Fallback weight if a chore somehow reaches the request unset (the wizard blocks
+// this — Apply is gated until every chore has an estimate).
+const FALLBACK_MINUTES = 15
 
 const MODES: { value: BalanceMode; label: string; hint: string }[] = [
   { value: "rotate", label: "Split", hint: "Take turns" },
@@ -90,8 +91,8 @@ export function BalanceSheet({
           t.id,
           {
             mode: "rotate" as BalanceMode,
-            // Port in the saved estimate; fall back to a default until the user sets one.
-            minutes: t.estimated_minutes ?? DEFAULT_MINUTES,
+            // Port in the saved estimate; null means the user must set one here.
+            minutes: t.estimated_minutes ?? null,
             lockDay: false,
             fixedId: t.members[0]?.id ?? allMembers[0] ?? "",
           },
@@ -119,7 +120,7 @@ export function BalanceSheet({
         return {
           task_id: t.id,
           mode: c.mode,
-          minutes: Math.max(1, c.minutes || DEFAULT_MINUTES),
+          minutes: Math.max(1, c.minutes ?? FALLBACK_MINUTES),
           lock_day: c.lockDay,
           fixed_member_id: c.mode === "fixed" ? c.fixedId || selectedMembers[0] : null,
         }
@@ -157,6 +158,7 @@ export function BalanceSheet({
   }
 
   const canShare = selectedMembers.length >= 1
+  const missingEstimates = recurring.filter((t) => config[t.id]?.minutes == null).length
   const plan = balancePlan.data
 
   return (
@@ -232,8 +234,15 @@ export function BalanceSheet({
             </Button>
           )}
           {step === 2 && (
-            <Button type="button" className="flex-1" onClick={goToPreview}>
-              See the plan
+            <Button
+              type="button"
+              className="flex-1"
+              onClick={goToPreview}
+              disabled={missingEstimates > 0}
+            >
+              {missingEstimates > 0
+                ? `Set ${missingEstimates} estimate${missingEstimates === 1 ? "" : "s"}`
+                : "See the plan"}
             </Button>
           )}
           {step === 3 && (
@@ -367,12 +376,19 @@ function Step2({
   memberById: Record<string, MemberBrief>
 }) {
   const [openId, setOpenId] = useState<string | null>(null)
+  const missing = recurring.filter((t) => config[t.id]?.minutes == null).length
   return (
-    <ul className="flex flex-col gap-3">
+    <div className="flex flex-col gap-3">
+      {missing > 0 && (
+        <p className="rounded-2xl bg-amber-50 px-3.5 py-2.5 text-xs text-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
+          Set a time for {missing} highlighted chore{missing === 1 ? "" : "s"} to continue.
+        </p>
+      )}
+      <ul className="flex flex-col gap-3">
       {recurring.map((t) => {
         const c = config[t.id]
         if (!c) return null
-        const noEstimate = t.estimated_minutes == null
+        const noEstimate = c.minutes == null
         return (
           <li key={t.id} className="bg-card ring-foreground/5 flex flex-col gap-3 rounded-2xl p-3 shadow-sm ring-1">
             <div className="min-w-0">
@@ -392,7 +408,7 @@ function Step2({
                 )}
               >
                 <ClockIcon className="size-3.5" />
-                {bucketLabel(c.minutes)}
+                {c.minutes == null ? "Set time" : bucketLabel(c.minutes)}
                 <ChevronDownIcon
                   className={cn("size-3.5 transition-transform", openId === t.id && "rotate-180")}
                 />
@@ -462,7 +478,8 @@ function Step2({
           </li>
         )
       })}
-    </ul>
+      </ul>
+    </div>
   )
 }
 
