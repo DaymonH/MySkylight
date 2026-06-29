@@ -624,8 +624,12 @@ frontend (FE) pieces, and **acceptance criteria** (AC) that define "done".
     a generic "Sync failed" toast. Manual "Sync now" is back to a fast **incremental** pull; reconcile stays
     on the off-request-path full pulls above. The sync endpoint now also maps errors precisely — 409
     reconnect / 502 with the provider message / 500 with the error type — and the FE shows that detail
-    instead of a vague catch-all.) +3 tests in `tests/test_external.py` (reconcile drop, incremental keeps,
-    window guard); suite **160 green**. _Note: this clears stale rows within one calendar; if "duplicates" are
+    instead of a vague catch-all.) For an **on-demand** clean-up there's a separate **"Clean up duplicates"**
+    action (`POST …/external/accounts/{id}/resync`, owner/adult) that runs the full reconcile as a FastAPI
+    **background task** (its own session, like the scheduler) and returns **202** immediately — so the heavy
+    CalDAV pull never hits the proxy timeout — then the realtime nudge refreshes the device when it finishes.
+    +5 tests in `tests/test_external.py` (reconcile drop, incremental keeps, window guard, resync 202+queues,
+    resync 404); suite **162 green**. _Note: this clears stale rows within one calendar; if "duplicates" are
     instead two `ExternalCalendar` rows for the same real calendar (a reconnect that re-keyed the calendar
     id), "Sync now" reports "0 removed" and the extra calendar is toggled off instead — see TRACKER follow-up._
 - **Setup:** needs a Google Cloud OAuth client (ID/secret); for personal/self-hosted use, OAuth

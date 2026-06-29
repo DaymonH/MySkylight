@@ -7,10 +7,12 @@ import {
   RefreshCwIcon,
   Trash2Icon,
   TriangleAlertIcon,
+  WandSparklesIcon,
 } from "lucide-react"
 
 import {
   useDisconnectExternalAccount,
+  useResyncExternalAccount,
   useSetCalendarSync,
   useSyncExternalAccount,
 } from "@/hooks/use-external-calendars"
@@ -59,6 +61,7 @@ export function ExternalAccountCard({
   account: ExternalAccountOut
 }) {
   const syncAccount = useSyncExternalAccount(familyId)
+  const resyncAccount = useResyncExternalAccount(familyId)
   const disconnect = useDisconnectExternalAccount(familyId)
   const setSync = useSetCalendarSync(familyId)
 
@@ -85,6 +88,23 @@ export function ExternalAccountCard({
           toast.error("Sync failed", { description: e.message })
         } else {
           toast.error("Sync failed. Please try again.")
+        }
+      },
+    })
+  }
+
+  function handleResync() {
+    resyncAccount.mutate(account.id, {
+      onSuccess: () =>
+        toast.success("Cleaning up…", {
+          description:
+            "Re-checking the source and removing leftover duplicates. Your calendar will refresh in a moment.",
+        }),
+      onError: (e) => {
+        if (e instanceof ApiError && e.message) {
+          toast.error("Clean-up failed", { description: e.message })
+        } else {
+          toast.error("Clean-up failed. Please try again.")
         }
       },
     })
@@ -199,20 +219,40 @@ export function ExternalAccountCard({
 
         <Separator />
 
-        <div className="flex items-center justify-between">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleSync}
-            disabled={syncAccount.isPending}
-          >
-            {syncAccount.isPending ? (
-              <Loader2Icon className="animate-spin" />
-            ) : (
-              <RefreshCwIcon />
-            )}
-            Sync now
-          </Button>
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleSync}
+              disabled={syncAccount.isPending}
+            >
+              {syncAccount.isPending ? (
+                <Loader2Icon className="animate-spin" />
+              ) : (
+                <RefreshCwIcon />
+              )}
+              Sync now
+            </Button>
+
+            {/* Full reconciling re-pull — removes leftover duplicate rows the
+                source no longer has. Runs in the background (see the hook). */}
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-muted-foreground"
+              onClick={handleResync}
+              disabled={resyncAccount.isPending}
+              title="Re-check the source and remove leftover duplicate events"
+            >
+              {resyncAccount.isPending ? (
+                <Loader2Icon className="animate-spin" />
+              ) : (
+                <WandSparklesIcon />
+              )}
+              Clean up duplicates
+            </Button>
+          </div>
 
           <AlertDialog>
             <AlertDialogTrigger asChild>

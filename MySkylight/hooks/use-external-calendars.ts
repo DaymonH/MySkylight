@@ -92,3 +92,18 @@ export function useSyncExternalAccount(familyId: string) {
     },
   })
 }
+
+/**
+ * Queue a full, reconciling re-pull that clears stale duplicate mirror rows the
+ * source no longer has. Returns immediately (202) — the heavy pull runs on the
+ * server and the device refreshes over the realtime feed when it finishes.
+ */
+export function useResyncExternalAccount(familyId: string) {
+  const api = useApi()
+  return useMutation({
+    mutationFn: (accountId: string) =>
+      api.post<{ status: string }>(
+        `/families/${familyId}/external/accounts/${accountId}/resync`,
+      ),
+  })
+}
