@@ -79,6 +79,10 @@ export function ExternalAccountCard({
       onError: (e) => {
         if (e instanceof ApiError && e.status === 409) {
           toast.error("This account needs to be reconnected.")
+        } else if (e instanceof ApiError && e.message) {
+          // Surface the backend's reason (e.g. unreachable provider, not
+          // configured) instead of a vague catch-all, so failures are debuggable.
+          toast.error("Sync failed", { description: e.message })
         } else {
           toast.error("Sync failed. Please try again.")
         }

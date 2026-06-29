@@ -616,11 +616,16 @@ frontend (FE) pieces, and **acceptance criteria** (AC) that define "done".
     row the snapshot didn't contain, so the mirror converges to exactly what the source has. It runs **only**
     on a full pull (an incremental delta would wipe everything); a `window_start` guard protects one-offs
     ending before the pull's time bound (recurring masters are always in a full pull, so always reconcilable).
-    `EventsPage.time_min` reports the Google window. The user-initiated **"Sync now"** now does a full
-    reconciling pull (`sync_account(force_full=True)`); the 30-min background scheduler stays incremental and
-    self-heals on Google's periodic token expiry (410 → full pull). Shared by Apple/CalDAV (whole-collection
-    snapshot, no window). +3 tests in `tests/test_external.py` (reconcile drop, incremental keeps, window
-    guard); suite **160 green**. _Note: this clears stale rows within one calendar; if "duplicates" are
+    `EventsPage.time_min` reports the Google window. Shared by Apple/CalDAV (whole-collection snapshot, no
+    window). The full reconcile runs **off the request path** — the scheduler's periodic run, a provider
+    sync-token expiry (410 → full pull), or toggling a calendar off→on (resets the cursor) — never through
+    the synchronous "Sync now" button. **(Corrected same-day:** an earlier cut forced a full pull on "Sync
+    now"; a full CalDAV pull re-fetches the whole collection and overran the frontend proxy's 20s timeout →
+    a generic "Sync failed" toast. Manual "Sync now" is back to a fast **incremental** pull; reconcile stays
+    on the off-request-path full pulls above. The sync endpoint now also maps errors precisely — 409
+    reconnect / 502 with the provider message / 500 with the error type — and the FE shows that detail
+    instead of a vague catch-all.) +3 tests in `tests/test_external.py` (reconcile drop, incremental keeps,
+    window guard); suite **160 green**. _Note: this clears stale rows within one calendar; if "duplicates" are
     instead two `ExternalCalendar` rows for the same real calendar (a reconnect that re-keyed the calendar
     id), "Sync now" reports "0 removed" and the extra calendar is toggled off instead — see TRACKER follow-up._
 - **Setup:** needs a Google Cloud OAuth client (ID/secret); for personal/self-hosted use, OAuth
