@@ -43,6 +43,19 @@ frontend (FE) pieces, and **acceptance criteria** (AC) that define "done".
   there's no "choose a calendar" step. Synced events reference their source via `Event.external_calendar_id`
   and take that `ExternalCalendar`'s color; occurrences hide events whose source is toggled off
   (`ExternalCalendar.synced`).
+- **Update (2026-06-28) — event source labeling (explains apparent "duplicates"):** Each `OccurrenceOut`
+  now carries a `source` object (`EventSource`: `kind` local/external · `label` · `provider` · `account_email`)
+  built in `services/calendar.py::get_occurrences` (batch-loads the `ExternalAccount` behind any mirrored
+  calendar; no migration — pure serialization). **Why:** the read-only mirror engine dedups only *within*
+  one external calendar (`apply_mirror_events`, key `<provider>:<cal>:<id>`), so the *same* real-world event
+  can exist as several `Event` rows at once — typed into MySkylight **and** mirrored from Google **and** from
+  iCloud — and all render (a recurring one shows N× per day). That's expected, not a bug; users had no way to
+  tell the copies apart. The FE event details sheet (`components/calendar/event-sheet.tsx`) now names the
+  origin: read-only mirrors show "**Synced from _{calendar}_ · {Provider}**" + the connected account email and
+  a note that the event may also exist elsewhere; native events show "**Added in MySkylight**". `tsc` +
+  `next build` + eslint clean; new `tests/test_calendar.py::test_occurrence_source_labels_native_vs_external`
+  (suite **157 green**). _Follow-up if the duplicates themselves are unwanted: cross-source dedup/merge by
+  title+time, or a per-calendar "hide" toggle — deliberately **not** done here (labeling only)._
 
 ### F24 — Realtime live-update
 

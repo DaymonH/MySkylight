@@ -4,7 +4,7 @@ import { useEffect, useState } from "react"
 import { useForm, Controller } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
-import { CloudIcon, Trash2Icon } from "lucide-react"
+import { CloudIcon, HouseIcon, Trash2Icon } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -37,7 +37,20 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
-import type { MemberBrief, OccurrenceOut } from "@/lib/types/calendar"
+import type { EventSource, MemberBrief, OccurrenceOut } from "@/lib/types/calendar"
+
+const PROVIDER_LABELS: Record<NonNullable<EventSource["provider"]>, string> = {
+  google: "Google",
+  apple: "iCloud",
+}
+
+// One-line provenance for an event, e.g. "Synced from Holidays · Google" or
+// "Added in MySkylight" — the headline that explains why an event can appear twice.
+function sourceHeadline(source: EventSource): string {
+  if (source.kind === "local") return "Added in MySkylight"
+  const provider = source.provider ? PROVIDER_LABELS[source.provider] : null
+  return provider ? `Synced from ${source.label} · ${provider}` : `Synced from ${source.label}`
+}
 
 const RRULE_OPTIONS = [
   { label: "Does not repeat", value: "none" },
@@ -232,14 +245,37 @@ export function EventSheet({
           </SheetHeader>
 
           <div className="thin-scrollbar flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto p-6">
-            <div className="flex items-center gap-2 rounded-2xl bg-muted/50 px-3.5 py-2.5 text-sm text-muted-foreground">
-              <CloudIcon className="size-4 flex-shrink-0" />
-              <span>Synced from an external calendar — read-only here.</span>
+            <div className="flex items-start gap-2 rounded-2xl bg-muted/50 px-3.5 py-2.5 text-sm text-muted-foreground">
+              <CloudIcon className="mt-0.5 size-4 flex-shrink-0" />
+              <div className="space-y-0.5">
+                <p className="font-medium text-foreground">{sourceHeadline(editing.source)}</p>
+                <p className="text-xs">
+                  Read-only here — manage it in the source calendar. The same event
+                  may also exist elsewhere (e.g. added in MySkylight), which is why
+                  it can appear more than once.
+                </p>
+              </div>
             </div>
 
             <div className="space-y-1">
               <p className="text-xs font-medium text-muted-foreground">Title</p>
               <p className="text-base font-medium">{editing.title}</p>
+            </div>
+
+            <div className="space-y-1">
+              <p className="text-xs font-medium text-muted-foreground">Source</p>
+              <p className="text-sm">
+                {editing.source.label}
+                {editing.source.provider && (
+                  <span className="text-muted-foreground">
+                    {" · "}
+                    {PROVIDER_LABELS[editing.source.provider]}
+                  </span>
+                )}
+              </p>
+              {editing.source.account_email && (
+                <p className="text-xs text-muted-foreground">{editing.source.account_email}</p>
+              )}
             </div>
 
             <div className="space-y-1">
@@ -307,6 +343,15 @@ export function EventSheet({
           className="flex min-h-0 flex-1 flex-col"
         >
           <div className="thin-scrollbar flex-1 space-y-5 overflow-y-auto p-6">
+            {/* Source — only when editing an existing (already-saved) event, so a
+                duplicate can be told apart from its synced twin. */}
+            {editing && (
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <HouseIcon className="size-3.5 flex-shrink-0" />
+                <span>{sourceHeadline(editing.source)}</span>
+              </div>
+            )}
+
             {/* Title */}
             <div className="space-y-1.5">
               <Label htmlFor="title">Title</Label>

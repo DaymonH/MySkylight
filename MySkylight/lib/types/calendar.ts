@@ -4,6 +4,19 @@ export interface MemberBrief {
   color: string
 }
 
+/**
+ * Where an event came from. Lets the UI distinguish a locally-created event from
+ * one mirrored read-only from a connected calendar — the usual reason the "same"
+ * event shows up more than once (it exists in MySkylight *and* on a synced calendar).
+ */
+export interface EventSource {
+  kind: "local" | "external"
+  /** "MySkylight" for native events; the external calendar's name for mirrors. */
+  label: string
+  provider: "google" | "apple" | null
+  account_email: string | null
+}
+
 export interface EventOut {
   id: string
   /** Source external calendar when this is a read-only mirror; null for native events. */
@@ -40,6 +53,8 @@ export interface OccurrenceOut {
   is_recurring: boolean
   /** True when this occurrence belongs to a read-only external mirror (F18/F20). */
   read_only: boolean
+  /** Where the underlying event came from (local vs which synced calendar). */
+  source: EventSource
   effective_color: string
   members: MemberBrief[]
   reminder_minutes: number[]
