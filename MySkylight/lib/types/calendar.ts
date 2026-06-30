@@ -13,7 +13,7 @@ export interface EventSource {
   kind: "local" | "external"
   /** "MySkylight" for native events; the external calendar's name for mirrors. */
   label: string
-  provider: "google" | "apple" | null
+  provider: "google" | "apple" | "ics" | null
   account_email: string | null
 }
 

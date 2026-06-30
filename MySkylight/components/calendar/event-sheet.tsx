@@ -42,6 +42,7 @@ import type { EventSource, MemberBrief, OccurrenceOut } from "@/lib/types/calend
 const PROVIDER_LABELS: Record<NonNullable<EventSource["provider"]>, string> = {
   google: "Google",
   apple: "iCloud",
+  ics: "Calendar feed",
 }
 
 // One-line provenance for an event, e.g. "Synced from Holidays · Google" or
