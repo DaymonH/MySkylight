@@ -4,7 +4,9 @@
 // read-only. Mirror events surface on the calendar as ordinary occurrences with
 // `read_only: true` (see lib/types/calendar.ts) — shown but never editable here.
 
-export type ExternalProvider = "google" | "apple"
+// "ics" = a subscribed iCalendar feed URL (e.g. US Holidays), grouped under one
+// per-family container account. No auth — the scheduler re-fetches the feed.
+export type ExternalProvider = "google" | "apple" | "ics"
 export type ExternalAccountStatus = "active" | "needs_reauth"
 
 export interface ExternalCalendarOut {
@@ -30,6 +32,15 @@ export interface ExternalAccountOut {
 /** Google consent URL to open to start the OAuth connect flow. */
 export interface AuthorizeUrlOut {
   authorize_url: string
+}
+
+/** Subscribe to a read-only iCalendar (.ics) feed by URL (e.g. US Holidays). */
+export interface IcsFeedConnectIn {
+  url: string
+  /** Optional label; defaults to the feed's own name server-side. */
+  name?: string
+  /** Optional #RRGGBB tint for the feed's events. */
+  color?: string
 }
 
 /** Outcome of an on-demand pull. */

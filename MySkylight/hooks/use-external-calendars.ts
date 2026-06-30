@@ -6,6 +6,7 @@ import type {
   AuthorizeUrlOut,
   ExternalAccountOut,
   ExternalSyncResult,
+  IcsFeedConnectIn,
 } from "@/lib/types/external"
 
 /** Connected external accounts for the family, each with its discovered calendars. */
@@ -44,6 +45,28 @@ export function useConnectApple(familyId: string) {
       ),
     onSuccess: () =>
       qc.invalidateQueries({ queryKey: ["external-accounts", familyId] }),
+  })
+}
+
+/**
+ * Subscribe to a read-only iCalendar (.ics) feed by URL (e.g. a US-Holidays
+ * calendar). The backend validates + records it as a synced calendar and kicks an
+ * immediate background pull; the scheduler keeps it fresh thereafter. Refresh the
+ * accounts list and the occurrence cache (events start appearing).
+ */
+export function useConnectIcsFeed(familyId: string) {
+  const api = useApi()
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (data: IcsFeedConnectIn) =>
+      api.post<ExternalAccountOut>(
+        `/families/${familyId}/external/ics/connect`,
+        data,
+      ),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["external-accounts", familyId] })
+      qc.invalidateQueries({ queryKey: ["occurrences", familyId] })
+    },
   })
 }
 

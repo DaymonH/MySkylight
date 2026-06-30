@@ -763,6 +763,21 @@ frontend (FE) pieces, and **acceptance criteria** (AC) that define "done".
   `components/calendar/calendar-sync-dialog.tsx`, the `useImportCalendarIcs` hook, and the toolbar entry
   point. `events.ical_uid` (migration `009`) stays as the mirror dedup key. Re-addable later (likely as a
   family-level export) if wanted.
+- **Revived as a read-only *subscription* (2026-06-30):** the import path is back in a narrower form — not
+  file/calendar import, but a **subscribed `.ics` feed** modelled as a connected account
+  (`ExternalProvider.ics`, no migration — SQLite stores the enum as a bare `VARCHAR` with no CHECK).
+  `POST …/external/ics/connect {url, name?, color?}` validates + records a feed URL (`webcal://` normalised
+  to https) as a synced `ExternalCalendar` under a per-family ICS container account, then kicks an immediate
+  background pull. The existing `external_sync`/`apply_mirror_events` engine re-fetches it on the **5-min
+  scheduler**, so a public **US-Holidays** feed stays current with **no re-import** (future years appear, old
+  years fall off). Each pull is a full snapshot → always reconciles (with an empty-fetch guard so a transient
+  glitch can't wipe the mirror). Events carry an `ics:<url>:<uid>` uid → **read-only**, hidden when the feed
+  is toggled off, tinted by the feed's colour. Use case: the iPhone **US Holidays** calendar, which is a
+  *subscribed* calendar iCloud's CalDAV never exposes to F20. Backend + tests done (`app/services/ics_feed.py`;
+  +11 tests, suite **184 green**). **FE done:** a "Subscribe to a feed" dialog (`ics-feed-dialog.tsx`,
+  one-tap US-Holidays fill) on the integrations page; the feed renders in the existing account card.
+  **Zero-touch on deploy:** migration `019` seeds the US-Holidays subscription for every family, so holidays
+  appear after deploy with no app interaction (the 5-min scheduler does the first pull).
 
 ---
 

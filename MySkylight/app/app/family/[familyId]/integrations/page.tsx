@@ -18,6 +18,7 @@ import { useRealtime } from "@/hooks/use-realtime"
 import { ApiError } from "@/lib/api-client"
 import { AppleConnectDialog } from "@/components/integrations/apple-connect-dialog"
 import { ExternalAccountCard } from "@/components/integrations/external-account-card"
+import { IcsFeedDialog } from "@/components/integrations/ics-feed-dialog"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -30,6 +31,7 @@ export default function IntegrationsPage({
   const { familyId } = use(params)
   const qc = useQueryClient()
   const [appleOpen, setAppleOpen] = useState(false)
+  const [icsOpen, setIcsOpen] = useState(false)
 
   // Mirrored events arrive as ordinary occurrences via the SSE bus; keep the
   // calendar caches live while this page is open (and on other devices).
@@ -78,7 +80,8 @@ export default function IntegrationsPage({
           Calendar sync
         </h1>
         <p className="text-muted-foreground text-sm">
-          Connect Google or Apple to mirror their calendars here.
+          Connect Google or Apple, or subscribe to a calendar feed, to mirror
+          their events here.
         </p>
       </header>
 
@@ -86,7 +89,7 @@ export default function IntegrationsPage({
         <InfoIcon className="mt-0.5 size-4 flex-shrink-0" />
         <p>
           Synced calendars are <span className="font-medium">read-only</span> —
-          their events show on your calendar but are edited in Google or Apple,
+          their events show on your calendar but are edited in their source app,
           not here.
         </p>
       </div>
@@ -103,6 +106,10 @@ export default function IntegrationsPage({
             <Button variant="outline" onClick={() => setAppleOpen(true)}>
               <PlusIcon />
               Connect iCloud
+            </Button>
+            <Button variant="outline" onClick={() => setIcsOpen(true)}>
+              <PlusIcon />
+              Subscribe to a feed
             </Button>
           </div>
         </CardContent>
@@ -143,6 +150,11 @@ export default function IntegrationsPage({
         familyId={familyId}
         open={appleOpen}
         onOpenChange={setAppleOpen}
+      />
+      <IcsFeedDialog
+        familyId={familyId}
+        open={icsOpen}
+        onOpenChange={setIcsOpen}
       />
     </div>
   )

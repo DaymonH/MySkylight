@@ -41,6 +41,7 @@ import type {
 const PROVIDER_LABEL: Record<string, string> = {
   google: "Google Calendar",
   apple: "Apple iCloud",
+  ics: "Subscribed feeds",
 }
 
 function formatWhen(iso: string | null): string {
@@ -147,7 +148,11 @@ export function ExternalAccountCard({
               {PROVIDER_LABEL[account.provider] ?? account.provider}
             </p>
             <p className="text-muted-foreground truncate text-sm">
-              {account.account_email ?? "Connected account"}
+              {account.provider === "ics"
+                ? `${account.calendars.length} feed${
+                    account.calendars.length === 1 ? "" : "s"
+                  }`
+                : (account.account_email ?? "Connected account")}
             </p>
           </div>
         </div>
