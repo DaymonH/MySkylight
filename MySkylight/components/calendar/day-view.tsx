@@ -207,8 +207,8 @@ export function DayView({
                 className="pointer-events-none absolute inset-x-0 z-30"
                 style={{ top: ((now - startMinClamp) / 60) * hourHeight }}
               >
-                <div className="relative h-px bg-red-500">
-                  <span className="absolute -top-1 -left-1 size-2 rounded-full bg-red-500" />
+                <div className="bg-now relative h-px">
+                  <span className="bg-now absolute -top-1 -left-1 size-2 rounded-full" />
                 </div>
               </div>
             )}

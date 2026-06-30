@@ -24,6 +24,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { useVisibleHours } from "@/hooks/use-visible-hours"
+import { PALETTES, usePalette } from "@/hooks/use-palette"
 import { cn } from "@/lib/utils"
 
 const THEME_OPTIONS = [
@@ -52,6 +53,7 @@ export function SettingsButton({
 }) {
   const [open, setOpen] = useState(false)
   const { theme, setTheme } = useTheme()
+  const { palette, setPalette } = usePalette()
   const { start, end, setRange } = useVisibleHours()
 
   return (
@@ -93,9 +95,9 @@ export function SettingsButton({
             </div>
           </section>
 
-          {/* Theme */}
+          {/* Appearance — light / dark / system */}
           <section className="grid gap-3">
-            <h3 className="text-sm font-medium">Theme</h3>
+            <h3 className="text-sm font-medium">Appearance</h3>
             <RadioGroup
               value={theme ?? "system"}
               onValueChange={setTheme}
@@ -112,6 +114,63 @@ export function SettingsButton({
                 </Label>
               ))}
             </RadioGroup>
+          </section>
+
+          {/* Color theme — palette applied to both light and dark */}
+          <section className="grid gap-3">
+            <div>
+              <h3 className="text-sm font-medium">Color theme</h3>
+              <p className="text-xs text-muted-foreground">
+                Applies to both light and dark.
+              </p>
+            </div>
+            <div
+              role="radiogroup"
+              aria-label="Color theme"
+              className="grid grid-cols-2 gap-2"
+            >
+              {PALETTES.map((p) => {
+                const active = palette === p.id
+                return (
+                  <button
+                    key={p.id}
+                    type="button"
+                    role="radio"
+                    aria-checked={active}
+                    onClick={() => setPalette(p.id)}
+                    className={cn(
+                      "flex items-center gap-2.5 rounded-md border bg-background p-2 text-left transition-colors focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:outline-none",
+                      active
+                        ? "border-primary ring-2 ring-primary/30"
+                        : "hover:bg-muted",
+                    )}
+                  >
+                    <span className="relative size-8 shrink-0 overflow-hidden rounded-full border">
+                      <span
+                        className="absolute inset-0"
+                        style={{ background: p.swatch.light }}
+                      />
+                      <span
+                        className="absolute inset-y-0 right-0 w-1/2"
+                        style={{ background: p.swatch.dark }}
+                      />
+                      <span
+                        className="absolute top-1/2 left-1/2 size-3 -translate-x-1/2 -translate-y-1/2 rounded-full ring-1 ring-black/15"
+                        style={{ background: p.swatch.accent }}
+                      />
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block text-sm font-medium leading-tight">
+                        {p.name}
+                      </span>
+                      <span className="block truncate text-xs text-muted-foreground">
+                        {p.hint}
+                      </span>
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
           </section>
 
           {/* Visible hours (week / day views) */}
