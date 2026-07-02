@@ -439,7 +439,14 @@ export function CalendarView({
         {isLoading ? (
           <CalendarSkeleton view={view} />
         ) : view === "month" ? (
-          <div className="thin-scrollbar h-full overflow-auto">
+          <div
+            className={cn(
+              "h-full",
+              // Kiosk: the month fits the screen (no scroll) — MonthView sizes its
+              // rows to the height. Phone: keep the scrollable month.
+              isDevice ? "overflow-hidden" : "thin-scrollbar overflow-auto",
+            )}
+          >
             <MonthView
               year={anchor.getFullYear()}
               month={anchor.getMonth()}

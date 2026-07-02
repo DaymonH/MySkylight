@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { cn } from "@/lib/utils"
 import type { OccurrenceOut } from "@/lib/types/calendar"
 import { EventDot } from "./event-dot"
@@ -17,6 +17,12 @@ interface MonthViewProps {
 }
 
 const DOW_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+
+// Large (wall-display) cell metrics, in px — used to fit as many events per day
+// as the row height allows so the whole month shows without scrolling. Approximate;
+// the cell also clips (overflow-hidden), so a miscount never brings a scrollbar back.
+const LARGE_HEADER_PX = 44 // date badge + its bottom margin + the cell's top padding
+const LARGE_EVENT_PX = 32 // one EventDot row including the list's flex gap
 
 function toYMD(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`
@@ -54,10 +60,32 @@ export function MonthView({ year, month, occurrences, onDayClick, onEventClick, 
     return map
   }, [occurrences])
 
-  const maxVisible = large ? 5 : 3
+  const weeks = cells.length / 7
+
+  // Wall display: the grid fills a fixed height (no scroll), so measure it and
+  // derive how many events fit in one day-cell. Six week-rows of a static count
+  // overflowed the screen; fitting the count to the measured row height keeps the
+  // whole month visible on any kiosk resolution. The phone (`!large`) keeps its
+  // static count and scrolls instead.
+  const gridRef = useRef<HTMLDivElement>(null)
+  const [gridH, setGridH] = useState(0)
+  useEffect(() => {
+    const el = gridRef.current
+    if (!el || !large) return
+    const ro = new ResizeObserver(([entry]) => setGridH(entry.contentRect.height))
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [large])
+
+  const capacity = useMemo(() => {
+    if (!large) return 3
+    if (!gridH) return 4 // pre-measure default; corrected on the next frame
+    const rowH = gridH / weeks
+    return Math.max(1, Math.floor((rowH - LARGE_HEADER_PX) / LARGE_EVENT_PX))
+  }, [large, gridH, weeks])
 
   return (
-    <div className="flex h-full flex-col">
+    <div className={cn("flex h-full flex-col", large && "min-h-0")}>
       {/* Weekday headers */}
       <div className="bg-background sticky top-0 z-10 grid grid-cols-7 border-b">
         {DOW_LABELS.map((d, i) => (
@@ -75,8 +103,8 @@ export function MonthView({ year, month, occurrences, onDayClick, onEventClick, 
       </div>
 
       {/* Weeks */}
-      <div className="grid flex-1 auto-rows-fr">
-        {Array.from({ length: cells.length / 7 }, (_, row) => (
+      <div ref={gridRef} className={cn("grid flex-1 auto-rows-fr", large && "min-h-0")}>
+        {Array.from({ length: weeks }, (_, row) => (
           <div key={row} className="grid grid-cols-7 border-b last:border-b-0">
             {cells.slice(row * 7, row * 7 + 7).map(({ date, inMonth }, col) => {
               const isWeekend = col === 0 || col === 6
@@ -89,7 +117,7 @@ export function MonthView({ year, month, occurrences, onDayClick, onEventClick, 
                     key={col}
                     className={cn(
                       "border-r p-1 last:border-r-0",
-                      large ? "min-h-[8.5rem]" : "min-h-[5rem]",
+                      large ? "min-h-0 overflow-hidden" : "min-h-[5rem]",
                       "bg-muted/30",
                     )}
                   >
@@ -107,6 +135,13 @@ export function MonthView({ year, month, occurrences, onDayClick, onEventClick, 
 
               const evts = byDay.get(ymd) ?? []
               const isToday = ymd === today
+              // Fit the list to the cell: when it overflows, reserve a slot for the
+              // "+N more" line (large only) so the row never exceeds its capacity.
+              const overflow = evts.length > capacity
+              const shown = overflow
+                ? evts.slice(0, large ? Math.max(1, capacity - 1) : capacity)
+                : evts
+              const hidden = evts.length - shown.length
 
               return (
                 <button
@@ -114,14 +149,14 @@ export function MonthView({ year, month, occurrences, onDayClick, onEventClick, 
                   type="button"
                   className={cn(
                     "hover:bg-accent/60 active:bg-accent focus-visible:ring-ring/40 group flex flex-col items-stretch border-r p-1 text-left transition-colors outline-none last:border-r-0 focus-visible:ring-2 focus-visible:ring-inset",
-                    large ? "min-h-[7rem]" : "min-h-[5rem]",
+                    large ? "min-h-0 overflow-hidden" : "min-h-[5rem]",
                     isWeekend && !isToday && "bg-muted/20",
                   )}
                   onClick={() => onDayClick(ymd)}
                 >
                   <span
                     className={cn(
-                      "mb-0.5 inline-flex items-center justify-center rounded-full font-medium tabular-nums",
+                      "mb-0.5 inline-flex flex-shrink-0 items-center justify-center rounded-full font-medium tabular-nums",
                       large ? "h-8 w-8 text-base" : "h-6 w-6 text-sm",
                       isToday
                         ? "bg-primary text-primary-foreground shadow-sm"
@@ -130,12 +165,13 @@ export function MonthView({ year, month, occurrences, onDayClick, onEventClick, 
                   >
                     {date.getDate()}
                   </span>
-                  <div className={cn("flex flex-col", large ? "gap-1" : "gap-0.5")}>
-                    {evts.slice(0, maxVisible).map((occ, i) => (
+                  <div className={cn("flex min-h-0 flex-col", large ? "gap-1" : "gap-0.5")}>
+                    {shown.map((occ, i) => (
                       <div
                         key={i}
                         role="button"
                         tabIndex={-1}
+                        className="flex-shrink-0"
                         onClick={(e) => { e.stopPropagation(); onEventClick(occ) }}
                       >
                         <EventDot
@@ -145,17 +181,17 @@ export function MonthView({ year, month, occurrences, onDayClick, onEventClick, 
                         />
                       </div>
                     ))}
-                    {evts.length > maxVisible && (
+                    {hidden > 0 && (
                       <span
                         role="button"
                         tabIndex={-1}
                         onClick={(e) => { e.stopPropagation(); (onViewDay ?? onDayClick)(ymd) }}
                         className={cn(
-                          "text-muted-foreground hover:text-foreground rounded pl-1 font-medium transition-colors",
+                          "text-muted-foreground hover:text-foreground flex-shrink-0 rounded pl-1 font-medium transition-colors",
                           large ? "text-base" : "text-xs",
                         )}
                       >
-                        +{evts.length - maxVisible} more
+                        +{hidden} more
                       </span>
                     )}
                   </div>
