@@ -24,8 +24,10 @@ const TABS = [
 ]
 
 /** Shared visual for a single rail item — icon stacked over a small label. */
+// rem-based sizes (w-18 = 4.5rem, text-[0.6875rem] = 11px) so the whole rail
+// scales with the kiosk --kiosk-scale knob rather than staying pinned in px.
 export const RAIL_ITEM =
-  "flex w-[72px] flex-col items-center gap-1 rounded-2xl px-1 py-2.5 text-[11px] font-medium transition-colors"
+  "flex w-18 flex-col items-center gap-1 rounded-2xl px-1 py-2.5 text-[0.6875rem] font-medium transition-colors"
 
 /** Vertical icon-rail nav for the wall-display kiosk — switches between device surfaces. */
 export function DeviceSidebar() {

@@ -89,14 +89,14 @@ export function MonthView({ year, month, occurrences, onDayClick, onEventClick, 
                     key={col}
                     className={cn(
                       "border-r p-1 last:border-r-0",
-                      large ? "min-h-[7rem]" : "min-h-[5rem]",
+                      large ? "min-h-[8.5rem]" : "min-h-[5rem]",
                       "bg-muted/30",
                     )}
                   >
                     <span
                       className={cn(
                         "inline-flex items-center justify-center font-medium tabular-nums text-muted-foreground/40",
-                        large ? "h-8 w-8 text-base" : "h-6 w-6 text-sm",
+                        large ? "h-9 w-9 text-lg" : "h-6 w-6 text-sm",
                       )}
                     >
                       {date.getDate()}
@@ -130,7 +130,7 @@ export function MonthView({ year, month, occurrences, onDayClick, onEventClick, 
                   >
                     {date.getDate()}
                   </span>
-                  <div className="flex flex-col gap-0.5">
+                  <div className={cn("flex flex-col", large ? "gap-1" : "gap-0.5")}>
                     {evts.slice(0, maxVisible).map((occ, i) => (
                       <div
                         key={i}
@@ -152,7 +152,7 @@ export function MonthView({ year, month, occurrences, onDayClick, onEventClick, 
                         onClick={(e) => { e.stopPropagation(); (onViewDay ?? onDayClick)(ymd) }}
                         className={cn(
                           "text-muted-foreground hover:text-foreground rounded pl-1 font-medium transition-colors",
-                          large ? "text-sm" : "text-xs",
+                          large ? "text-base" : "text-xs",
                         )}
                       >
                         +{evts.length - maxVisible} more

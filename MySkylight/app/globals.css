@@ -525,6 +525,21 @@
        small card titles stay calm. No-op for Inter (no opsz axis). */
     font-optical-sizing: auto;
   }
+
+  /* ── Kiosk scale knob ──────────────────────────────────────────────
+     The /device wall-display is viewed from across the room, so the whole
+     surface is scaled up from the phone/tablet /app view. Because every
+     size in this app is rem-based (Tailwind text-*, spacing, size-*,
+     --radius, icons), bumping the root font-size on the device surface
+     scales the ENTIRE kiosk UI proportionally — one number to tune.
+     `<KioskScale>` (device layout) sets data-surface="device" on <html>.
+     Bump --kiosk-scale to make the kiosk bigger/smaller (1 = /app size). */
+  :root {
+    --kiosk-scale: 1.2;
+  }
+  html[data-surface="device"] {
+    font-size: calc(16px * var(--kiosk-scale));
+  }
   /* Headings (Fraunces) read better with a hair of negative tracking. */
   .font-heading {
     letter-spacing: -0.01em;
