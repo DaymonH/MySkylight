@@ -73,8 +73,12 @@ export default function IntegrationsPage({
     })
   }
 
+  // [&>*]:shrink-0 — this is a flex-col scroll container; without it flexbox
+  // shrinks the section cards to fit the viewport instead of scrolling, and cards
+  // with overflow-hidden then clip their own content (the "Add an account" buttons
+  // vanished exactly this way). Keep children at natural height so the list scrolls.
   return (
-    <div className="thin-scrollbar mx-auto flex w-full max-w-xl flex-col gap-6 overflow-y-auto p-4 sm:p-6">
+    <div className="thin-scrollbar mx-auto flex w-full max-w-xl flex-col gap-6 overflow-y-auto p-4 sm:p-6 [&>*]:shrink-0">
       <header className="flex flex-col gap-1">
         <h1 className="font-heading text-xl font-semibold tracking-tight">
           Calendar sync

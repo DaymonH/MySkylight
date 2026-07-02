@@ -194,7 +194,7 @@ export default function InvitationsPage({ params }: { params: Promise<{ familyId
   }
 
   return (
-    <div className="thin-scrollbar mx-auto flex w-full max-w-xl flex-col gap-6 overflow-y-auto p-4 pb-24 sm:p-6 sm:pb-24">
+    <div className="thin-scrollbar mx-auto flex w-full max-w-xl flex-col gap-6 overflow-y-auto p-4 pb-24 sm:p-6 sm:pb-24 [&>*]:shrink-0">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="font-heading text-xl font-bold tracking-tight">Invitations</h1>

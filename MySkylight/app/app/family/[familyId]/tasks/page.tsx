@@ -201,7 +201,7 @@ export default function TasksPage({ params }: { params: Promise<{ familyId: stri
   }
 
   return (
-    <div className="thin-scrollbar mx-auto flex w-full max-w-2xl flex-col gap-6 overflow-y-auto p-4 pb-24 sm:p-6 sm:pb-24">
+    <div className="thin-scrollbar mx-auto flex w-full max-w-2xl flex-col gap-6 overflow-y-auto p-4 pb-24 sm:p-6 sm:pb-24 [&>*]:shrink-0">
       <header className="flex flex-col gap-1">
         <h1 className="font-heading text-xl font-semibold tracking-tight">Tasks &amp; routines</h1>
         <p className="text-muted-foreground text-sm">

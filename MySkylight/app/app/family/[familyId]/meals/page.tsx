@@ -192,7 +192,7 @@ export default function MealsPage({
   }
 
   return (
-    <div className="thin-scrollbar mx-auto flex w-full max-w-3xl flex-col gap-5 overflow-y-auto p-4 sm:p-6">
+    <div className="thin-scrollbar mx-auto flex w-full max-w-3xl flex-col gap-5 overflow-y-auto p-4 sm:p-6 [&>*]:shrink-0">
       <header className="flex flex-col gap-1">
         <h1 className="font-heading text-xl font-semibold tracking-tight">
           Meals &amp; recipes

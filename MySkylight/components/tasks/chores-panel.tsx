@@ -192,7 +192,7 @@ export function ChoresPanel({ familyId }: { familyId: string }) {
   const nothingToShow = dayGroups.length === 0 && overdueItems.length === 0
 
   return (
-    <div className="thin-scrollbar mx-auto flex w-full max-w-2xl flex-col gap-4 overflow-y-auto p-4 pb-24 sm:p-6 sm:pb-24">
+    <div className="thin-scrollbar mx-auto flex w-full max-w-2xl flex-col gap-4 overflow-y-auto p-4 pb-24 sm:p-6 sm:pb-24 [&>*]:shrink-0">
       <header className="flex flex-wrap items-center gap-3">
         <div className="flex-1">
           <h1 className="font-heading text-xl font-semibold tracking-tight">Chores</h1>

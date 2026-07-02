@@ -112,7 +112,7 @@ export default function MembersPage({ params }: { params: Promise<{ familyId: st
   })
 
   return (
-    <div className="thin-scrollbar mx-auto flex w-full max-w-xl flex-col gap-6 overflow-y-auto p-4 sm:p-6">
+    <div className="thin-scrollbar mx-auto flex w-full max-w-xl flex-col gap-6 overflow-y-auto p-4 sm:p-6 [&>*]:shrink-0">
       <header className="flex flex-col gap-1">
         <FamilyNameEditor familyId={familyId} />
         <p className="text-muted-foreground text-sm">Manage members and sharing for your family.</p>
