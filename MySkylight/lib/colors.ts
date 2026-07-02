@@ -15,6 +15,30 @@ export const MEMBER_COLORS = [
 // Default color for the auto-created "Family" calendar.
 export const DEFAULT_CALENDAR_COLOR = MEMBER_COLORS[0]
 
+// Wider preset palette for external-calendar tints (F18/F20/F25). Users pick a
+// calendar's color from these — no free-form hex — so tints stay cohesive with
+// the warm brand while being distinct enough to tell calendars apart at a glance.
+// Two calendars may share a color (the picker flags it), so this is a menu of
+// suggestions, not a uniqueness constraint.
+export const CALENDAR_COLORS = [
+  "#f0603f", // coral (brand)
+  "#ef4444", // red
+  "#f97316", // orange
+  "#f59e0b", // amber
+  "#eab308", // gold
+  "#84cc16", // lime
+  "#16a34a", // green
+  "#0d9488", // teal
+  "#06b6d4", // cyan
+  "#0ea5e9", // sky
+  "#3b82f6", // blue
+  "#6366f1", // indigo
+  "#8b5cf6", // violet
+  "#a855f7", // purple
+  "#ec4899", // pink
+  "#e11d6b", // raspberry
+] as const
+
 // Warm near-black used for text/avatars placed on a light event color, so it
 // sits with the cozy palette instead of a clinical pure black.
 const ON_LIGHT = "#1c1917"

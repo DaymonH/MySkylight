@@ -19,6 +19,18 @@ export interface ExternalCalendarOut {
   last_synced_at: string | null
 }
 
+/**
+ * Minimal calendar identity used by the color picker to flag which preset colors
+ * are already used by *another* calendar in the family (across all accounts).
+ */
+export interface CalendarColorRef {
+  id: string
+  name: string
+  color: string | null
+  /** Only synced calendars count as "actively using" a color. */
+  synced: boolean
+}
+
 export interface ExternalAccountOut {
   id: string
   provider: ExternalProvider

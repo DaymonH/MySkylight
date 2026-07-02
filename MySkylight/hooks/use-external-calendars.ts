@@ -100,6 +100,43 @@ export function useSetCalendarSync(familyId: string) {
   })
 }
 
+/**
+ * Recolor a mirrored calendar's events. Mirror events carry no color of their
+ * own — the backend resolves their tint live from the calendar — so this both
+ * updates the settings dot and re-tints every occurrence on the calendar views.
+ * Optimistically patches the accounts cache so the swatch flips instantly.
+ */
+export function useSetCalendarColor(familyId: string) {
+  const api = useApi()
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ extCalId, color }: { extCalId: string; color: string }) =>
+      api.put(`/families/${familyId}/external/calendars/${extCalId}`, { color }),
+    onMutate: async ({ extCalId, color }) => {
+      const key = ["external-accounts", familyId]
+      await qc.cancelQueries({ queryKey: key })
+      const prev = qc.getQueryData<ExternalAccountOut[]>(key)
+      qc.setQueryData<ExternalAccountOut[]>(key, (old) =>
+        old?.map((acc) => ({
+          ...acc,
+          calendars: acc.calendars.map((c) =>
+            c.id === extCalId ? { ...c, color } : c,
+          ),
+        })),
+      )
+      return { prev }
+    },
+    onError: (_e, _vars, ctx) => {
+      if (ctx?.prev)
+        qc.setQueryData(["external-accounts", familyId], ctx.prev)
+    },
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: ["external-accounts", familyId] })
+      qc.invalidateQueries({ queryKey: ["occurrences", familyId] })
+    },
+  })
+}
+
 /** Pull an account's mapped calendars into their local mirrors right now. */
 export function useSyncExternalAccount(familyId: string) {
   const api = useApi()

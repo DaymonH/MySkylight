@@ -5,10 +5,13 @@ import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
 import { toast } from "sonner"
-import { Loader2Icon, SparklesIcon } from "lucide-react"
+import { CheckIcon, Loader2Icon, SparklesIcon } from "lucide-react"
 
 import { useConnectIcsFeed } from "@/hooks/use-external-calendars"
 import { ApiError } from "@/lib/api-client"
+import { CALENDAR_COLORS, readableTextOn } from "@/lib/colors"
+import { cn } from "@/lib/utils"
+import type { CalendarColorRef } from "@/lib/types/external"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -36,20 +39,25 @@ const schema = z.object({
       "Must start with http(s):// or webcal://",
     ),
   name: z.string().max(512).optional(),
-  color: z.string().regex(/^#[0-9a-fA-F]{6}$/, "Pick a colour"),
+  color: z.string().regex(/^#[0-9a-fA-F]{6}$/, "Pick a color"),
 })
 type FormValues = z.infer<typeof schema>
 
-const DEFAULTS: FormValues = { url: "", name: "", color: "#d93025" }
+// Holidays (the common reason to subscribe) read as red, so default to the
+// palette's red rather than an off-palette hex that no swatch would highlight.
+const DEFAULTS: FormValues = { url: "", name: "", color: "#ef4444" }
 
 export function IcsFeedDialog({
   familyId,
   open,
   onOpenChange,
+  roster = [],
 }: {
   familyId: string
   open: boolean
   onOpenChange: (open: boolean) => void
+  /** All calendars in the family — so the picker can flag colors already in use. */
+  roster?: CalendarColorRef[]
 }) {
   const connect = useConnectIcsFeed(familyId)
   const {
@@ -57,8 +65,20 @@ export function IcsFeedDialog({
     handleSubmit,
     reset,
     setValue,
+    watch,
     formState: { errors },
   } = useForm<FormValues>({ resolver: zodResolver(schema), defaultValues: DEFAULTS })
+
+  const selectedColor = watch("color")
+
+  // Colors already used by a synced calendar → the names using each (lowercased hex).
+  const usage: Record<string, string[]> = {}
+  for (const c of roster) {
+    if (!c.synced || !c.color) continue
+    const key = c.color.toLowerCase()
+    ;(usage[key] ??= []).push(c.name)
+  }
+  const anyInUse = Object.values(usage).some((names) => names.length > 0)
 
   useEffect(() => {
     if (open) reset(DEFAULTS)
@@ -132,24 +152,72 @@ export function IcsFeedDialog({
             </Button>
           </div>
 
-          <div className="flex items-end gap-3">
-            <div className="flex flex-1 flex-col gap-1.5">
-              <Label htmlFor="feed_name">Name (optional)</Label>
-              <Input
-                id="feed_name"
-                placeholder="e.g. US Holidays"
-                {...register("name")}
-              />
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="feed_name">Name (optional)</Label>
+            <Input
+              id="feed_name"
+              placeholder="e.g. US Holidays"
+              {...register("name")}
+            />
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <Label>Color</Label>
+            <div className="flex flex-wrap gap-2">
+              {CALENDAR_COLORS.map((c) => {
+                const selected = selectedColor?.toLowerCase() === c.toLowerCase()
+                const usedBy = usage[c.toLowerCase()] ?? []
+                const inUse = usedBy.length > 0
+                return (
+                  <button
+                    key={c}
+                    type="button"
+                    aria-pressed={selected}
+                    title={inUse ? `Also used by ${usedBy.join(", ")}` : undefined}
+                    aria-label={
+                      inUse
+                        ? `Color ${c} — also used by ${usedBy.join(", ")}`
+                        : `Color ${c}`
+                    }
+                    onClick={() =>
+                      setValue("color", c, { shouldValidate: true })
+                    }
+                    className={cn(
+                      "relative flex size-9 items-center justify-center rounded-full ring-1 ring-foreground/10 transition-transform hover:scale-110",
+                      selected &&
+                        "ring-foreground ring-2 ring-offset-2 ring-offset-background",
+                    )}
+                    style={{ backgroundColor: c }}
+                  >
+                    {selected && (
+                      <CheckIcon
+                        className="size-4"
+                        style={{ color: readableTextOn(c) }}
+                      />
+                    )}
+                    {inUse && !selected && (
+                      <span
+                        aria-hidden
+                        className="border-background bg-foreground/70 absolute top-0 right-0 size-2.5 rounded-full border-2"
+                      />
+                    )}
+                  </button>
+                )
+              })}
             </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="feed_color">Colour</Label>
-              <Input
-                id="feed_color"
-                type="color"
-                className="h-9 w-14 p-1"
-                {...register("color")}
-              />
-            </div>
+            {anyInUse && (
+              <p className="text-muted-foreground flex items-center gap-1.5 text-xs">
+                <span
+                  aria-hidden
+                  className="border-background bg-foreground/70 inline-block size-2.5 flex-shrink-0 rounded-full border-2"
+                />
+                Used by another calendar
+              </p>
+            )}
+            <input type="hidden" {...register("color")} />
+            {errors.color && (
+              <p className="text-destructive text-xs">{errors.color.message}</p>
+            )}
           </div>
 
           <DialogFooter>

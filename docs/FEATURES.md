@@ -661,9 +661,15 @@ frontend (FE) pieces, and **acceptance criteria** (AC) that define "done".
   - **FE (new 2026-06-16):** a "Calendar sync" page (`app/app/family/[id]/integrations/page.tsx`,
     owner/adult, linked from `FamilyMenu`) — **Connect Google** (`useGoogleAuthorize` → redirect to the
     consent URL; toasts when the server is unconfigured) and **Connect iCloud** (see F20). Each discovered
-    calendar has an on/off **sync toggle** (`useSetCalendarSync` → `synced`), with a color swatch,
-    "Synced <when>", a **Sync now** button + status badge,
-    and Disconnect. The OAuth callback returns to this page (`?external=connected|error`). Hooks in
+    calendar has an on/off **sync toggle** (`useSetCalendarSync` → `synced`) and an **editable color
+    swatch** (`CalendarColorPicker` → `useSetCalendarColor` → PUT `{color}`, optimistic). The picker is a
+    fixed **preset palette** (`CALENDAR_COLORS`, 16 tints — no free-form hex); colors already used by
+    another *synced* calendar are flagged with a dot (and a toast on pick) so duplicates are a knowing
+    choice, not blocked. Mirror events carry no color of their own, so recoloring the `ExternalCalendar`
+    re-tints every occurrence live (fallback in `services/calendar.py::get_occurrences`) — no re-sync.
+    Each row also shows "Synced <when>"; per-account there's a **Sync now** button + status badge, and a
+    **⋯ menu** with **Clean up duplicates** + **Disconnect** (confirmed via AlertDialog). The OAuth
+    callback returns to this page (`?external=connected|error`). Hooks in
     `hooks/use-external-calendars.ts`, types in `lib/types/external.ts`.
   - **Read-only enforcement (new 2026-06-16):** occurrences/events now carry a `read_only` flag, derived
     from the `google:`/`apple:` `ical_uid` prefix (`is_external_mirror` in `app/models/external.py`). The

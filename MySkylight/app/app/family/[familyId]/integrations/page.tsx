@@ -40,6 +40,17 @@ export default function IntegrationsPage({
   const { data: accounts = [], isLoading } = useExternalAccounts(familyId)
   const googleAuth = useGoogleAuthorize(familyId)
 
+  // Flat list of every calendar across all accounts, so each color picker can
+  // flag presets another calendar is already using.
+  const roster = accounts.flatMap((a) =>
+    a.calendars.map((c) => ({
+      id: c.id,
+      name: c.name,
+      color: c.color,
+      synced: c.synced,
+    })),
+  )
+
   // The OAuth callback bounces back here with ?external=connected|error. Surface
   // the outcome, then strip the param so a refresh doesn't re-toast. Reading from
   // window (not useSearchParams) keeps this client-only — no Suspense boundary.
@@ -145,6 +156,7 @@ export default function IntegrationsPage({
               key={account.id}
               familyId={familyId}
               account={account}
+              roster={roster}
             />
           ))}
         </div>
@@ -159,6 +171,7 @@ export default function IntegrationsPage({
         familyId={familyId}
         open={icsOpen}
         onOpenChange={setIcsOpen}
+        roster={roster}
       />
     </div>
   )
