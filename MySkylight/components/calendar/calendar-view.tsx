@@ -20,7 +20,14 @@ import { useRealtime } from "@/hooks/use-realtime"
 import { useWeatherDays } from "@/hooks/use-weather"
 import { useVisibleHours } from "@/hooks/use-visible-hours"
 import { useActiveMember } from "@/hooks/use-active-member"
+import { useExternalAccounts } from "@/hooks/use-external-calendars"
+import { useHiddenCalendars } from "@/hooks/use-hidden-calendars"
+import {
+  buildCalendarSources,
+  occurrenceCalendarKey,
+} from "@/lib/calendar-sources"
 import { MemberFilter } from "./member-filter"
+import { CalendarFilter } from "./calendar-filter"
 import { MonthView } from "./month-view"
 import { WeekView } from "./week-view"
 import { DayView } from "./day-view"
@@ -182,6 +189,17 @@ export function CalendarView({
   const effectiveMemberId =
     activeMemberId && members.some((m) => m.id === activeMemberId) ? activeMemberId : null
 
+  // Calendar-source filter: hide events from specific calendars (native +
+  // synced external feeds). Complements the member filter above — the member
+  // switcher focuses one person, this toggles whole calendars on/off. Default
+  // shows everything; the hidden set is persisted per family + surface.
+  const { data: accounts = [] } = useExternalAccounts(familyId)
+  const calendarSources = useMemo(
+    () => buildCalendarSources(accounts),
+    [accounts],
+  )
+  const { hidden, toggle, showAll, hideAll } = useHiddenCalendars(familyId, surface)
+
   const { from, to } = rangeForView(view, anchor)
   const { data: occurrences = [], isLoading } = useOccurrences(
     familyId,
@@ -189,15 +207,17 @@ export function CalendarView({
     to
   )
 
-  // Occurrences shown after applying the profile filter. Strict: only events that
-  // include the focused member (unassigned family-wide events show under "All").
-  const visibleOccurrences = useMemo(
-    () =>
-      effectiveMemberId
-        ? occurrences.filter((o) => o.members.some((m) => m.id === effectiveMemberId))
-        : occurrences,
-    [occurrences, effectiveMemberId]
-  )
+  // Occurrences shown after applying both filters: the profile filter (strict —
+  // only events including the focused member; unassigned family-wide events show
+  // under "All") and the calendar-source filter (drop any hidden calendar).
+  const visibleOccurrences = useMemo(() => {
+    let occ = occurrences
+    if (effectiveMemberId)
+      occ = occ.filter((o) => o.members.some((m) => m.id === effectiveMemberId))
+    if (hidden.size)
+      occ = occ.filter((o) => !hidden.has(occurrenceCalendarKey(o, accounts)))
+    return occ
+  }, [occurrences, effectiveMemberId, hidden, accounts])
 
   // Countdowns are anchored to "today", not the viewed range. Querying only the
   // visible month meant a countdown tile vanished the moment you navigated away
@@ -215,15 +235,14 @@ export function CalendarView({
     countdownRange.from,
     countdownRange.to
   )
-  const visibleCountdowns = useMemo(
-    () =>
-      effectiveMemberId
-        ? countdownOccurrences.filter((o) =>
-            o.members.some((m) => m.id === effectiveMemberId)
-          )
-        : countdownOccurrences,
-    [countdownOccurrences, effectiveMemberId]
-  )
+  const visibleCountdowns = useMemo(() => {
+    let occ = countdownOccurrences
+    if (effectiveMemberId)
+      occ = occ.filter((o) => o.members.some((m) => m.id === effectiveMemberId))
+    if (hidden.size)
+      occ = occ.filter((o) => !hidden.has(occurrenceCalendarKey(o, accounts)))
+    return occ
+  }, [countdownOccurrences, effectiveMemberId, hidden, accounts])
 
   // Mirrors CountdownStrip's own filter so we know whether the strip will render
   // anything — used to decide the shared filter/countdown band's borders.
@@ -394,6 +413,18 @@ export function CalendarView({
               ))}
             </TabsList>
           </Tabs>
+          {/* Only worth showing once there's more than the native calendar to
+              toggle — otherwise there's nothing to filter. */}
+          {calendarSources.length > 1 && (
+            <CalendarFilter
+              sources={calendarSources}
+              hidden={hidden}
+              onToggle={toggle}
+              onShowAll={showAll}
+              onHideAll={() => hideAll(calendarSources.map((s) => s.key))}
+              large={isDevice}
+            />
+          )}
           {!isDevice && (
             <Button variant="outline" size="sm" onClick={() => setImportOpen(true)}>
               <SparklesIcon />
