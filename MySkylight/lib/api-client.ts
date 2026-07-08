@@ -12,6 +12,36 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * A *definitive* client-side failure (bad request / unauthorized / forbidden /
+ * not found / conflict) — the request reached the backend and was rejected, so it
+ * will never succeed as-is. Distinct from an ambiguous transport error (a dropped
+ * connection, timeout, or 5xx from our proxy) where an *idempotent* write may well
+ * have landed even though the response didn't make it back. `429` is excluded —
+ * that's "slow down", which is worth retrying.
+ */
+export function isDefiniteClientError(error: unknown): boolean {
+  return (
+    error instanceof ApiError &&
+    error.status >= 400 &&
+    error.status < 500 &&
+    error.status !== 429
+  )
+}
+
+/**
+ * Whether a failed *idempotent* request is worth retrying: transport-level
+ * flakiness — a network throw, a rate-limit (429), or a 5xx (incl. the proxy's
+ * 502/504 on a reset/timeout over the home link). Never retry a 4xx: the backend
+ * saw it and said no. Safe only for idempotent writes (PUT/DELETE to a fixed key).
+ */
+export function isRetryableTransportError(error: unknown): boolean {
+  if (error instanceof ApiError) return error.status >= 500 || error.status === 429
+  // A non-ApiError here means `fetch` itself threw (DNS, connection reset,
+  // abort) before any HTTP status — transient by nature.
+  return true
+}
+
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const { body, ...rest } = options
   const result = await apiRequest<T>(`api/v1${path}`, {

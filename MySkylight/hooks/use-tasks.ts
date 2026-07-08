@@ -2,6 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useApi } from "@/hooks/use-api"
+import { isRetryableTransportError } from "@/lib/api-client"
 import type {
   BalanceApplyResult,
   BalancePlan,
@@ -232,16 +233,31 @@ interface OverrideVars {
   scope?: RotationOverrideScope
 }
 
+// The device talks to the Pi backend over a home DDNS link that can reset or time
+// out mid-request (see the proxy's 20s abort + the Pi's power quirks). Both
+// override writes are idempotent — PUT sets the override for a date, DELETE clears
+// it — so a lost *response* is safe to re-send: retrying turns a phantom failure
+// (write landed, reply didn't) into a real success. 4xx is never retried.
+const RETRY_TRANSPORT = {
+  retry: (failureCount: number, error: unknown) =>
+    isRetryableTransportError(error) && failureCount < 3,
+  retryDelay: (attempt: number) => Math.min(400 * 2 ** attempt, 3000),
+} as const
+
 export function useSetRotationOverride(familyId: string) {
   const api = useApi()
   const qc = useQueryClient()
   return useMutation({
+    ...RETRY_TRANSPORT,
     mutationFn: ({ taskId, occurrenceDate, memberId, scope = "occurrence" }: OverrideVars) =>
       api.put<RotationOverrideOut[]>(
         `/families/${familyId}/tasks/${taskId}/overrides/${occurrenceDate}`,
         { member_id: memberId, scope },
       ),
-    onSuccess: () => {
+    // Reconcile on settle, not just success: if we give up after retries but the
+    // write actually landed (SSE will confirm), refetching shows the true state
+    // instead of leaving the board stale under a suppressed error.
+    onSettled: () => {
       qc.invalidateQueries({ queryKey: ["task-occurrences", familyId] })
       qc.invalidateQueries({ queryKey: ["task-streak", familyId] })
     },
@@ -252,6 +268,7 @@ export function useClearRotationOverride(familyId: string) {
   const api = useApi()
   const qc = useQueryClient()
   return useMutation({
+    ...RETRY_TRANSPORT,
     mutationFn: ({
       taskId,
       occurrenceDate,
@@ -260,7 +277,7 @@ export function useClearRotationOverride(familyId: string) {
       api.delete(
         `/families/${familyId}/tasks/${taskId}/overrides/${occurrenceDate}?scope=${scope}`,
       ),
-    onSuccess: () => {
+    onSettled: () => {
       qc.invalidateQueries({ queryKey: ["task-occurrences", familyId] })
       qc.invalidateQueries({ queryKey: ["task-streak", familyId] })
     },

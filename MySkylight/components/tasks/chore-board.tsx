@@ -42,6 +42,7 @@ import {
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { ChoreFilterBar } from "@/components/tasks/chore-filter-bar"
 import { cn } from "@/lib/utils"
+import { isDefiniteClientError } from "@/lib/api-client"
 import { routineAccent } from "@/lib/colors"
 import {
   type ChoreFilters,
@@ -275,22 +276,37 @@ export function ChoreBoard({ familyId }: { familyId: string }) {
     if (done) uncomplete.mutate(vars)
     else complete.mutate(vars)
   }
+  // Only alert on a *definitive* rejection (4xx). Transport hiccups over the home
+  // link are retried in the hook and reconciled via SSE/refetch, so surfacing them
+  // would cry wolf on writes that actually landed ("failed… then it worked").
   function swapTo(o: TaskOccurrenceOut, memberId: string) {
     setOverride.mutate(
       { taskId: o.task_id, occurrenceDate: o.occurrence_date, memberId, scope: "occurrence" },
-      { onError: () => toast.error("Couldn't reassign this chore.") },
+      {
+        onError: (err) => {
+          if (isDefiniteClientError(err)) toast.error("Couldn't reassign this chore.")
+        },
+      },
     )
   }
   function skip(o: TaskOccurrenceOut, scope: "occurrence" | "turn") {
     setOverride.mutate(
       { taskId: o.task_id, occurrenceDate: o.occurrence_date, memberId: null, scope },
-      { onError: () => toast.error("Couldn't skip this chore.") },
+      {
+        onError: (err) => {
+          if (isDefiniteClientError(err)) toast.error("Couldn't skip this chore.")
+        },
+      },
     )
   }
   function resetRotation(o: TaskOccurrenceOut) {
     clearOverride.mutate(
       { taskId: o.task_id, occurrenceDate: o.occurrence_date, scope: "occurrence" },
-      { onError: () => toast.error("Couldn't reset this chore.") },
+      {
+        onError: (err) => {
+          if (isDefiniteClientError(err)) toast.error("Couldn't reset this chore.")
+        },
+      },
     )
   }
 

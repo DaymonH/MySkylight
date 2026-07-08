@@ -40,6 +40,7 @@ import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { ChoreFilterBar } from "@/components/tasks/chore-filter-bar"
 import { cn } from "@/lib/utils"
+import { isDefiniteClientError } from "@/lib/api-client"
 import {
   type ChoreFilters,
   DEFAULT_FILTERS,
@@ -164,22 +165,36 @@ export function ChoresPanel({ familyId }: { familyId: string }) {
     if (done) uncomplete.mutate(vars)
     else complete.mutate(vars)
   }
+  // Only alert on a *definitive* rejection (4xx); transport hiccups are retried in
+  // the hook and reconciled via SSE/refetch, so they shouldn't raise a false alarm.
   function swapTo(o: TaskOccurrenceOut, memberId: string) {
     setOverride.mutate(
       { taskId: o.task_id, occurrenceDate: o.occurrence_date, memberId, scope: "occurrence" },
-      { onError: () => toast.error("Couldn't reassign this chore.") },
+      {
+        onError: (err) => {
+          if (isDefiniteClientError(err)) toast.error("Couldn't reassign this chore.")
+        },
+      },
     )
   }
   function skip(o: TaskOccurrenceOut, scope: "occurrence" | "turn") {
     setOverride.mutate(
       { taskId: o.task_id, occurrenceDate: o.occurrence_date, memberId: null, scope },
-      { onError: () => toast.error("Couldn't skip this chore.") },
+      {
+        onError: (err) => {
+          if (isDefiniteClientError(err)) toast.error("Couldn't skip this chore.")
+        },
+      },
     )
   }
   function resetRotation(o: TaskOccurrenceOut) {
     clearOverride.mutate(
       { taskId: o.task_id, occurrenceDate: o.occurrence_date, scope: "occurrence" },
-      { onError: () => toast.error("Couldn't reset this chore.") },
+      {
+        onError: (err) => {
+          if (isDefiniteClientError(err)) toast.error("Couldn't reset this chore.")
+        },
+      },
     )
   }
 
