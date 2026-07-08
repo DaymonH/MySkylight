@@ -83,6 +83,21 @@ export function relativeWeekLabel(offset: number): string {
   return offset > 0 ? `In ${offset} weeks` : `${-offset} weeks ago`
 }
 
+/**
+ * Compact label for a *summed* minutes total (F30 aggregate), e.g. 45 → "45m",
+ * 90 → "1h 30m", 120 → "2h". Unlike `bucketLabel` (which names a single chore's
+ * time *range*), this is a point value for a per-person daily load. Returns "" for
+ * a zero/negative total so callers can skip rendering it.
+ */
+export function formatMinutesTotal(mins: number): string {
+  if (mins <= 0) return ""
+  const h = Math.floor(mins / 60)
+  const m = mins % 60
+  if (h === 0) return `${m}m`
+  if (m === 0) return `${h}h`
+  return `${h}h ${m}m`
+}
+
 // ── Per-occurrence completion semantics ───────────────────────────────────────
 
 /** Assigned members who still owe this occurrence (not yet completed). */

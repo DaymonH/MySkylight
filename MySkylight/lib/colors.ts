@@ -39,6 +39,38 @@ export const CALENDAR_COLORS = [
   "#e11d6b", // raspberry
 ] as const
 
+// Accent palette for chore *routines*. Member color already answers "whose chore
+// is this?", so routines need their own color channel to answer "which routine?".
+// Kept distinct from MEMBER_COLORS' leading entries so a routine dot doesn't read
+// as a member's swatch, while staying inside the cohesive warm/cool spread.
+export const ROUTINE_COLORS = [
+  "#0d9488", // teal
+  "#6366f1", // indigo
+  "#f59e0b", // amber
+  "#e11d6b", // raspberry
+  "#8b5cf6", // violet
+  "#0ea5e9", // sky
+  "#16a34a", // green
+  "#f97316", // orange
+] as const
+
+// Warm gray for the ungrouped "Anytime" pseudo-routine — reads as "no routine"
+// rather than competing with the real routines' saturated accents.
+const ROUTINE_NEUTRAL = "#a8a29e" // stone-400
+
+/**
+ * Stable accent color for a routine. Routines carry no color in the data model, so
+ * we hash the routine id into `ROUTINE_COLORS` — the same routine always lands on
+ * the same accent across cards/columns without any per-routine config. `null`
+ * (ungrouped "Anytime") gets a neutral gray.
+ */
+export function routineAccent(routineId: string | null): string {
+  if (!routineId) return ROUTINE_NEUTRAL
+  let h = 0
+  for (let i = 0; i < routineId.length; i++) h = (Math.imul(h, 31) + routineId.charCodeAt(i)) | 0
+  return ROUTINE_COLORS[Math.abs(h) % ROUTINE_COLORS.length]
+}
+
 // Warm near-black used for text/avatars placed on a light event color, so it
 // sits with the cozy palette instead of a clinical pure black.
 const ON_LIGHT = "#1c1917"

@@ -42,6 +42,7 @@ import {
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { ChoreFilterBar } from "@/components/tasks/chore-filter-bar"
 import { cn } from "@/lib/utils"
+import { routineAccent } from "@/lib/colors"
 import {
   type ChoreFilters,
   DEFAULT_FILTERS,
@@ -50,6 +51,7 @@ import {
   dayLabel,
   dayStripLabel,
   filtersActive,
+  formatMinutesTotal,
   isOverdue,
   matchesStatus,
   matchesStatusForMember,
@@ -91,6 +93,49 @@ interface RoutineGroup {
   key: string
   name: string
   items: TaskOccurrenceOut[]
+}
+
+/**
+ * Bucket occurrences by routine, in routine sort order with "Anytime" (ungrouped)
+ * last. Shared by the Today cards and the Week columns so both read routine
+ * membership the same way. Items within a group sort by title.
+ */
+function groupByRoutine(
+  items: TaskOccurrenceOut[],
+  routineOrder: Map<string, { name: string; sort: number }>,
+): RoutineGroup[] {
+  const byRoutine = new Map<string, TaskOccurrenceOut[]>()
+  for (const o of items) {
+    const key = o.routine_id ?? ANYTIME_KEY
+    const list = byRoutine.get(key) ?? []
+    list.push(o)
+    byRoutine.set(key, list)
+  }
+  return [...byRoutine.entries()]
+    .map(([key, list]) => ({
+      key,
+      name: key === ANYTIME_KEY ? "Anytime" : (routineOrder.get(key)?.name ?? "Routine"),
+      items: list.sort((a, b) => a.title.localeCompare(b.title)),
+      sort: key === ANYTIME_KEY ? Number.MAX_SAFE_INTEGER : (routineOrder.get(key)?.sort ?? 0),
+    }))
+    .sort((a, b) => a.sort - b.sort)
+    .map(({ key, name, items }) => ({ key, name, items }))
+}
+
+/** Accent color for a routine group key (ANYTIME_KEY → neutral "Anytime" gray). */
+function accentForGroup(key: string): string {
+  return routineAccent(key === ANYTIME_KEY ? null : key)
+}
+
+/** Small routine label: a color dot + name, the "which routine?" cue that pairs
+ *  with the member-colored checkbox's "whose chore?" cue. */
+function RoutineHeader({ name, color }: { name: string; color: string }) {
+  return (
+    <p className="text-muted-foreground flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide">
+      <span className="size-2 shrink-0 rounded-full" style={{ backgroundColor: color }} />
+      {name}
+    </p>
+  )
 }
 
 /**
@@ -207,25 +252,6 @@ export function ChoreBoard({ familyId }: { familyId: string }) {
         ),
     [pastOccs, filters, freqByTaskId, overdueAnchor],
   )
-
-  function groupsFor(items: TaskOccurrenceOut[]): RoutineGroup[] {
-    const byRoutine = new Map<string, TaskOccurrenceOut[]>()
-    for (const o of items) {
-      const key = o.routine_id ?? ANYTIME_KEY
-      const list = byRoutine.get(key) ?? []
-      list.push(o)
-      byRoutine.set(key, list)
-    }
-    return [...byRoutine.entries()]
-      .map(([key, list]) => ({
-        key,
-        name: key === ANYTIME_KEY ? "Anytime" : (routineOrder.get(key)?.name ?? "Routine"),
-        items: list.sort((a, b) => a.title.localeCompare(b.title)),
-        sort: key === ANYTIME_KEY ? Number.MAX_SAFE_INTEGER : (routineOrder.get(key)?.sort ?? 0),
-      }))
-      .sort((a, b) => a.sort - b.sort)
-      .map(({ key, name, items }) => ({ key, name, items }))
-  }
 
   // Cards: one per member with ≥1 chore on the active day (after the status filter).
   const memberCards = members
@@ -382,11 +408,16 @@ export function ChoreBoard({ familyId }: { familyId: string }) {
             {view === "today" ? (
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
               {memberCards.map(({ member, items }) => {
-                const groups = groupsFor(items)
+                const groups = groupByRoutine(items, routineOrder)
                 const doneCount = items.filter((o) =>
                   o.completed_member_ids.includes(member.id),
                 ).length
                 const allDone = doneCount === items.length
+                // Per-person daily load (F30 aggregate): total estimated time across
+                // this member's chores today, regardless of done state.
+                const totalLabel = formatMinutesTotal(
+                  items.reduce((sum, o) => sum + (minutesByTaskId.get(o.task_id) ?? 0), 0),
+                )
 
                 return (
                   <section
@@ -403,6 +434,13 @@ export function ChoreBoard({ familyId }: { familyId: string }) {
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-lg font-semibold leading-tight">{member.name}</p>
                         <p className="text-muted-foreground text-sm">
+                          {totalLabel && (
+                            <span className="inline-flex items-center gap-1">
+                              <ClockIcon className="size-3.5" />
+                              {totalLabel}
+                              <span className="mx-1.5 opacity-40">·</span>
+                            </span>
+                          )}
                           {doneCount} / {items.length} done
                         </p>
                       </div>
@@ -414,14 +452,19 @@ export function ChoreBoard({ familyId }: { familyId: string }) {
                     </header>
 
                     <div className="flex flex-col gap-3">
-                      {groups.map((g) => (
+                      {groups.map((g) => {
+                        const accent = accentForGroup(g.key)
+                        // Show the routine header whenever it carries information: any
+                        // time there's more than one group, or the lone group is a real
+                        // routine (not the catch-all "Anytime").
+                        const showHeader = groups.length > 1 || g.key !== ANYTIME_KEY
+                        return (
                         <div key={g.key} className="flex flex-col gap-1.5">
-                          {groups.length > 1 && (
-                            <p className="text-muted-foreground text-xs font-medium uppercase tracking-wide">
-                              {g.name}
-                            </p>
-                          )}
-                          <ul className="flex flex-col gap-2">
+                          {showHeader && <RoutineHeader name={g.name} color={accent} />}
+                          <ul
+                            className={cn("flex flex-col gap-2", showHeader && "border-l-2 pl-3")}
+                            style={showHeader ? { borderLeftColor: accent } : undefined}
+                          >
                             {g.items.map((o) => {
                               const done = o.completed_member_ids.includes(member.id)
                               return (
@@ -443,7 +486,8 @@ export function ChoreBoard({ familyId }: { familyId: string }) {
                             })}
                           </ul>
                         </div>
-                      ))}
+                        )
+                      })}
                     </div>
                   </section>
                 )
@@ -833,19 +877,17 @@ function WeekDayColumn({
   const isToday = date === today
   const { dow, day } = dayStripLabel(date)
 
-  // Cluster related chores (routine order, then title) without spending vertical
-  // space on routine sub-headers in a narrow column.
-  const sortOf = (o: TaskOccurrenceOut) =>
-    o.routine_id ? (routineOrder.get(o.routine_id)?.sort ?? 0) : Number.MAX_SAFE_INTEGER
-  const sorted = [...items].sort((a, b) => {
-    const sa = sortOf(a)
-    const sb = sortOf(b)
-    return sa === sb ? a.title.localeCompare(b.title) : sa - sb
-  })
-
-  const assigned = sorted.filter((o) => o.members.length > 0 && !o.is_skipped)
-  const unassigned = sorted.filter((o) => o.members.length === 0 && !o.is_skipped)
-  const skipped = sorted.filter((o) => o.is_skipped)
+  // Cluster the day's assigned chores by routine ("Anytime" last) so a column
+  // shared by several people still reads which routine each chore belongs to.
+  const assigned = items.filter((o) => o.members.length > 0 && !o.is_skipped)
+  const assignedGroups = groupByRoutine(assigned, routineOrder)
+  const unassigned = [...items]
+    .filter((o) => o.members.length === 0 && !o.is_skipped)
+    .sort((a, b) => a.title.localeCompare(b.title))
+  const skipped = [...items]
+    .filter((o) => o.is_skipped)
+    .sort((a, b) => a.title.localeCompare(b.title))
+  const isEmpty = assigned.length === 0 && unassigned.length === 0 && skipped.length === 0
 
   // done/total over assigned member-rows, ignoring the status filter (so the count
   // reflects the day's whole load even when filtered to "to-do" or "done").
@@ -857,6 +899,21 @@ function WeekDayColumn({
       if (o.completed_member_ids.includes(m.id)) done += 1
     }
   }
+
+  // Per-person daily load (F30 aggregate): summed estimated time each member is on
+  // the hook for this day, ignoring the status filter. Shown as a footer so the
+  // day's cleaning time splits across people are visible at a glance.
+  const minutesByMember = new Map<string, number>()
+  for (const o of assigned) {
+    const mins = minutesByTaskId.get(o.task_id) ?? 0
+    if (mins <= 0) continue
+    for (const m of o.members) {
+      minutesByMember.set(m.id, (minutesByMember.get(m.id) ?? 0) + mins)
+    }
+  }
+  const memberTimes = members
+    .map((m) => ({ member: m, minutes: minutesByMember.get(m.id) ?? 0 }))
+    .filter((x) => x.minutes > 0)
 
   return (
     <section
@@ -877,69 +934,108 @@ function WeekDayColumn({
         </span>
       </header>
 
-      {sorted.length === 0 ? (
+      {isEmpty ? (
         <p className="text-muted-foreground/50 py-3 text-center text-xs">Nothing</p>
       ) : (
-        <ul className="flex flex-col gap-1.5">
-          {assigned.map((o) =>
-            o.members
-              .filter((m) => matchesStatusForMember(o, m.id, status))
-              .map((m) => {
-                const isDone = o.completed_member_ids.includes(m.id)
-                return (
-                  <li key={`${o.task_id}:${m.id}`}>
-                    <WeekChoreRow
-                      occurrence={o}
-                      member={m}
-                      allMembers={members}
-                      canManage={canManage}
-                      done={isDone}
-                      minutes={minutesByTaskId.get(o.task_id) ?? null}
-                      onToggle={() => onToggle(o, m.id, isDone)}
-                      onSwap={(mid) => onSwap(o, mid)}
-                      onSkip={(scope) => onSkip(o, scope)}
-                      onReset={() => onReset(o)}
-                    />
-                  </li>
-                )
-              }),
-          )}
-          {unassigned.map((o) => (
-            <li
-              key={o.task_id}
-              className="flex items-center gap-2 rounded-xl border px-2.5 py-1.5"
-            >
-              <span
-                className="size-2.5 shrink-0 rounded-full"
-                style={{ backgroundColor: o.effective_color }}
-              />
-              <span className="text-muted-foreground min-w-0 flex-1 truncate text-sm">
-                {o.title}
-              </span>
-            </li>
-          ))}
-          {skipped.map((o) => (
-            <li
-              key={o.task_id}
-              className="flex items-center gap-2 rounded-xl border border-dashed px-2.5 py-1.5"
-            >
-              <BanIcon className="text-muted-foreground size-3.5 shrink-0" />
-              <span className="text-muted-foreground min-w-0 flex-1 truncate text-sm line-through">
-                {o.title}
-              </span>
-              {canManage && (
-                <button
-                  type="button"
-                  onClick={() => onReset(o)}
-                  aria-label={`Restore ${o.title}`}
-                  className="text-muted-foreground hover:text-foreground shrink-0"
+        <div className="flex flex-col gap-2">
+          {assignedGroups.map((g) => {
+            // One row per still-relevant assignee, after the status filter.
+            const rows = g.items.flatMap((o) =>
+              o.members
+                .filter((m) => matchesStatusForMember(o, m.id, status))
+                .map((m) => ({ o, m })),
+            )
+            if (rows.length === 0) return null
+            const accent = accentForGroup(g.key)
+            const showHeader = assignedGroups.length > 1 || g.key !== ANYTIME_KEY
+            return (
+              <div key={g.key} className="flex flex-col gap-1.5">
+                {showHeader && <RoutineHeader name={g.name} color={accent} />}
+                <ul
+                  className={cn("flex flex-col gap-1.5", showHeader && "border-l-2 pl-2")}
+                  style={showHeader ? { borderLeftColor: accent } : undefined}
                 >
-                  <Undo2Icon className="size-3.5" />
-                </button>
-              )}
-            </li>
-          ))}
-        </ul>
+                  {rows.map(({ o, m }) => {
+                    const isDone = o.completed_member_ids.includes(m.id)
+                    return (
+                      <li key={`${o.task_id}:${m.id}`}>
+                        <WeekChoreRow
+                          occurrence={o}
+                          member={m}
+                          allMembers={members}
+                          canManage={canManage}
+                          done={isDone}
+                          minutes={minutesByTaskId.get(o.task_id) ?? null}
+                          onToggle={() => onToggle(o, m.id, isDone)}
+                          onSwap={(mid) => onSwap(o, mid)}
+                          onSkip={(scope) => onSkip(o, scope)}
+                          onReset={() => onReset(o)}
+                        />
+                      </li>
+                    )
+                  })}
+                </ul>
+              </div>
+            )
+          })}
+
+          {(unassigned.length > 0 || skipped.length > 0) && (
+            <ul className="flex flex-col gap-1.5">
+              {unassigned.map((o) => (
+                <li
+                  key={o.task_id}
+                  className="flex items-center gap-2 rounded-xl border px-2.5 py-1.5"
+                >
+                  <span
+                    className="size-2.5 shrink-0 rounded-full"
+                    style={{ backgroundColor: o.effective_color }}
+                  />
+                  <span className="text-muted-foreground min-w-0 flex-1 truncate text-sm">
+                    {o.title}
+                  </span>
+                </li>
+              ))}
+              {skipped.map((o) => (
+                <li
+                  key={o.task_id}
+                  className="flex items-center gap-2 rounded-xl border border-dashed px-2.5 py-1.5"
+                >
+                  <BanIcon className="text-muted-foreground size-3.5 shrink-0" />
+                  <span className="text-muted-foreground min-w-0 flex-1 truncate text-sm line-through">
+                    {o.title}
+                  </span>
+                  {canManage && (
+                    <button
+                      type="button"
+                      onClick={() => onReset(o)}
+                      aria-label={`Restore ${o.title}`}
+                      className="text-muted-foreground hover:text-foreground shrink-0"
+                    >
+                      <Undo2Icon className="size-3.5" />
+                    </button>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+
+          {memberTimes.length > 0 && (
+            <footer className="mt-0.5 flex flex-wrap gap-x-2.5 gap-y-1 border-t pt-2 text-[11px]">
+              {memberTimes.map(({ member, minutes }) => (
+                <span
+                  key={member.id}
+                  className="flex items-center gap-1"
+                  title={`${member.name}: ${formatMinutesTotal(minutes)} of chores`}
+                >
+                  <span className="font-semibold" style={{ color: member.color }}>
+                    {initials(member.name)}
+                  </span>
+                  <span className="text-muted-foreground">{formatMinutesTotal(minutes)}</span>
+                </span>
+              ))}
+            </footer>
+          )}
+        </div>
       )}
     </section>
   )

@@ -16,7 +16,7 @@ import { SettingsButton } from "@/components/settings-dialog"
 
 const TABS = [
   { href: "/device", label: "Calendar", icon: CalendarDaysIcon },
-  { href: "/device/chores", label: "Tasks", icon: ListChecksIcon },
+  { href: "/device/chores", label: "Chores", icon: ListChecksIcon },
   { href: "/device/lists", label: "Lists", icon: ListTodoIcon },
   { href: "/device/meals", label: "Meals", icon: UtensilsCrossedIcon },
   { href: "/device/recipes", label: "Recipes", icon: BookOpenIcon },
