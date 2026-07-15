@@ -72,6 +72,17 @@ export function isCustomInterval(rrule: string | null): boolean {
   return p !== null && p.n >= 2
 }
 
+/**
+ * A recurring chore whose cadence re-phases off its anchor (`start_date`), so
+ * "Move to today" can shift the whole future series. True for interval-style rules
+ * (daily / every-N-days / plain weekly / monthly); false for one-offs and for
+ * `BYDAY=`/`BYMONTHDAY=` rules that pin explicit calendar days (re-anchoring can't
+ * move those). Mirrors the backend guard in `move_task_to_today`.
+ */
+export function canRephase(rrule: string | null): boolean {
+  return !!rrule && !rrule.includes("BYDAY=") && !rrule.includes("BYMONTHDAY=")
+}
+
 // ── End date (RRULE UNTIL) ──────────────────────────────────────────────────
 // The "pattern" (FREQ/INTERVAL/BYDAY) and the optional end date are edited as two
 // separate controls; we keep UNTIL out of the form's rrule field and only splice

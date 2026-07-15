@@ -126,6 +126,23 @@ frontend (FE) pieces, and **acceptance criteria** (AC) that define "done".
   companion `FamilyMenu` now links **Chores** (the do/check view) separately from **Manage tasks** (the
   CRUD page). No backend change — `GET …/tasks/occurrences?from&to` already served arbitrary ranges.
   `next build` + typecheck + eslint clean; 25 backend task tests still green. Live two-device smoke pending.
+- **Update (2026-07-14) — "Move to today": re-phase a missed chore's cadence (BE + FE):** fixes the
+  "did the every-other-day chore today but it still wants tomorrow" problem. A chore's recurrence is a
+  pure function of `start_date` + `rrule`, so a missed occurrence's next instance stayed locked to the
+  original schedule. New backend endpoint **`POST /families/{id}/tasks/{id}/move-to-today`**
+  (`move_task_to_today` in `app/services/tasks.py`) **re-anchors `start_date` to today** so the whole
+  future series re-phases from today (e.g. every-other-day → today, +2, +4…). It preserves the rotation
+  phase for week/month rotations (pins `rotation_anchor_date` to the old start when unset) and, given a
+  `member_id`, also records today's completion via the existing idempotent `complete_task`. Guards (400):
+  only recurring, **interval-style** chores — rejects one-offs, `BYDAY=`/`BYMONTHDAY=` (calendar-pinned),
+  and an already-past `UNTIL`. **FE:** a **Move to today** item in the chore-row 3-dot menu on both the
+  device board (`components/tasks/chore-board.tsx`, incl. the week grid — from the Missed section it's
+  one tap that also completes today for that member) and the companion panel
+  (`components/tasks/chores-panel.tsx`, re-phase only — its rows group all assignees). Gated by
+  `canRephase(rrule)` (`lib/recurrence.ts`) and hidden on a today occurrence; hook `useMoveTaskToToday`
+  (idempotent → `RETRY_TRANSPORT`). Original-day backfill (tapping a Missed row) is unchanged. Backend
+  tests in `tests/test_tasks.py` (re-phase, rotation-anchor preservation, the three guards, API path);
+  full suite (198) + `tsc`/eslint green. No migration (only existing columns mutated).
 - **Update (2026-06-29) — device chore board: time buckets, week paging, full-week grid (FE):** three
   refinements to `components/tasks/chore-board.tsx`. **(1) Time bucket on each card** — every chore row
   (today cards, Missed rows, and the week grid) now shows a ⏱ chip with its F30 estimate via `bucketLabel`;

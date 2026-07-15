@@ -7,6 +7,7 @@ import {
   AlertTriangleIcon,
   ArrowLeftRightIcon,
   BanIcon,
+  CalendarArrowDownIcon,
   CheckIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
@@ -25,6 +26,7 @@ import { useRealtime } from "@/hooks/use-realtime"
 import {
   useCompleteTask,
   useClearRotationOverride,
+  useMoveTaskToToday,
   useRoutines,
   useSetRotationOverride,
   useTasks,
@@ -63,7 +65,7 @@ import {
   weekRangeYMD,
   type CompletionStatus,
 } from "@/lib/chores"
-import { classifyFrequency, type ChoreFrequency } from "@/lib/recurrence"
+import { canRephase, classifyFrequency, type ChoreFrequency } from "@/lib/recurrence"
 import { bucketLabel } from "@/components/tasks/time-wheel"
 import type { MemberBrief } from "@/lib/types/calendar"
 import type { TaskOccurrenceOut } from "@/lib/types/task"
@@ -194,6 +196,7 @@ export function ChoreBoard({ familyId }: { familyId: string }) {
   const uncomplete = useUncompleteTask(familyId)
   const setOverride = useSetRotationOverride(familyId)
   const clearOverride = useClearRotationOverride(familyId)
+  const moveTask = useMoveTaskToToday(familyId)
 
   // Reassigning/skipping a turn is an owner/adult action (kids can't dodge chores).
   const { data: memberships = [] } = useQuery({
@@ -213,6 +216,13 @@ export function ChoreBoard({ familyId }: { familyId: string }) {
   // join it from the task list to show each chore's time bucket on its card.
   const minutesByTaskId = useMemo(
     () => new Map<string, number | null>(tasks.map((t) => [t.id, t.estimated_minutes])),
+    [tasks],
+  )
+
+  // task_id → can "Move to today" re-phase it? Only interval-style recurring chores
+  // (not BYDAY-pinned). Occurrences don't carry the rrule, so join from the task list.
+  const movableByTaskId = useMemo(
+    () => new Map<string, boolean>(tasks.map((t) => [t.id, canRephase(t.rrule)])),
     [tasks],
   )
 
@@ -305,6 +315,19 @@ export function ChoreBoard({ familyId }: { familyId: string }) {
       {
         onError: (err) => {
           if (isDefiniteClientError(err)) toast.error("Couldn't reset this chore.")
+        },
+      },
+    )
+  }
+  // Re-anchor the chore's recurrence to today (its cadence re-phases from today) and
+  // complete it today for `memberId` — one tap resolves a missed chore you did today
+  // without it nagging you again too soon.
+  function moveToToday(o: TaskOccurrenceOut, memberId: string) {
+    moveTask.mutate(
+      { taskId: o.task_id, memberId },
+      {
+        onError: (err) => {
+          if (isDefiniteClientError(err)) toast.error("Couldn't move this chore.")
         },
       },
     )
@@ -414,10 +437,12 @@ export function ChoreBoard({ familyId }: { familyId: string }) {
                 today={today}
                 canManage={canManage}
                 minutesByTaskId={minutesByTaskId}
+                movableByTaskId={movableByTaskId}
                 onToggle={toggle}
                 onSwap={swapTo}
                 onSkip={skip}
                 onReset={resetRotation}
+                onMoveToToday={moveToToday}
               />
             )}
 
@@ -492,10 +517,13 @@ export function ChoreBoard({ familyId }: { familyId: string }) {
                                     canManage={canManage}
                                     done={done}
                                     minutes={minutesByTaskId.get(o.task_id) ?? null}
+                                    canMove={movableByTaskId.get(o.task_id) ?? false}
+                                    today={today}
                                     onToggle={() => toggle(o, member.id, done)}
                                     onSwap={(mid) => swapTo(o, mid)}
                                     onSkip={(scope) => skip(o, scope)}
                                     onReset={() => resetRotation(o)}
+                                    onMoveToToday={() => moveToToday(o, member.id)}
                                   />
                                 </li>
                               )
@@ -576,11 +604,13 @@ export function ChoreBoard({ familyId }: { familyId: string }) {
                 status={filters.status}
                 routineOrder={routineOrder}
                 minutesByTaskId={minutesByTaskId}
+                movableByTaskId={movableByTaskId}
                 canManage={canManage}
                 onToggle={toggle}
                 onSwap={swapTo}
                 onSkip={skip}
                 onReset={resetRotation}
+                onMoveToToday={moveToToday}
               />
             )}
           </div>
@@ -617,20 +647,24 @@ function OverdueSection({
   today,
   canManage,
   minutesByTaskId,
+  movableByTaskId,
   onToggle,
   onSwap,
   onSkip,
   onReset,
+  onMoveToToday,
 }: {
   items: TaskOccurrenceOut[]
   members: MemberRow[]
   today: string
   canManage: boolean
   minutesByTaskId: Map<string, number | null>
+  movableByTaskId: Map<string, boolean>
   onToggle: (o: TaskOccurrenceOut, memberId: string, done: boolean) => void
   onSwap: (o: TaskOccurrenceOut, memberId: string) => void
   onSkip: (o: TaskOccurrenceOut, scope: "occurrence" | "turn") => void
   onReset: (o: TaskOccurrenceOut) => void
+  onMoveToToday: (o: TaskOccurrenceOut, memberId: string) => void
 }) {
   return (
     <section className="flex flex-col gap-3 rounded-3xl border border-amber-300/60 bg-amber-50 p-5 dark:border-amber-900/50 dark:bg-amber-950/30">
@@ -652,11 +686,14 @@ function OverdueSection({
                 canManage={canManage}
                 done={false}
                 minutes={minutesByTaskId.get(o.task_id) ?? null}
+                canMove={movableByTaskId.get(o.task_id) ?? false}
+                today={today}
                 dateLabel={`${m.name} · ${dayLabel(o.occurrence_date, today)}`}
                 onToggle={() => onToggle(o, m.id, false)}
                 onSwap={(mid) => onSwap(o, mid)}
                 onSkip={(scope) => onSkip(o, scope)}
                 onReset={() => onReset(o)}
+                onMoveToToday={() => onMoveToToday(o, m.id)}
               />
             </li>
           ))
@@ -673,11 +710,14 @@ function ChoreRow({
   canManage,
   done,
   minutes,
+  canMove,
+  today,
   dateLabel,
   onToggle,
   onSwap,
   onSkip,
   onReset,
+  onMoveToToday,
 }: {
   occurrence: TaskOccurrenceOut
   currentMemberId: string
@@ -686,12 +726,17 @@ function ChoreRow({
   done: boolean
   /** Estimated time bucket (F30), shown as a chip; null when no estimate is set. */
   minutes: number | null
+  /** Interval-style recurring chore whose cadence can re-phase to today (F01). */
+  canMove?: boolean
+  /** Today's YMD — "Move to today" is hidden on an occurrence that's already today. */
+  today?: string
   /** Optional sub-label (used by the Missed section to show who/when). */
   dateLabel?: string
   onToggle: () => void
   onSwap: (memberId: string) => void
   onSkip: (scope: "occurrence" | "turn") => void
   onReset: () => void
+  onMoveToToday: () => void
 }) {
   const { title, effective_color: color, up_next: upNext } = occurrence
   const style: CSSProperties = done
@@ -702,7 +747,10 @@ function ChoreRow({
   // swap/skip makes sense. A multi-day turn (e.g. a weekly owner) also offers
   // "skip the whole turn".
   const isRotating = upNext != null
-  const showMenu = canManage && isRotating
+  // "Move to today" re-phases an interval chore to today; pointless on an
+  // occurrence that's already today (no shift), so hide it there.
+  const showMove = !!canMove && occurrence.occurrence_date !== today
+  const showMenu = canManage && (isRotating || showMove)
   const multiDayTurn =
     occurrence.rotation_unit !== "occurrence" || occurrence.rotation_interval > 1
   const swapTargets = allMembers.filter((m) => m.id !== currentMemberId)
@@ -771,30 +819,42 @@ function ChoreRow({
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-52">
-            {swapTargets.length > 0 && (
+            {isRotating && (
               <>
-                <DropdownMenuLabel>Reassign</DropdownMenuLabel>
-                {swapTargets.map((m) => (
-                  <DropdownMenuItem key={m.id} onClick={() => onSwap(m.id)}>
-                    <ArrowLeftRightIcon /> Swap to {m.name}
+                {swapTargets.length > 0 && (
+                  <>
+                    <DropdownMenuLabel>Reassign</DropdownMenuLabel>
+                    {swapTargets.map((m) => (
+                      <DropdownMenuItem key={m.id} onClick={() => onSwap(m.id)}>
+                        <ArrowLeftRightIcon /> Swap to {m.name}
+                      </DropdownMenuItem>
+                    ))}
+                    <DropdownMenuSeparator />
+                  </>
+                )}
+                <DropdownMenuItem onClick={() => onSkip("occurrence")}>
+                  <BanIcon /> Skip this one
+                </DropdownMenuItem>
+                {multiDayTurn && (
+                  <DropdownMenuItem onClick={() => onSkip("turn")}>
+                    <BanIcon /> Skip this whole turn
                   </DropdownMenuItem>
-                ))}
-                <DropdownMenuSeparator />
+                )}
+                {occurrence.is_overridden && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={onReset}>
+                      <Undo2Icon /> Reset to rotation
+                    </DropdownMenuItem>
+                  </>
+                )}
               </>
             )}
-            <DropdownMenuItem onClick={() => onSkip("occurrence")}>
-              <BanIcon /> Skip this one
-            </DropdownMenuItem>
-            {multiDayTurn && (
-              <DropdownMenuItem onClick={() => onSkip("turn")}>
-                <BanIcon /> Skip this whole turn
-              </DropdownMenuItem>
-            )}
-            {occurrence.is_overridden && (
+            {showMove && (
               <>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={onReset}>
-                  <Undo2Icon /> Reset to rotation
+                {isRotating && <DropdownMenuSeparator />}
+                <DropdownMenuItem onClick={onMoveToToday}>
+                  <CalendarArrowDownIcon /> Move to today
                 </DropdownMenuItem>
               </>
             )}
@@ -819,11 +879,13 @@ function WeekGrid({
   status,
   routineOrder,
   minutesByTaskId,
+  movableByTaskId,
   canManage,
   onToggle,
   onSwap,
   onSkip,
   onReset,
+  onMoveToToday,
 }: {
   weekDates: string[]
   today: string
@@ -832,11 +894,13 @@ function WeekGrid({
   status: CompletionStatus
   routineOrder: Map<string, { name: string; sort: number }>
   minutesByTaskId: Map<string, number | null>
+  movableByTaskId: Map<string, boolean>
   canManage: boolean
   onToggle: (o: TaskOccurrenceOut, memberId: string, done: boolean) => void
   onSwap: (o: TaskOccurrenceOut, memberId: string) => void
   onSkip: (o: TaskOccurrenceOut, scope: "occurrence" | "turn") => void
   onReset: (o: TaskOccurrenceOut) => void
+  onMoveToToday: (o: TaskOccurrenceOut, memberId: string) => void
 }) {
   return (
     // 1 column stacked on narrow screens, a clean 7-across week on tablet/kiosk
@@ -852,11 +916,13 @@ function WeekGrid({
           status={status}
           routineOrder={routineOrder}
           minutesByTaskId={minutesByTaskId}
+          movableByTaskId={movableByTaskId}
           canManage={canManage}
           onToggle={onToggle}
           onSwap={onSwap}
           onSkip={onSkip}
           onReset={onReset}
+          onMoveToToday={onMoveToToday}
         />
       ))}
     </div>
@@ -871,11 +937,13 @@ function WeekDayColumn({
   status,
   routineOrder,
   minutesByTaskId,
+  movableByTaskId,
   canManage,
   onToggle,
   onSwap,
   onSkip,
   onReset,
+  onMoveToToday,
 }: {
   date: string
   today: string
@@ -884,11 +952,13 @@ function WeekDayColumn({
   status: CompletionStatus
   routineOrder: Map<string, { name: string; sort: number }>
   minutesByTaskId: Map<string, number | null>
+  movableByTaskId: Map<string, boolean>
   canManage: boolean
   onToggle: (o: TaskOccurrenceOut, memberId: string, done: boolean) => void
   onSwap: (o: TaskOccurrenceOut, memberId: string) => void
   onSkip: (o: TaskOccurrenceOut, scope: "occurrence" | "turn") => void
   onReset: (o: TaskOccurrenceOut) => void
+  onMoveToToday: (o: TaskOccurrenceOut, memberId: string) => void
 }) {
   const isToday = date === today
   const { dow, day } = dayStripLabel(date)
@@ -982,10 +1052,13 @@ function WeekDayColumn({
                           canManage={canManage}
                           done={isDone}
                           minutes={minutesByTaskId.get(o.task_id) ?? null}
+                          canMove={movableByTaskId.get(o.task_id) ?? false}
+                          today={today}
                           onToggle={() => onToggle(o, m.id, isDone)}
                           onSwap={(mid) => onSwap(o, mid)}
                           onSkip={(scope) => onSkip(o, scope)}
                           onReset={() => onReset(o)}
+                          onMoveToToday={() => onMoveToToday(o, m.id)}
                         />
                       </li>
                     )
@@ -1066,10 +1139,13 @@ function WeekChoreRow({
   canManage,
   done,
   minutes,
+  canMove,
+  today,
   onToggle,
   onSwap,
   onSkip,
   onReset,
+  onMoveToToday,
 }: {
   occurrence: TaskOccurrenceOut
   member: MemberBrief
@@ -1077,10 +1153,13 @@ function WeekChoreRow({
   canManage: boolean
   done: boolean
   minutes: number | null
+  canMove?: boolean
+  today?: string
   onToggle: () => void
   onSwap: (memberId: string) => void
   onSkip: (scope: "occurrence" | "turn") => void
   onReset: () => void
+  onMoveToToday: () => void
 }) {
   const { title, up_next: upNext } = occurrence
   // The box doubles as the checkbox and the "who" cue: the assignee's initials in
@@ -1092,7 +1171,10 @@ function WeekChoreRow({
 
   // Same swap/skip affordance as the Today view: only for a rotating chore (up_next
   // set) and only for owners/adults. A multi-day turn also offers "skip the turn".
-  const showMenu = canManage && upNext != null
+  // "Move to today" additionally shows for a movable interval chore on a non-today day.
+  const isRotating = upNext != null
+  const showMove = !!canMove && occurrence.occurrence_date !== today
+  const showMenu = canManage && (isRotating || showMove)
   const multiDayTurn =
     occurrence.rotation_unit !== "occurrence" || occurrence.rotation_interval > 1
   const swapTargets = allMembers.filter((m) => m.id !== member.id)
@@ -1146,30 +1228,42 @@ function WeekChoreRow({
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-52">
-            {swapTargets.length > 0 && (
+            {isRotating && (
               <>
-                <DropdownMenuLabel>Reassign</DropdownMenuLabel>
-                {swapTargets.map((m) => (
-                  <DropdownMenuItem key={m.id} onClick={() => onSwap(m.id)}>
-                    <ArrowLeftRightIcon /> Swap to {m.name}
+                {swapTargets.length > 0 && (
+                  <>
+                    <DropdownMenuLabel>Reassign</DropdownMenuLabel>
+                    {swapTargets.map((m) => (
+                      <DropdownMenuItem key={m.id} onClick={() => onSwap(m.id)}>
+                        <ArrowLeftRightIcon /> Swap to {m.name}
+                      </DropdownMenuItem>
+                    ))}
+                    <DropdownMenuSeparator />
+                  </>
+                )}
+                <DropdownMenuItem onClick={() => onSkip("occurrence")}>
+                  <BanIcon /> Skip this one
+                </DropdownMenuItem>
+                {multiDayTurn && (
+                  <DropdownMenuItem onClick={() => onSkip("turn")}>
+                    <BanIcon /> Skip this whole turn
                   </DropdownMenuItem>
-                ))}
-                <DropdownMenuSeparator />
+                )}
+                {occurrence.is_overridden && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={onReset}>
+                      <Undo2Icon /> Reset to rotation
+                    </DropdownMenuItem>
+                  </>
+                )}
               </>
             )}
-            <DropdownMenuItem onClick={() => onSkip("occurrence")}>
-              <BanIcon /> Skip this one
-            </DropdownMenuItem>
-            {multiDayTurn && (
-              <DropdownMenuItem onClick={() => onSkip("turn")}>
-                <BanIcon /> Skip this whole turn
-              </DropdownMenuItem>
-            )}
-            {occurrence.is_overridden && (
+            {showMove && (
               <>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={onReset}>
-                  <Undo2Icon /> Reset to rotation
+                {isRotating && <DropdownMenuSeparator />}
+                <DropdownMenuItem onClick={onMoveToToday}>
+                  <CalendarArrowDownIcon /> Move to today
                 </DropdownMenuItem>
               </>
             )}

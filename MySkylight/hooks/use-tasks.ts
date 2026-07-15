@@ -284,6 +284,35 @@ export function useClearRotationOverride(familyId: string) {
   })
 }
 
+// ── Move to today (re-phase a recurring chore's cadence) ─────────────────────
+//
+// Re-anchors the chore's recurrence to today so subsequent instances follow its
+// cadence from today (fixes "did the missed chore today, but it still wants
+// tomorrow"). Optionally completes today for the acting member (the Missed-row
+// flow). Both effects are idempotent, so re-sending over the flaky Pi link is safe.
+
+interface MoveToTodayVars {
+  taskId: string
+  memberId?: string | null // set = also complete today for that member
+}
+
+export function useMoveTaskToToday(familyId: string) {
+  const api = useApi()
+  const qc = useQueryClient()
+  return useMutation({
+    ...RETRY_TRANSPORT,
+    mutationFn: ({ taskId, memberId = null }: MoveToTodayVars) =>
+      api.post<TaskOut>(`/families/${familyId}/tasks/${taskId}/move-to-today`, {
+        member_id: memberId,
+      }),
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: ["task-occurrences", familyId] })
+      qc.invalidateQueries({ queryKey: ["tasks", familyId] })
+      qc.invalidateQueries({ queryKey: ["task-streak", familyId] })
+    },
+  })
+}
+
 // ── Chore balancer ────────────────────────────────────────────────────────────
 
 /**
