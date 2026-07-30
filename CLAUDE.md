@@ -37,6 +37,9 @@ Backend canonical docs cross-reference here; its API surface is in `docs/PLAN.md
 - File/folder naming: kebab-case; components/types PascalCase; hooks/functions camelCase.
 
 ## Deployment — automatic on push to `main` (no manual deploy)
+> **Mid-migration (2026-07-29 →):** the step-by-step cutover runbook is **[`docs/MIGRATION.md`](./docs/MIGRATION.md)**.
+> Until it's complete, the live site may still be the old Netlify deployment or nothing at all.
+
 **Self-hosted** on the home Ubuntu server (the Jellyfin box) as the `myskylight-web` Docker service,
 behind the same Caddy that fronts the APIs. Live at `https://myskylight.daymonhansen.com`.
 Was on Netlify until 2026-07-29; moved because Netlify bills per function invocation and a Next.js
