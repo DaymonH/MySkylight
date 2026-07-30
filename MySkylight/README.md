@@ -45,10 +45,16 @@ Both support hot reload — save a file and the change appears immediately.
 |---|---|
 | `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | Clerk dashboard → API Keys |
 | `CLERK_SECRET_KEY` | Clerk dashboard → API Keys |
-| `API_BASE_URL` | `http://localhost:8001` for local, `https://skylight-api.daymonhansen.com` for production |
+| `API_BASE_URL` | `http://localhost:8001` for local; `http://skylight-api:8001` in production (Docker service name — API traffic stays on the host) |
 | `CLERK_JWT_TEMPLATE` | Name of the JWT template in Clerk (set to `skylight-api`) |
 
-These are already set in `.env.local` for local dev. For production, set them in the Netlify dashboard under **Site settings → Environment variables**.
+These are already set in `.env.local` for local dev — copy `.env.example` to `.env.local` if you're
+starting fresh.
+
+**Production** is self-hosted on the home server, so there's no hosting dashboard: the values live in
+`HomeServerAPI/.env` on that machine (see `HomeServerAPI/.env.example`). `NEXT_PUBLIC_*` values are
+compiled into the client bundle at build time, so changing one requires a **rebuild** —
+`./ops/deploy.sh myskylight`, or re-run this repo's deploy workflow — not just a container restart.
 
 ---
 

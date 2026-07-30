@@ -1,0 +1,53 @@
+name: Deploy frontend to home server
+
+# The frontend is a Compose service on the home server (`myskylight-web`), built
+# from this repo's source. Compose and the deploy script live in HomeServerAPI, so
+# this workflow just SSHes in and runs that script's `myskylight` target — which
+# pulls this repo to origin/main, rebuilds, health-checks, and rolls back on
+# failure.
+#
+# Docs-only pushes are skipped: nothing outside MySkylight/ affects the image.
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "MySkylight/**"
+      - ".github/workflows/deploy.yml"
+  # Manual trigger for redeploying the current main without a new commit (e.g.
+  # after rotating Clerk keys in the server's .env, which needs a rebuild since
+  # NEXT_PUBLIC_* values are compiled into the bundle).
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Deploy myskylight-web
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy over SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          # Same five secrets as the HomeServerAPI repo. PI_REPO_DIR points at the
+          # HomeServerAPI checkout (where compose lives), not at this repo — the
+          # deploy script finds this one as a sibling.
+          host: ${{ secrets.PI_HOST }}
+          username: ${{ secrets.PI_USER }}
+          key: ${{ secrets.PI_SSH_KEY }}
+          port: ${{ secrets.PI_SSH_PORT }}
+          script_stop: true
+          command_timeout: 30m
+          script: |
+            set -Eeuo pipefail
+            REPO_DIR="${{ secrets.PI_REPO_DIR }}"
+            chmod +x "$REPO_DIR/ops/deploy.sh"
+            export REPO_DIR="$REPO_DIR"
+            export BRANCH="main"
+            export WEB_BRANCH="main"
+            # A `next build` on the server takes a few minutes.
+            export HEALTH_TIMEOUT="180"
+            "$REPO_DIR/ops/deploy.sh" myskylight
