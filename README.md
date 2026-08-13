@@ -1,42 +1,102 @@
 # MySkylight
 
-A self-hosted clone of the **Skylight Family Calendar** — a wall-mounted touchscreen "hub of the
-home" plus a companion mobile app, on our own backend.
+A self-hosted replacement for the **Skylight Family Calendar**: a wall-mounted touchscreen "hub of
+the home" plus a companion mobile app, running on my own backend instead of a subscription.
 
-- **Frontend** — `MySkylight/` · Next.js 16 + React 19 + Tailwind v4 + shadcn/ui. One app serving a
-  full-screen **device/kiosk** view (`/device`) and a mobile **companion** PWA (`/app`).
-- **Backend** — `MySkylightBackend/` · **FastAPI + SQLite** (SQLAlchemy + Alembic), **Clerk** auth
-  (JWT verification + webhooks), per-family authz, realtime SSE, APScheduler, DeepSeek for AI features.
+Both surfaces — the kiosk and the phone — are served by one Next.js app against one FastAPI service.
 
-## Key decisions
-1. **One responsive Next.js app + PWA** for both screen and phone (no separate native app yet).
-2. **Internal calendar first**; external sync (Google/Outlook/Apple/Cozi/Yahoo) is a later phase.
-3. **DeepSeek** powers the AI "Smart" features (Magic Import, recipe generation).
-4. **Clerk** for authentication (identity only) — Family, roles, and invitations stay in our DB.
+**Status: working software, actively built.** 154 of 195 tracked tasks complete. Phases 0–4
+(foundations, identity, calendar, tasks, lists) are done end to end; phases 5–7 are partial; 8–9
+haven't started. Details in [docs/TRACKER.md](./docs/TRACKER.md).
 
-## 📚 Documentation
-| Doc | What's in it |
-|-----|--------------|
-| [docs/PLAN.md](./docs/PLAN.md) | Vision, tech stack, architecture, data model, API surface, **phased roadmap**, risks |
-| [docs/FEATURES.md](./docs/FEATURES.md) | Every Skylight feature → our spec, BE/FE pieces, acceptance criteria (`Fxx` IDs) |
-| [docs/TRACKER.md](./docs/TRACKER.md) | **Living checklist** — 148 tasks across 10 phases; tick items as you build |
+## Verify it in under a minute
 
-## Feature coverage at a glance
-**Free:** Tasks/Chores · Color Coding · Mobile App · Custom Lists · Grocery→Instacart · Day/Week/Month/Schedule
-views · Weather · Event Countdowns · Sleep Mode · Parental Lock · Software Updates · Device Linking · Share Access
-**Calendar Plus:** Rewards · Meal Planning · Photo Screensaver · Magic Import (AI)
-**Auto-sync (later):** Google · Outlook · Apple · Cozi · Yahoo
-
-## Status
-🟡 **Planning complete — implementation not started.** Next up is **Phase 0 (Foundations)** in
-[docs/TRACKER.md](./docs/TRACKER.md): git init, FastAPI skeleton + SQLite/Alembic, Next.js `/device`
-& `/app` shells, API client, **Clerk wiring (both ends)**, realtime + PWA scaffolding.
-
-## Repo layout
+```bash
+cd MySkylightBackend
+uv run --extra dev pytest -q
+# Expected: 194 passed in ~11s
 ```
-SkylightClone/
-├── README.md              ← you are here
-├── docs/                  ← plan, feature specs, tracker
-├── MySkylight/            ← Next.js frontend (device + mobile PWA)
-└── MySkylightBackend/     ← FastAPI + SQLite backend (to be scaffolded)
+
+That suite is not decorative. It includes `test_authz.py` and `test_calendar_authz.py` (can a member
+of family A read family B's data — no), `test_security.py`, and `test_webhooks.py` (Clerk signature
+verification, including forged and replayed payloads). Multi-tenant authorization is the part of this
+app that would actually hurt if it were wrong, so it's the part with the most tests.
+
+```bash
+# What the API surface looks like
+cat MySkylightBackend/docs/api.md
+# The data model, generated from the live schema
+cat MySkylightBackend/docs/schema.sql
+```
+
+## Architecture
+
+**One backend, two very different front ends.** The device is a wall-mounted always-on touchscreen
+used by the whole family, including kids with PINs; the phone is a private, authenticated companion.
+Same data, same realtime stream, different assumptions about who's holding it.
+
+| | |
+|---|---|
+| **Frontend** — `MySkylight/` | Next.js 16, React 19, Tailwind v4, shadcn/ui. 19 routes across a full-screen kiosk view (`/device`) and a mobile PWA (`/app`), plus invite acceptance and auth flows. 95 components/pages. |
+| **Backend** — `MySkylightBackend/` | FastAPI + SQLAlchemy (async) + SQLite, 19 Alembic migrations, 15 routers, 16 service modules. Clerk for identity only — families, roles, and invitations live in this database. Realtime via SSE; background refresh via APScheduler. |
+
+**Layering:** `routers/` handle HTTP and nothing else, `services/` hold the domain logic
+(calendar recurrence, chore balancing, CalDAV sync, rewards, weather), `models/` and `schemas/` keep
+the ORM and the wire format separate. `app/ai/provider.py` isolates the AI vendor behind one
+interface — the project moved from DeepSeek to Gemini Flash-Lite without touching any caller.
+
+## Running it
+
+```bash
+# Backend
+cd MySkylightBackend
+cp .env.example .env          # fill in Clerk keys; GEMINI_API_KEY optional
+uv run alembic upgrade head
+uv run uvicorn app.main:app --reload
+
+# Frontend
+cd MySkylight
+npm install && npm run dev    # /device for the kiosk, /app for the phone
+```
+
+Production runs in Docker behind Caddy on a Raspberry Pi. Without `GEMINI_API_KEY` set, the AI
+endpoints return 503 and everything else works normally — the AI features are additive, not load-bearing.
+
+## Notes on a few decisions
+
+- **Clerk for identity, our DB for authority.** Clerk answers "who is this human." It does not decide
+  what they can see. Family membership, roles, and per-family access are ours, which is why the authz
+  tests are ours too.
+- **The AI is behind an interface and allowed to be absent.** Magic Import (paste a school newsletter,
+  get structured events) is a genuine language problem and worth a model. Everything else — recurrence,
+  chore rotation, streaks — is deterministic, because a family calendar that occasionally invents an
+  appointment is worse than no calendar.
+- **Scope was cut on purpose, and written down.** Instacart checkout (F05) descoped, photo screensaver
+  (F16) parked, external-calendar *writes* (F19/F21/F22) descoped in favor of read-only sync. Each is
+  recorded in the tracker with the reason rather than left as a silent gap.
+- **SQLite, deliberately.** One family, one Pi. [docs/postgres-migration.md](./MySkylightBackend/docs/postgres-migration.md)
+  covers the move if that stops being true.
+
+## Not done yet
+
+Phase 8 (device pairing, sleep mode, software updates) and Phase 9 (polish and hardening) are
+untouched. The Smart/AI phase has a working backend but the review UIs are unfinished. There's no CI —
+tests are run locally. External calendar sync is read-only.
+
+## Documentation
+
+| Doc | What's in it |
+|---|---|
+| [docs/PLAN.md](./docs/PLAN.md) | Vision, architecture, data model, API surface, phased roadmap, risks |
+| [docs/FEATURES.md](./docs/FEATURES.md) | Every feature spec'd with acceptance criteria (`Fxx` IDs) |
+| [docs/TRACKER.md](./docs/TRACKER.md) | Living checklist — 195 tasks across 10 phases, with what was cut and why |
+| [MySkylightBackend/docs/api.md](./MySkylightBackend/docs/api.md) | Generated API reference |
+
+## Layout
+
+```
+MySkylight/
+├── MySkylight/            ← Next.js frontend (kiosk + mobile PWA)
+├── MySkylightBackend/     ← FastAPI backend (app/, tests/, alembic/, docs/)
+└── docs/                  ← plan, feature specs, tracker
 ```
