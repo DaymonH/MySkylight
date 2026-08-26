@@ -44,5 +44,21 @@ hand. The **backend deploys separately** (its own GitHub Actions → SSH → reb
 - When an **API-contract change spans both repos** (e.g. a field added/removed on an endpoint), push the
   backend and frontend close together — otherwise the live FE and BE briefly mismatch.
 
+> **The site was rebuilt on Netlify on 2026-07-30 after a ~$26 function-invocation bill.** Setup +
+> verification: **[`docs/NETLIFY-SETUP.md`](./docs/NETLIFY-SETUP.md)**.
+
+### Realtime does NOT go through the proxy — don't "fix" it back
+Every route handler is a billed serverless function here, and the platform kills long responses. When
+the SSE stream ran through `/api/backend/…` the always-on kiosk reconnected every ~13s, and each
+reconnect resynced 14 query keys — on the order of a million invocations a month.
+
+So `hooks/use-realtime.ts` connects **straight to `NEXT_PUBLIC_API_BASE_URL`**, using `fetch` + a
+streamed body (not `EventSource`, which can't send an `Authorization` header) with a client-minted
+Clerk token, and `lib/sse.ts` does the framing.
+- **`NEXT_PUBLIC_API_BASE_URL` must be set in production.** Unset, the stream silently falls back to
+  the proxy path and the bill comes back. It's inlined at build time, so changing it needs a redeploy.
+- The backend's `CORS_ORIGINS` must list the site's origin, since the browser now calls it cross-origin.
+- Regular API calls still go through the proxy — that's fine, they scale with actual use.
+
 ## Never edit
 `.env*` / secrets. `NEXT_PUBLIC_*` are the only client-exposed vars.
