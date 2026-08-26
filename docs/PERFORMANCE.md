@@ -5,19 +5,30 @@
 > measured yet** — see [§7 Measure first](#7-measure-first-before-you-optimize). Treat the
 > rankings as informed hypotheses, not benchmarks.
 >
-> Context: single household, one Raspberry Pi (`pi.daymonhansen.com`, DDNS) running the
-> FastAPI backend behind Caddy; Next.js frontend on **Netlify**; a 24/7 wall kiosk
-> (`/device`) + phone companion (`/app`); realtime via SSE. Related:
+> **Update 2026-07-29 — the #1 finding below is fixed by infrastructure, not code.** The
+> frontend left Netlify and is now self-hosted next to the API on the home server (a single
+> Ubuntu box; the Raspberry Pi is retired). The Next proxy reaches FastAPI over the Docker
+> network, so **the cross-internet proxy→backend hop no longer exists**. Sections below that
+> rank it #1 are kept for the reasoning, but the remaining wins are (a) stop refetching what
+> SSE already delivered, (b) tame kiosk re-renders, (c) unblock the backend event loop,
+> (d) the index gap.
+>
+> Context: single household, one home server running the FastAPI backend **and** the Next.js
+> frontend behind one Caddy; a 24/7 wall kiosk (`/device`) + phone companion (`/app`);
+> realtime via SSE. Related:
 > [`HomeServerAPI/skylight-api/docs/postgres-migration.md`](../../HomeServerAPI/skylight-api/docs/postgres-migration.md)
 > (TL;DR: the DB engine is **not** the bottleneck — don't switch to Postgres for speed).
 
 ## 1. The one-paragraph mental model
 
 Latency in this app is dominated by **network round-trips across the public internet**,
-not by the database or query speed. Every API call goes browser → Netlify-hosted Next
-proxy (`/api/backend/[...path]`, mints a Clerk token) → **cross-internet hop to the home
-Pi** → Caddy → FastAPI. That hop is the slowest, least reliable link (the proxy already
-carries a 20s timeout + retry because of it). The frontend then *multiplies* that hop by
+not by the database or query speed. Every API call goes browser → Next proxy
+(`/api/backend/[...path]`, mints a Clerk token) → Caddy → FastAPI. **Originally the proxy
+ran on Netlify, so the middle step was a cross-internet hop to the home Pi** — the slowest,
+least reliable link, which is why the proxy carries a 20s timeout + retry. Since 2026-07-29
+the proxy and FastAPI share a host and that hop is a Docker-network call; a request now
+crosses the internet once (browser → home server) instead of twice, and not at all for the
+LAN kiosk. The frontend still *multiplies* whatever hop remains by
 treating every realtime SSE event as "throw away the cache and refetch," even though the
 SSE frame already contains the changed data. On the always-on kiosk, a second, independent
 cost is **render churn**: the calendar re-renders its whole tree every minute (a clock

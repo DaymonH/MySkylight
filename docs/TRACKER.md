@@ -43,7 +43,7 @@ Goal: both apps boot, talk to each other, and the data/auth/realtime plumbing ex
 
 - [x] `[INFRA]` Initialize git repo at root; add root `.gitignore` (Python, Node, `.env`, `*.db`) — both repos have `.gitignore` covering `.env`, `*.db`, `venv`
 - [x] `[INFRA]` Add root `README.md` + `docs/` (done) and a `.env.example` for each app — FE + BE both have `.env.example`; backend README still TODO
-- [x] `[INFRA]` Decide local dev: run scripts / `docker-compose.yml` (api + web) — API via `HomeServerAPI/docker-compose.yml`; web via Netlify (`netlify.toml`)
+- [x] `[INFRA]` Decide local dev: run scripts / `docker-compose.yml` (api + web) — API via `HomeServerAPI/docker-compose.yml`; web via `npm run dev`. _(Web hosting was Netlify until 2026-07-29; now the `myskylight-web` service in that same compose file.)_
 
 **Backend skeleton — `HomeServerAPI/skylight-api/`**
 
@@ -452,7 +452,8 @@ reconciled against the actual `SkylightClone/MySkylight/` tree.
 - [x] Proxy route (`app/api/backend/[...path]/route.ts`) — injects Clerk JWT server-side
 - [x] API helpers (`lib/api-client.ts`, `hooks/use-api.ts`, `lib/api.ts`, `lib/use-api-query.ts`)
 - [x] `.env.local` configured; `skylight-api` Clerk JWT template created
-- [ ] Netlify deploy configured (`netlify.toml` present — confirm pipeline)
+- [x] Self-hosted deploy configured — `MySkylight/Dockerfile` + `.github/workflows/deploy.yml` → `HomeServerAPI/ops/deploy.sh myskylight` (the `myskylight-web` Compose service behind Caddy). Netlify dropped 2026-07-29: it bills per function invocation, and Clerk middleware + the API proxy route make nearly every request one.
+- [ ] First self-hosted deploy verified end-to-end on the home server (TLS issued, sign-in works, SSE stays connected)
 - [ ] `app/api/webhooks/clerk` registered in the Clerk dashboard
 
 **Settings & preferences** _(→ Phase 2 / F26; future home for F09 sleep + F12 orientation/default-view)_

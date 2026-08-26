@@ -37,12 +37,29 @@ Backend canonical docs cross-reference here; its API surface is in `docs/PLAN.md
 - File/folder naming: kebab-case; components/types PascalCase; hooks/functions camelCase.
 
 ## Deployment — automatic on push to `main` (no manual deploy)
-The frontend is hosted on **Netlify** (`MySkylight/netlify.toml`: `next build` + `@netlify/plugin-nextjs`)
-and **auto-deploys on every push to `main`** — there's no GitHub Actions workflow and nothing to run by
-hand. The **backend deploys separately** (its own GitHub Actions → SSH → rebuild on the Pi, which runs
-`alembic upgrade head`). So a push to `main` here goes live on its own.
+> **Mid-migration (2026-07-29 →):** the step-by-step cutover runbook is **[`docs/MIGRATION.md`](./docs/MIGRATION.md)**.
+> Until it's complete, the live site may still be the old Netlify deployment or nothing at all.
+
+**Self-hosted** on the home Ubuntu server (the Jellyfin box) as the `myskylight-web` Docker service,
+behind the same Caddy that fronts the APIs. Live at `https://myskylight.daymonhansen.com`.
+Was on Netlify until 2026-07-29; moved because Netlify bills per function invocation and a Next.js
+app invokes one on nearly every request (Clerk middleware + the API proxy route).
+
+`.github/workflows/deploy.yml` **auto-deploys on every push to `main`** that touches `MySkylight/**`
+— it SSHes to the server and runs `ops/deploy.sh myskylight` from the **HomeServerAPI** repo, which
+owns `docker-compose.yml`, the `Caddyfile`, and the deploy script. That target pulls this repo,
+rebuilds the image, health-checks `/api/health` inside the container, and rolls back on failure. The
+**backend deploys separately** from its own repo (SSH → rebuild → `alembic upgrade head`).
 - When an **API-contract change spans both repos** (e.g. a field added/removed on an endpoint), push the
   backend and frontend close together — otherwise the live FE and BE briefly mismatch.
+- **Config lives on the server**, in `HomeServerAPI/.env` — not here, and no longer in a hosting
+  dashboard. `NEXT_PUBLIC_*` values are compiled into the client bundle, so changing one needs a
+  **rebuild**, not a restart: push, or run the workflow manually via `workflow_dispatch`.
+- **Where things run:** `Dockerfile` (multi-stage, `output: "standalone"`) builds it;
+  `app/api/health/route.ts` is the deploy's liveness probe; `app/sw.js/route.ts` reads `COMMIT_REF`,
+  which the deploy script sets from this repo's git SHA to bust the kiosk's service-worker cache.
+- The proxy route reaches the backend at `http://skylight-api:8001` over the Docker network, so API
+  traffic never leaves the host — don't point `API_BASE_URL` at the public API domain in production.
 
 ## Never edit
 `.env*` / secrets. `NEXT_PUBLIC_*` are the only client-exposed vars.

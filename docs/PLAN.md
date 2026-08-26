@@ -268,10 +268,13 @@ Each phase is independently shippable and has an **exit criteria**. Detailed tas
   prevent accidental navigation in kiosk mode.
 - **Observability**: structured logging, request IDs, a simple `/health` + `/version`.
 - **Performance**: findings + prioritized plan in [PERFORMANCE.md](./PERFORMANCE.md) (2026-06-25
-  discovery pass). Headline: latency is dominated by the cross-internet Netlify→Pi hop and
-  SSE-as-invalidation refetches, plus 24/7 kiosk re-render churn — *not* the DB. Top quick win:
-  add the missing `members.family_id` index.
-- **Deployment**: Docker Compose; SQLite file on a mounted volume; nightly DB backup task.
+  discovery pass). Headline: latency was dominated by the cross-internet Netlify→Pi hop and
+  SSE-as-invalidation refetches, plus 24/7 kiosk re-render churn — *not* the DB. **The hop is gone
+  as of 2026-07-29**: the frontend is self-hosted alongside the API, so the proxy reaches it over the
+  Docker network. What's left is SSE refetch churn and kiosk re-renders. Top quick win: add the
+  missing `members.family_id` index.
+- **Deployment**: Docker Compose on one home server — frontend *and* APIs behind a single Caddy;
+  SQLite file on a mounted volume; nightly DB backup task.
 
 ---
 
