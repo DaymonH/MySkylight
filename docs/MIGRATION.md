@@ -37,23 +37,75 @@ Neither works without the other. Both are drafts — **§7 covers when to merge 
 - [ ] **Namecheap** — DNS records for `daymonhansen.com` + the Dynamic DNS password
 - [ ] **Router admin** — to change port forwarding and set a DHCP reservation
 - [ ] **Pi SSH** — `ssh pi@pi.daymonhansen.com -p 2222`, or `ssh pi@192.168.68.62` on the LAN
-- [ ] **Desktop** — terminal access, and `sudo`
+- [ ] **Desktop** — `ssh king@192.168.68.61` (key auth already set up from the Mac). You also need the
+      `sudo` **password** — `king` has no passwordless sudo, so the Docker install can't be scripted
+      remotely
+- [ ] **ProtonVPN app** on the desktop — see the blocker in §1a
 - [ ] **GitHub** — repo settings → secrets, for both repos
 
 ---
 
-## 1. Verify four facts first — they change later steps
+## 1. Host facts — verified, plus the one blocker
 
-Don't skip this. Getting §9 wrong is the most likely way to end up with a site that loads but won't
-let anyone sign in.
+Surveyed over SSH on **2026-07-30**. The facts below are measured, not assumed; re-check only if the
+machine changes.
 
-- [ ] **1a. What domain was the live site on?**
-      Check Namecheap → Domain List → `daymonhansen.com` → Advanced DNS, and look for a `myskylight`
-      record (likely a CNAME pointing at Netlify).
-  - **`myskylight.daymonhansen.com`** → the domain isn't changing, only where it points. Clerk's
-    domain configuration stays valid. This is the easy path and what the PRs assume.
-  - **A `*.netlify.app` address** → you're introducing a new public domain. Add §9b's Clerk domain
-    setup, and expect new DNS records for Clerk itself.
+| | |
+|---|---|
+| Host | `king-desktop`, `king@192.168.68.61` (SSH key auth from the Mac already works, port 22) |
+| OS | Ubuntu 22.04.5 LTS, kernel 6.8, **x86-64** |
+| Resources | 7.7 GB RAM, 4 cores, 407 GB free on `/` — comfortably enough for `next build` (~2 GB) |
+| **Ports 80/443** | **free** — nothing listening. Caddy can take them |
+| Jellyfin | bare-metal systemd service, active + enabled at boot, on `:8096` — **no conflict** |
+| Docker | **not installed** (§2a). `king` has **no passwordless sudo**, so you must run that step yourself |
+| Auto-suspend | already effectively off (`sleep-inactive-ac-type=nothing`, logind `IdleAction` default) — §2c is verify-only |
+| `git` | 2.34.1, present |
+| Repos | `~/GithubProjects` doesn't exist yet (§2e creates it) |
+| Home public IP | `204.8.100.99` — and `skylight-api`/`landlord-api`/`workout-api`/`pi` all resolve to it, so the Pi's DDNS is working |
+| `myskylight.daymonhansen.com` | **no DNS record at all** — the Netlify record is already gone, so §3a only has to *create* one |
+| Pi | still live and serving (`skylight-api` health → 200) |
+
+### 🛑 1a. BLOCKER — ProtonVPN's kill switch owns the default route
+
+**This must be resolved before anything else in this runbook will work.** The desktop runs ProtonVPN
+(WireGuard) with `"killswitch": 2` — the *permanent* kill switch — in `~/.config/Proton/VPN/settings.json`.
+It installs a default route via Proton's kill-switch interface (`pvpnksintrf1`, metric 98) that wins
+over the LAN gateway (metric 100). Measured consequences:
+
+| Symptom | Evidence |
+|---|---|
+| The box's public IP isn't yours | `curl api.ipify.org` on the desktop → `159.26.102.97` (Proton exit), vs `204.8.100.99` from the LAN |
+| Replies to visitors leave via the tunnel | `ip route get 1.2.3.4 from 192.168.68.61` → `dev proton0` |
+
+So: **DDNS would publish Proton's IP**, repointing not just the new site but the three APIs that work
+today; and inbound port-forwarded connections would be answered out the wrong interface, so
+Let's Encrypt could never validate and no certificate would ever issue. `killswitch: 2` survives
+reboots and stays in force even when the app shows "disconnected" — disconnecting is *not* enough.
+
+- [ ] **Fix — split tunnelling in "include" mode** (chosen 2026-07-30; the Proton split-tunnel daemon
+      is already running on this box, so it's supported). In the Proton VPN app:
+  1. **Settings → Kill switch → Off.** Permanent kill switch and a public server can't coexist; it's
+     the kill switch, not the tunnel, that hijacks routing.
+  2. **Settings → Split tunnelling → On → mode "Include"** ("only send selected apps/IPs through the
+     VPN"). Include only what actually needs the tunnel — a torrent client, say. Everything
+     unlisted — Caddy, the APIs, DDNS, Jellyfin — then uses the normal LAN route.
+  3. Reconnect the VPN.
+
+- [ ] **Verify the fix before continuing.** Both must be true:
+
+```bash
+ssh king@192.168.68.61 'curl -s https://api.ipify.org; echo'      # want 204.8.100.99, not 159.x
+ssh king@192.168.68.61 'ip route get 1.2.3.4 from 192.168.68.61'  # want dev enp37s0, not proton0
+```
+
+Notes: app-based split tunnelling only affects apps started *after* the change, so restart anything
+already running. Docker containers aren't "apps" with a path — in include mode their traffic stays
+off the tunnel by default, which is what we want. The VPN app runs inside the GNOME session, so after
+a headless reboot it may not connect at all; that's harmless for hosting, but it does mean routing
+can differ depending on whether someone has logged in — which is exactly why the kill switch has to
+be off rather than merely disconnected.
+
+### Still open — Clerk (answer before §7)
 
 - [ ] **1b. Which Clerk instance served production — development or production?**
       Clerk dashboard → the instance switcher. Local dev uses a **development** instance
@@ -70,14 +122,22 @@ let anyone sign in.
       `CLERK_JWT_TEMPLATE` (`skylight-api`) must exist on it. A mismatch means every API call 401s
       even though sign-in works.
 
-- [ ] **1d. Desktop basics** — Ubuntu version, LAN IP, whether Docker is installed, and what's
-      listening on 80/443. §2 gets you all of this.
+> Note: `myskylight.daymonhansen.com` currently resolves to nothing, which is consistent with the
+> site having lived there on a record that was removed along with the Netlify site (the backend's
+> `.env.example` assumes that hostname too). Confirm in the Clerk dashboard while answering 1b. If
+> that's right, the hostname isn't changing — only the IP behind it — so any Clerk domain records for
+> it stay valid.
 
 ---
 
 ## 2. Prepare the desktop
 
-- [ ] **2a. Install Docker** (skip if `docker --version` works)
+> Do §1a (the VPN fix) first. Everything here works regardless, but deploying on top of the VPN
+> routing produces failures that look like DNS or firewall problems.
+
+- [ ] **2a. Install Docker** — confirmed **not** installed. `king` has no passwordless sudo, so run
+      this at the desktop's own terminal (or an interactive SSH session) where you can type the
+      password:
 
 ```bash
 curl -fsSL https://get.docker.com | sh
@@ -85,31 +145,30 @@ sudo usermod -aG docker "$USER" && newgrp docker
 sudo systemctl enable --now docker
 ```
 
-- [ ] **2b. SSH server** — the auto-deploy needs it
+Confirm with `docker run --rm hello-world`. `newgrp docker` only fixes the *current* shell — log out
+and back in so the group sticks, otherwise later `docker` calls fail with a permission error.
 
-```bash
-sudo apt update && sudo apt install -y openssh-server
-sudo systemctl enable --now ssh
-```
+- [ ] **2b. SSH server** — already running on port 22 with key auth working, so nothing to do. (For
+      reference, on a fresh box: `sudo apt install -y openssh-server && sudo systemctl enable --now ssh`.)
 
-- [ ] **2c. Stop the desktop from sleeping.** This is the single most common way a repurposed
-      desktop fails as a server — it works, then goes unreachable overnight.
+- [ ] **2c. Sleep — already handled, just confirm.** `sleep-inactive-ac-type` reads `nothing` and
+      logind's `IdleAction` is at its default (`ignore`), so this box shouldn't auto-suspend. Worth a
+      glance in Settings → Power since a GUI session can override it. Belt-and-braces if you want it
+      guaranteed:
 
 ```bash
 sudo systemctl mask sleep.target suspend.target hibernate.target hybrid-sleep.target
-# On a GNOME desktop, also turn off automatic suspend while on AC power:
-gsettings set org.gnome.settings-daemon.plugins.power sleep-inactive-ac-type 'nothing'
 ```
 
 Also check the BIOS/UEFI for a "restore power state after power loss" option, so the box comes back
 on its own after an outage.
 
-- [ ] **2d. Give it a fixed LAN address.** Find it, then set a DHCP reservation for that MAC in the
-      router (easier than static config on the host):
+- [ ] **2d. Pin the LAN address.** It's currently `192.168.68.61` on `enp37s0` (DHCP). Set a
+      **DHCP reservation** for that interface's MAC in the router so it can't move — the port
+      forwards in §6 point at this address:
 
 ```bash
-ip -4 route get 1.1.1.1 | awk '{print $7}'   # LAN IP
-ip link | grep -A1 'state UP'                # MAC address
+ip link show enp37s0 | awk '/link\/ether/{print $2}'   # MAC for the reservation
 ```
 
 - [ ] **2e. Clone both repos side by side.** The layout matters — the Compose build context looks for
@@ -158,14 +217,19 @@ the move.
 
 | Host | Purpose | Action |
 |---|---|---|
-| `myskylight` | the site | **Delete the old Netlify CNAME**, create an A record |
+| `myskylight` | the site | **create** — verified 2026-07-30 that no record exists, so there's no Netlify CNAME to remove first |
 | `home` | SSH/deploy target for the desktop | create |
 | `skylight-api` | API | already exists |
 | `workout-api` | API | already exists |
 | `landlord-api` | API | already exists |
 | `pi` | old deploy target | leave for now; remove in §11 |
 
-> A `myskylight` **CNAME** to Netlify must be deleted before an A record can exist for the same host.
+> If a `myskylight` CNAME ever reappears, it must be deleted before an A record can exist for the
+> same host — the two record types can't coexist.
+>
+> **The DDNS updater must run on a host whose outbound IP is your home IP.** With the VPN routing
+> unfixed (§1a) it would publish Proton's exit IP and repoint every hostname here — including the
+> three APIs that work today. Re-check §1a's verification before starting the stack.
 
 - [ ] **3b. Enable Dynamic DNS** on the domain (Advanced DNS → Dynamic DNS) and copy the password.
 
@@ -401,7 +465,10 @@ curl -s https://landlord-api.daymonhansen.com/api/v1/health
       history, a list). If this looks empty, **stop** and see Rollback
 - [ ] **8h. Jellyfin still works**, locally and however you normally reach it
 - [ ] **8i. Reboot test** — `sudo reboot`, then confirm everything returns on its own without you
-      logging in. This catches the sleep/auto-start problems in §2c
+      logging in. This catches the sleep/auto-start problems in §2c. **Then log into the desktop's
+      GUI and re-check**: the Proton app lives in the GNOME session, so logging in is exactly when
+      VPN routing can reassert itself. Re-run §1a's two verification commands afterwards and confirm
+      the site still loads from outside the house
 - [ ] **8j. The other two APIs kept their data** — load something from the workout and landlord apps
       that only a populated database could return. Their frontends live elsewhere, so it's easy to
       migrate them and never notice an empty volume until much later
@@ -435,10 +502,10 @@ Settings → Secrets and variables → Actions. Same five values in `HomeServerA
 | Secret | Value |
 |---|---|
 | `PI_HOST` | `home.daymonhansen.com` |
-| `PI_USER` | your Ubuntu username |
-| `PI_SSH_PORT` | `2222` (the external port from §6c) |
-| `PI_SSH_KEY` | private key whose public half is in the desktop's `~/.ssh/authorized_keys` |
-| `PI_REPO_DIR` | `/home/<user>/GithubProjects/HomeServerAPI` — **always the HomeServerAPI path**, even in the MySkylight repo, because that's where Compose lives |
+| `PI_USER` | `king` |
+| `PI_SSH_PORT` | `2222` (the external port from §6c; sshd itself listens on 22) |
+| `PI_SSH_KEY` | private key whose public half is in `/home/king/.ssh/authorized_keys`. Your Mac's key already works — either reuse it or generate a deploy-only pair |
+| `PI_REPO_DIR` | `/home/king/GithubProjects/HomeServerAPI` — **always the HomeServerAPI path**, even in the MySkylight repo, because that's where Compose lives |
 
 - [ ] **10a. Add/copy the deploy key** to the desktop:
 
