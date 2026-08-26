@@ -41,9 +41,15 @@ Applied on the Pi (`pi@192.168.68.59`, repo at `~/HomeServerAPI`) and verified. 
 unless it gets reverted. What changed in `skylight-api/.env` (backup left at `.env.bak-20260730`):
 
 ```env
-CORS_ORIGINS=https://myskylight.daymonhansen.com,http://localhost:3000
+CORS_ORIGINS=https://myskylight.daymonhansen.com,https://myskylight.netlify.app,http://localhost:3000
 FRONTEND_URL=https://myskylight.daymonhansen.com
 ```
+
+> The **`myskylight.netlify.app` origin matters** and was added after the fact. Whitelisting only the
+> custom domain looks complete, but the site is reachable on its `netlify.app` subdomain too — and a
+> device that loaded it there got `400 "Disallowed CORS origin"` on every preflight, then retried
+> every 30s forever. That's the failure mode this whole document exists to avoid, arriving through a
+> side door. Keep both origins.
 
 `CORS_ORIGINS` previously allowed only `http://localhost:3000`, which would have blocked the direct
 stream. `FRONTEND_URL` was **not set at all**, so it was falling back to the code default of
@@ -142,14 +148,65 @@ went with the old site.
       If instead you see repeated requests to `/api/backend/...` every few seconds, `NEXT_PUBLIC_API_BASE_URL`
       didn't make it into the build — fix it and redeploy
 - [ ] Change something on a phone and watch the device update — proves events still arrive
-- [ ] Leave the kiosk running, then check **Netlify → Usage** the next day. Function invocations
-      should now be a few hundred a day, not tens of thousands
+- [x] Leave the kiosk running, then check **Netlify → Usage**. Function invocations should be a few
+      hundred a day, not tens of thousands — **confirmed 2026-08-26**, see below
+
+### Confirmed result — 2026-08-26
+
+Read from **Netlify → Usage → Serverless Functions daily usage**. Note the usage period runs the
+**21st → 20th**, not calendar months.
+
+| Period | Serverless requests | Against the 125K free tier |
+|---|---|---|
+| Jun 21 – Jul 20 | **280K** | 224% — this is the ~$26 bill |
+| Jul 21 – Aug 20 | 7.9K | 6% (site deleted Jul 13, rebuilt Jul 30) |
+| Aug 21 – Sep 20 | ~333/day, ~10K projected | **~8%** ✅ |
+
+Roughly a **28× reduction**, with ~92% of the allowance spare. Edge functions moved the same way:
+287K → 2.5K against a 1,000,000 allowance.
+
+The daily chart is the diagnostic worth knowing: the bill signature is a **round-the-clock ramp into
+the 10–28K/day range** — a flat plateau, not a spike, because a kiosk that reconnects every 13s never
+sleeps. Healthy looks like a flat band down near zero.
+
+> **Don't use the CLI for this number.** `netlify api listAccountsForUser` exposes
+> `capabilities.functions.used`, and it **always reads `0`** — it returned `0` for a period the
+> dashboard showed as 2K. `bandwidth.used` and `build_minutes.used` are equally dead. Only
+> `included` is meaningful. Read the dashboard chart, or use the Pi-side check under
+> **If it regresses** below.
 
 ## If it regresses
 
 The stream falling back to the proxy is the failure mode to watch for, and it's invisible from the
 outside. Netlify's usage graph is the canary: a flat, high, round-the-clock invocation rate means the
 kiosk is reconnecting again. Check `NEXT_PUBLIC_API_BASE_URL` first, then CORS.
+
+**The Pi-side check needs no Netlify auth**, and measures the actual cause rather than its billing
+side-effect:
+
+```bash
+ssh pi@192.168.68.59 'cd ~/HomeServerAPI && docker compose logs --since 24h caddy \
+  | grep "/stream" | grep -c "\"method\": \"GET\""'
+```
+
+**Caddy logs a request only when it completes**, so a healthy long-lived SSE produces *no* log line.
+Zero or near-zero completed `GET /stream` entries means connections are being held open ✅; dozens or
+hundreds means the stream is churning ❌.
+
+To prove a stream is genuinely open rather than merely absent from the logs, check for a matched pair
+of connections — client → Caddy `:443` and Caddy → `skylight_api:8001` — where the client source port
+matches the one in the earlier `OPTIONS` preflight log line. Verified this way 2026-07-30: a single
+connection held open ~24 hours.
+
+Then confirm the deployed bundle still points direct:
+
+```bash
+curl -s https://myskylight.daymonhansen.com/_next/static/chunks/<chunk>.js \
+  | grep -c "api/backend/api/v1/families"
+```
+
+**`0` is the answer you want.** Non-zero means `NEXT_PUBLIC_API_BASE_URL` went missing from the build
+environment and the stream reverted to the proxy path.
 
 ## The road not taken
 
