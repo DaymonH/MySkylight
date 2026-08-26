@@ -1,28 +1,56 @@
 "use client"
 
-import { useEffect } from "react"
+import { useEffect, useRef } from "react"
+import { useAuth } from "@clerk/nextjs"
 import { useQueryClient } from "@tanstack/react-query"
+
+import { createSseParser } from "@/lib/sse"
+
+// Direct-to-API base, e.g. https://skylight-api.daymonhansen.com. Set this in
+// production. Left unset, the stream falls back to the same-origin proxy route —
+// fine locally, ruinous on a serverless host; see the comment on `streamUrl`.
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? ""
+const JWT_TEMPLATE = process.env.NEXT_PUBLIC_CLERK_JWT_TEMPLATE
+
+// Reconnect backoff. Flat 3s while things are healthy; backs off when the server
+// keeps refusing us (an expired session, say) so a broken stream can't hammer the
+// backend twenty times a minute, forever, on an always-on kiosk.
+const RECONNECT_MIN_MS = 3_000
+const RECONNECT_MAX_MS = 30_000
 
 /**
  * Subscribes to the family's SSE stream and reconciles the TanStack Query cache
  * as `event.*` / `calendar.*` / `member.*` / `family.*` / `task.*` / `routine.*` /
  * `list.*` / `reward.*` / `recipe.*` / `mealplan.*` events arrive.
  *
- * Resilience: a plain `EventSource` auto-retries transient drops, but iOS Safari
- * tears the stream down when the tab is backgrounded and never resumes it — the
- * wall-display would silently go stale. So we also reconnect on `visibilitychange`
- * (foreground) and `online`, and on every *re*connect we resync all family-scoped
- * caches to catch up on anything missed while we were disconnected.
+ * Transport is `fetch` + a streamed body rather than `EventSource`, because
+ * `EventSource` cannot send an `Authorization` header and the backend accepts
+ * bearer tokens only there. Reading the stream by hand is what lets the browser
+ * hold the connection open against the API directly, instead of relaying it
+ * through the Next proxy route.
+ *
+ * Resilience: we reconnect on `visibilitychange` (foreground) and `online` — iOS
+ * Safari tears the stream down when the tab is backgrounded and never resumes it,
+ * which would leave the wall display silently stale — and on every *re*connect we
+ * resync all family-scoped caches to catch up on anything missed.
  */
 export function useRealtime(familyId: string) {
   const qc = useQueryClient()
+  const { getToken } = useAuth()
+
+  // Held in a ref so a new `getToken` identity from Clerk can't tear down and
+  // re-establish the stream: the effect intentionally depends only on familyId.
+  const getTokenRef = useRef(getToken)
+  getTokenRef.current = getToken
 
   useEffect(() => {
     if (!familyId) return
 
-    let es: EventSource | null = null
+    let abort: AbortController | null = null
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null
+    let reconnectDelay = RECONNECT_MIN_MS
     let hasConnected = false
+    let streaming = false
     let disposed = false // set on cleanup so async callbacks don't re-open
 
     // After a reconnect we may have missed events while disconnected, so refresh
@@ -103,53 +131,119 @@ export function useRealtime(familyId: string) {
       }
     }
 
-    function scheduleReconnect() {
-      if (disposed || reconnectTimer) return
-      reconnectTimer = setTimeout(() => {
-        reconnectTimer = null
-        connect()
-      }, 3000)
+    function onData(data: string) {
+      try {
+        handle(JSON.parse(data) as { type: string })
+      } catch {
+        // ignore malformed messages
+      }
     }
 
-    function connect() {
-      if (disposed) return
-      es?.close()
-      es = new EventSource(`/api/backend/api/v1/families/${familyId}/stream`)
+    function scheduleReconnect() {
+      if (disposed || reconnectTimer) return
+      const delay = reconnectDelay
+      reconnectDelay = Math.min(reconnectDelay * 2, RECONNECT_MAX_MS)
+      reconnectTimer = setTimeout(() => {
+        reconnectTimer = null
+        void connect()
+      }, delay)
+    }
 
-      es.onmessage = (e: MessageEvent) => {
-        try {
-          handle(JSON.parse(e.data as string) as { type: string })
-        } catch {
-          // ignore malformed messages
+    async function connect() {
+      if (disposed || streaming) return
+      abort?.abort()
+      const controller = new AbortController()
+      abort = controller
+      streaming = true
+
+      try {
+        // Falls back to the same-origin proxy path when no direct API base is
+        // configured. In production that relay is a serverless function: it's
+        // killed at the platform's execution limit, so the stream churns —
+        // reconnecting every few seconds forever, each cycle costing an
+        // invocation and triggering a full cache resync. Held directly against
+        // the API, one connection lasts hours.
+        const streamUrl = API_BASE_URL
+          ? `${API_BASE_URL.replace(/\/$/, "")}/api/v1/families/${familyId}/stream`
+          : `/api/backend/api/v1/families/${familyId}/stream`
+
+        const headers: Record<string, string> = {}
+        if (API_BASE_URL) {
+          // Going direct means minting the token here — the proxy route is what
+          // normally does that server-side.
+          const token = await getTokenRef.current(
+            JWT_TEMPLATE ? { template: JWT_TEMPLATE } : undefined,
+          )
+          if (!token) {
+            streaming = false
+            scheduleReconnect()
+            return
+          }
+          headers.Authorization = `Bearer ${token}`
         }
-      }
 
-      es.onerror = () => {
-        // CONNECTING means the browser is already auto-retrying — leave it be.
-        // CLOSED means it gave up (typical after an iOS background); reconnect.
-        if (es?.readyState === EventSource.CLOSED) scheduleReconnect()
+        const res = await fetch(streamUrl, {
+          headers,
+          signal: controller.signal,
+          cache: "no-store",
+          credentials: API_BASE_URL ? "omit" : "same-origin",
+        })
+
+        if (!res.ok || !res.body) {
+          streaming = false
+          scheduleReconnect()
+          return
+        }
+
+        // Connected — reset the backoff so the next genuine drop retries promptly.
+        reconnectDelay = RECONNECT_MIN_MS
+
+        const reader = res.body.getReader()
+        const decoder = new TextDecoder()
+        const parser = createSseParser(onData)
+
+        for (;;) {
+          const { done, value } = await reader.read()
+          if (done) break
+          parser.push(decoder.decode(value, { stream: true }))
+        }
+
+        // Server closed the stream cleanly — reconnect and resync.
+        streaming = false
+        scheduleReconnect()
+      } catch {
+        // Network error, or our own abort during cleanup/reconnect.
+        streaming = false
+        if (!disposed && !controller.signal.aborted) scheduleReconnect()
       }
     }
 
     // iOS drops SSE when the tab is backgrounded; re-establish on resume.
-    function onVisible() {
-      if (document.visibilityState !== "visible") return
-      if (!es || es.readyState !== EventSource.OPEN) connect()
-    }
-    function onOnline() {
-      connect()
+    function reconnectNow() {
+      if (disposed || streaming) return
+      if (reconnectTimer) {
+        clearTimeout(reconnectTimer)
+        reconnectTimer = null
+      }
+      reconnectDelay = RECONNECT_MIN_MS
+      void connect()
     }
 
-    connect()
+    function onVisible() {
+      if (document.visibilityState !== "visible") return
+      reconnectNow()
+    }
+
+    void connect()
     document.addEventListener("visibilitychange", onVisible)
-    window.addEventListener("online", onOnline)
+    window.addEventListener("online", reconnectNow)
 
     return () => {
       disposed = true
       if (reconnectTimer) clearTimeout(reconnectTimer)
       document.removeEventListener("visibilitychange", onVisible)
-      window.removeEventListener("online", onOnline)
-      es?.close()
+      window.removeEventListener("online", reconnectNow)
+      abort?.abort()
     }
   }, [familyId, qc])
 }
