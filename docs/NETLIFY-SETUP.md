@@ -35,32 +35,42 @@ code changed; only a CORS value.
 
 ---
 
-## 1. Backend: allow the site's origin (do this first)
+## 1. Backend: allow the site's origin — ✅ DONE 2026-07-30
 
-Verified against the live API on 2026-07-30: `CORS_ORIGINS` currently allows `http://localhost:3000`
-but **not** the production site, so the direct connection would be blocked until this changes.
-
-On the Pi, in `skylight-api/.env`:
+Applied on the Pi (`pi@192.168.68.59`, repo at `~/HomeServerAPI`) and verified. Nothing to do here
+unless it gets reverted. What changed in `skylight-api/.env` (backup left at `.env.bak-20260730`):
 
 ```env
 CORS_ORIGINS=https://myskylight.daymonhansen.com,http://localhost:3000
+FRONTEND_URL=https://myskylight.daymonhansen.com
 ```
 
-Then restart it:
+`CORS_ORIGINS` previously allowed only `http://localhost:3000`, which would have blocked the direct
+stream. `FRONTEND_URL` was **not set at all**, so it was falling back to the code default of
+`http://localhost:3000` — that's where the Google Calendar OAuth callback returns the browser, so a
+connect attempt would have dead-ended on localhost. (Google OAuth isn't configured on this instance
+yet — no `GOOGLE_CLIENT_ID` — so it was latent rather than broken, but it's right now.)
 
-```bash
-cd ~/HomeServerAPI && docker compose up -d skylight-api
-```
+Verified against the live API after `docker compose up -d skylight-api`:
 
-- [ ] Confirm the origin is now echoed back:
+| Check | Result |
+|---|---|
+| `Origin: https://myskylight.daymonhansen.com` on `/api/v1/health` | `access-control-allow-origin` echoed back ✅ |
+| Preflight `OPTIONS` on the stream endpoint with `Access-Control-Request-Headers: authorization` | `200`, `access-control-allow-headers: authorization` ✅ |
+| `Origin: http://localhost:3000` | still allowed — local dev unaffected ✅ |
+| `GET` stream with no token | `401` — endpoint live and still gated ✅ |
+
+That preflight is the one that matters: a cross-origin `fetch` carrying an `Authorization` header
+triggers an `OPTIONS` first, and the stream never opens if it fails.
+
+To re-check at any time:
 
 ```bash
 curl -s -i -H "Origin: https://myskylight.daymonhansen.com" \
   https://skylight-api.daymonhansen.com/api/v1/health | grep -i access-control-allow-origin
 ```
 
-You want `access-control-allow-origin: https://myskylight.daymonhansen.com`. **No output means it's
-still blocked** — the stream will fail in the browser with a CORS error.
+**No output means it's blocked** and the stream will fail in the browser with a CORS error.
 
 ## 2. Re-create the Netlify site
 
@@ -108,8 +118,7 @@ went with the old site.
       secret must match `CLERK_WEBHOOK_SECRET` in the Pi's `skylight-api/.env`
 - [ ] If the instance is a **production** one, confirm its domain is `myskylight.daymonhansen.com` and
       its DNS records still exist. If it's a development instance (`pk_test_…`), any origin works
-- [ ] `FRONTEND_URL` in the Pi's `skylight-api/.env` should be `https://myskylight.daymonhansen.com` —
-      it's where the Google Calendar OAuth callback returns the browser
+- [x] `FRONTEND_URL` in the Pi's `skylight-api/.env` — set 2026-07-30 (see §1)
 
 ## 6. Verify — especially the part that costs money
 
