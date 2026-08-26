@@ -84,10 +84,18 @@ curl -s -i -H "Origin: https://myskylight.daymonhansen.com" \
 Site settings → Environment variables. The old values died with the old site, so these come fresh
 from the Clerk dashboard → API Keys.
 
+> **Use the `trusted-beetle-9` development instance — the `pk_test_…` / `sk_test_…` keys.** Checked on
+> the Pi 2026-07-30: the production backend validates against
+> `https://trusted-beetle-9.clerk.accounts.dev/.well-known/jwks.json` and holds an `sk_test` secret, so
+> that's the only instance whose tokens it will accept. Production (`pk_live_…`) keys would let people
+> sign in and then 401 on every single API call, which looks like a backend outage rather than a key
+> mismatch. Switching to a production instance later means changing the frontend keys **and** the
+> backend's `CLERK_JWKS_URL` + `CLERK_SECRET_KEY` together, in one go.
+
 | Variable | Value |
 |---|---|
-| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | `pk_live_…` (or `pk_test_…`) |
-| `CLERK_SECRET_KEY` | `sk_live_…` (or `sk_test_…`) |
+| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | `pk_test_…` (trusted-beetle-9) |
+| `CLERK_SECRET_KEY` | `sk_test_…` (trusted-beetle-9) |
 | `NEXT_PUBLIC_CLERK_SIGN_IN_URL` | `/sign-in` |
 | `NEXT_PUBLIC_CLERK_SIGN_UP_URL` | `/sign-up` |
 | `NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL` | `/` |
@@ -116,8 +124,13 @@ went with the old site.
 
 - [ ] Webhook endpoint → `https://myskylight.daymonhansen.com/api/webhooks/clerk`, and its signing
       secret must match `CLERK_WEBHOOK_SECRET` in the Pi's `skylight-api/.env`
-- [ ] If the instance is a **production** one, confirm its domain is `myskylight.daymonhansen.com` and
-      its DNS records still exist. If it's a development instance (`pk_test_…`), any origin works
+- **No domain configuration needed.** It's a development instance, and those accept any origin — so
+  there are no `clerk.` / `accounts.` / `clkmail.` DNS records to create and nothing to verify. The
+  only DNS record this project needs is the site's own (§4).
+- Worth knowing rather than acting on: a dev instance shows Clerk's "development mode" banner and
+  carries lower limits (user caps, shorter-lived sessions). It's what's been running in production all
+  along; moving to a production instance is a deliberate change to make on both sides at once, not
+  part of this rebuild.
 - [x] `FRONTEND_URL` in the Pi's `skylight-api/.env` — set 2026-07-30 (see §1)
 
 ## 6. Verify — especially the part that costs money
