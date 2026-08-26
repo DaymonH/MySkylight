@@ -4,6 +4,11 @@
 invocations) and runs on the home Ubuntu desktop instead, alongside the APIs. The Raspberry Pi 3B+ is
 retired as a host and everything consolidates onto one machine.
 
+**This is one migration, not two.** Everything moves in a single cutover: the frontend arrives from
+Netlify, and `skylight-api`, `workout-api`, `landlord-api`, Caddy and the DDNS updater all move off
+the Pi. There's no separate backend step — the APIs rebuild from source on the desktop, so the only
+thing that physically moves is their data and secrets (§5).
+
 **Why one machine:** a router can forward ports 80/443 to exactly **one** host. The APIs' Caddy
 already owns that forward, so the frontend has to live behind the same Caddy.
 
@@ -209,28 +214,74 @@ NEXT_PUBLIC_CLERK_JWT_TEMPLATE=skylight-api
 - [ ] **4b. API env files** — §5's migration script copies the real ones off the Pi. If you skip
       migration, create them from the examples and fill in by hand.
 
-- [ ] **4c. After migration, edit `skylight-api/.env`:**
+- [ ] **4c. After migration, edit `skylight-api/.env`.** These are the settings that reference the
+      *old* hosting and will otherwise point at a site that no longer exists:
 
 ```env
 APP_ENV=production
 CORS_ORIGINS=https://myskylight.daymonhansen.com
+FRONTEND_URL=https://myskylight.daymonhansen.com
 ```
 
-The Pi's copy may still say `APP_ENV=development` / `CORS_ORIGINS=http://localhost:3000`. Requests
-normally arrive server-side through the frontend's proxy (same origin, so CORS doesn't apply), but
-the origin still needs listing for any direct browser call.
+| Setting | Why it matters |
+|---|---|
+| `CORS_ORIGINS` | The Pi's copy may still say `http://localhost:3000`. Requests normally arrive server-side through the frontend's proxy (same origin, so CORS doesn't apply), but the origin still needs listing for any direct browser call. |
+| `FRONTEND_URL` | Where the **Google Calendar OAuth callback bounces the browser back to** (`app/routers/external.py` → `/app/family/<id>/integrations`). If it still points at the Netlify URL, connecting a Google account dead-ends on a dead domain. Defaults to `http://localhost:3000` if unset. |
+| `DATABASE_URL` | Must stay the absolute container path `sqlite+aiosqlite:////app/data/myskylight.db` (four slashes). That's the mounted volume — a relative path would put the DB in the container's writable layer, where a rebuild discards it. |
+
+- [ ] **4d. Leave `GOOGLE_REDIRECT_URI` alone.** It points at the **API** domain
+      (`https://skylight-api.daymonhansen.com/api/v1/external/google/callback`), which is not moving,
+      so the URI registered in Google Cloud Console stays valid. Only the frontend's hostname target
+      changes hands in this migration.
+
+- [ ] **4e. `landlord-api/.env` and `workout-api/.env`** need no edits — neither references the
+      frontend. Their `DATABASE_URL` / `EXERCISES_DB_PATH` should likewise keep pointing at
+      `/app/data/…`.
 
 ---
 
 ## 5. Move the data off the Pi — **downtime starts here**
 
-The SQLite databases are the only irreplaceable thing in this migration.
+This is the whole backend migration. There is no separate backend cutover: the three APIs are Python
+containers built from source, so the *code* needs nothing moved — `docker compose up --build` on the
+desktop produces the same images (and unlike the frontend, nothing here was ever architecture-bound,
+which is why the APIs ran fine on ARM). What actually has to move is **state**:
 
-- [ ] **5a. Run the migration** (from the desktop):
+| What | Where it lives on the Pi | Moved by |
+|---|---|---|
+| MySkylight database | `skylight_data` volume → `/app/data/myskylight.db` | volume copy |
+| Landlord database | `landlord_data` volume → `/app/data/landlord.db` | volume copy |
+| Workout database | bind mount `workout-api/data/exercises.db` | directory copy |
+| API secrets (Clerk, Google OAuth, Gemini, DDNS) | gitignored `*/.env`, `ddns/config.json` | file copy |
+| Database **schema** | — | nothing to do: each API runs `alembic upgrade head` on container start |
+
+The SQLite databases are the only irreplaceable thing here. Schema upgrades happen automatically, so
+if the desktop builds a newer commit than the Pi was running, the copied database is migrated forward
+on first boot — which is exactly why 5d takes a snapshot first.
+
+- [ ] **5a. Confirm the data is where you think it is — before stopping anything.** Run against the
+      Pi. The whole copy is worthless if the databases aren't in the volumes:
+
+```bash
+ssh pi@192.168.68.62 'docker exec skylight_api ls -la /app/data'
+ssh pi@192.168.68.62 'docker exec landlord_api ls -la /app/data'
+ssh pi@192.168.68.62 'ls -la ~/HomeServerAPI/workout-api/data'
+```
+
+> The desktop and the Pi are on the same LAN, so these use the local IP on **port 22**. The `-p 2222`
+> form is only for reaching the Pi from outside the house (`pi@pi.daymonhansen.com -p 2222`), where
+> 2222 is the router's external forward.
+
+Each should list a `.db` file of meaningful size. If `/app/data` is empty but the API works, the
+database is in the container's writable layer instead of the volume (a relative `DATABASE_URL`) — it
+would be lost on the next rebuild, so copy it out by path rather than by volume before going further.
+
+- [ ] **5b. Run the migration** (from the desktop):
 
 ```bash
 cd ~/GithubProjects/HomeServerAPI
-./ops/migrate-from-pi.sh pi@192.168.68.62 --port 2222
+./ops/migrate-from-pi.sh pi@192.168.68.62          # on the LAN (port 22)
+# ./ops/migrate-from-pi.sh pi@pi.daymonhansen.com --port 2222   # from outside the house
 ```
 
 It prompts before doing anything, then:
@@ -243,16 +294,18 @@ It prompts before doing anything, then:
 It deliberately does **not** copy Caddy's certificates — Caddy re-issues from Let's Encrypt on first
 start, well inside rate limits.
 
-- [ ] **5b. Sanity-check the copy:**
+- [ ] **5c. Sanity-check the copy:**
 
 ```bash
 docker run --rm -v homeserverapi_skylight_data:/v:ro alpine ls -la /v
+docker run --rm -v homeserverapi_landlord_data:/v:ro alpine ls -la /v
+ls -la ~/GithubProjects/HomeServerAPI/workout-api/data
 ```
 
-You should see `myskylight.db` with a non-trivial size. **Don't restart the Pi's containers** — two
-hosts answering for the same names causes confusing, intermittent failures.
+Sizes should match what 5a showed on the Pi. **Don't restart the Pi's containers** — two hosts
+answering for the same names causes confusing, intermittent failures.
 
-- [ ] **5c. Keep a snapshot outside Docker**, in case you need to start over:
+- [ ] **5d. Keep a snapshot outside Docker**, in case you need to start over:
 
 ```bash
 docker run --rm -v homeserverapi_skylight_data:/v:ro -v "$PWD":/backup alpine \
@@ -349,6 +402,13 @@ curl -s https://landlord-api.daymonhansen.com/api/v1/health
 - [ ] **8h. Jellyfin still works**, locally and however you normally reach it
 - [ ] **8i. Reboot test** — `sudo reboot`, then confirm everything returns on its own without you
       logging in. This catches the sleep/auto-start problems in §2c
+- [ ] **8j. The other two APIs kept their data** — load something from the workout and landlord apps
+      that only a populated database could return. Their frontends live elsewhere, so it's easy to
+      migrate them and never notice an empty volume until much later
+- [ ] **8k. Google Calendar connect** (only if you use F18 sync) — start a connect from
+      `/app/family/<id>/integrations`. It should land back on that page rather than on the old Netlify
+      URL; that round trip is what proves `FRONTEND_URL` (§4c) is right. A previously connected
+      account keeps syncing regardless, since its tokens are in the database
 
 ---
 
@@ -444,7 +504,7 @@ for the failing health check, then `docker compose logs <service>`.
 
 **The data caveat:** once the desktop has served real traffic, its database has writes the Pi's copy
 doesn't. Rolling back to the Pi loses them. If that matters, copy the newer database forward first —
-stop the desktop's containers, snapshot as in §5c, and restore that into the Pi's volume rather than
+stop the desktop's containers, snapshot as in §5d, and restore that into the Pi's volume rather than
 accepting the older copy.
 
 **Nuclear option — start the data migration over:** `docker compose down`, then
