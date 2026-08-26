@@ -44,7 +44,7 @@ hand. The **backend deploys separately** (its own GitHub Actions → SSH → reb
 - When an **API-contract change spans both repos** (e.g. a field added/removed on an endpoint), push the
   backend and frontend close together — otherwise the live FE and BE briefly mismatch.
 
-> **The site was rebuilt on Netlify on 2026-07-30 after a ~$26 function-invocation bill.** Setup +
+> **The site was rebuilt on Netlify on 2026-08-25 after a ~$26 function-invocation bill.** Setup +
 > verification: **[`docs/NETLIFY-SETUP.md`](./docs/NETLIFY-SETUP.md)**.
 
 ### Realtime does NOT go through the proxy — don't "fix" it back

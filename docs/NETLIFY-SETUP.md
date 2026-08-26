@@ -35,10 +35,11 @@ code changed; only a CORS value.
 
 ---
 
-## 1. Backend: allow the site's origin — ✅ DONE 2026-07-30
+## 1. Backend: allow the site's origin — ✅ DONE 2026-08-25
 
 Applied on the Pi (`pi@192.168.68.59`, repo at `~/HomeServerAPI`) and verified. Nothing to do here
-unless it gets reverted. What changed in `skylight-api/.env` (backup left at `.env.bak-20260730`):
+unless it gets reverted. What changed in `skylight-api/.env` (backup left at `.env.bak-20260730` —
+the date in that filename is wrong; the file was actually created 2026-08-25):
 
 ```env
 CORS_ORIGINS=https://myskylight.daymonhansen.com,https://myskylight.netlify.app,http://localhost:3000
@@ -91,7 +92,7 @@ Site settings → Environment variables. The old values died with the old site, 
 from the Clerk dashboard → API Keys.
 
 > **Use the `trusted-beetle-9` development instance — the `pk_test_…` / `sk_test_…` keys.** Checked on
-> the Pi 2026-07-30: the production backend validates against
+> the Pi 2026-08-25: the production backend validates against
 > `https://trusted-beetle-9.clerk.accounts.dev/.well-known/jwks.json` and holds an `sk_test` secret, so
 > that's the only instance whose tokens it will accept. Production (`pk_live_…`) keys would let people
 > sign in and then 401 on every single API call, which looks like a backend outage rather than a key
@@ -118,7 +119,7 @@ from the Clerk dashboard → API Keys.
 
 ## 4. DNS
 
-`myskylight.daymonhansen.com` currently resolves to **nothing** (checked 2026-07-30) — the old record
+`myskylight.daymonhansen.com` currently resolves to **nothing** (checked 2026-08-25) — the old record
 went with the old site.
 
 - [ ] Add Netlify's custom domain, then at Namecheap create the record Netlify asks for (normally a
@@ -137,7 +138,7 @@ went with the old site.
   carries lower limits (user caps, shorter-lived sessions). It's what's been running in production all
   along; moving to a production instance is a deliberate change to make on both sides at once, not
   part of this rebuild.
-- [x] `FRONTEND_URL` in the Pi's `skylight-api/.env` — set 2026-07-30 (see §1)
+- [x] `FRONTEND_URL` in the Pi's `skylight-api/.env` — set 2026-08-25 (see §1)
 
 ## 6. Verify — especially the part that costs money
 
@@ -151,29 +152,44 @@ went with the old site.
 - [x] Leave the kiosk running, then check **Netlify → Usage**. Function invocations should be a few
       hundred a day, not tens of thousands — **confirmed 2026-08-26**, see below
 
-### Confirmed result — 2026-08-26
+### Where usage actually stands — 2026-08-26
 
-Read from **Netlify → Usage → Serverless Functions daily usage**. Note the usage period runs the
-**21st → 20th**, not calendar months.
+**Two traps make this chart easy to misread**, and both caught me:
 
-| Period | Serverless requests | Against the 125K free tier |
+1. **The Usage page is account-wide**, covering all 10 sites in the team — not just MySkylight.
+2. **MySkylight was paused from 2026-07-15 to 2026-08-25** (no deploys at all in that window), so it
+   contributed essentially nothing to the middle period below.
+
+| Period | Account total | MySkylight's state |
 |---|---|---|
-| Jun 21 – Jul 20 | **280K** | 224% — this is the ~$26 bill |
-| Jul 21 – Aug 20 | 7.9K | 6% (site deleted Jul 13, rebuilt Jul 30) |
-| Aug 21 – Sep 20 | ~333/day, ~10K projected | **~8%** ✅ |
+| Jun 21 – Jul 20 | **280K** (224% of tier) | live, streaming through the proxy — **this is the bill** |
+| Jul 21 – Aug 20 | 7.9K | **paused** — so this figure is the *other* sites |
+| Aug 21 – Sep 20 | 2K so far | relaunched 2026-08-25 ~22:33 local |
 
-Roughly a **28× reduction**, with ~92% of the allowance spare. Edge functions moved the same way:
-287K → 2.5K against a 1,000,000 allowance.
+Four other sites are Next.js and each deploys a `___netlify-server-handler` catch-all on `/*`, so
+every non-static request to them is an invocation: `polite-pastelito-569745`,
+`hansenmobilebrakes.com`, `landlordreviewer.com`, `www.daymonhansen.com`. Together they're a
+**baseline of roughly 260/day (~8K/month)** that has nothing to do with this project. The five
+2021–22 static sites contribute nothing.
 
-The daily chart is the diagnostic worth knowing: the bill signature is a **round-the-clock ramp into
-the 10–28K/day range** — a flat plateau, not a spike, because a kiosk that reconnects every 13s never
-sleeps. Healthy looks like a flat band down near zero.
+> **So the 280K → 7.9K drop is mostly MySkylight being switched off — it is *not* proof the fix
+> works.** Any future comparison has to account for the account-wide baseline and for whether the
+> kiosk was actually running.
 
-> **Don't use the CLI for this number.** `netlify api listAccountsForUser` exposes
-> `capabilities.functions.used`, and it **always reads `0`** — it returned `0` for a period the
-> dashboard showed as 2K. `bandwidth.used` and `build_minutes.used` are equally dead. Only
-> `included` is meaningful. Read the dashboard chart, or use the Pi-side check under
-> **If it regresses** below.
+The real evidence for the fix comes from the Pi, measured 2026-08-26 after ~10h live:
+
+| Signal | Observed | Expected under the old code |
+|---|---|---|
+| Completed `GET /stream` in 12h | **6** | ~3,300 |
+| Stream held open | yes — verified by matching source port between the access log and the container's connection table | never more than ~10s |
+| Total `skylight-api` requests in 12h | 398 | — |
+
+Those 6 are ordinary reconnects (a visibility change or a remount), about one every two hours, and
+each one's replacement connection stays open. That's the healthy shape.
+
+**Still to do:** re-check the daily chart once the kiosk has run a full day, which is the first
+measurement that will actually put the fix under load. Subtract the ~260/day baseline before
+judging.
 
 ## If it regresses
 
@@ -195,7 +211,7 @@ hundreds means the stream is churning ❌.
 
 To prove a stream is genuinely open rather than merely absent from the logs, check for a matched pair
 of connections — client → Caddy `:443` and Caddy → `skylight_api:8001` — where the client source port
-matches the one in the earlier `OPTIONS` preflight log line. Verified this way 2026-07-30: a single
+matches the one in the earlier `OPTIONS` preflight log line. Verified this way 2026-08-25: a single
 connection held open ~24 hours.
 
 Then confirm the deployed bundle still points direct:
