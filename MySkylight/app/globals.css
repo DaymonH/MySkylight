@@ -539,6 +539,12 @@
   }
   html[data-surface="device"] {
     font-size: calc(16px * var(--kiosk-scale));
+    /* A wall display is an app, not a web page: no pinch-zoom or double-tap
+       zoom. `pan-x pan-y` still allows scrolling. iOS Safari ignores
+       `user-scalable=no` in the viewport meta, but it honors touch-action (13+).
+       Child `touch-action: manipulation` rules intersect with this, so they
+       can't re-enable zoom. */
+    touch-action: pan-x pan-y;
   }
   /* Headings (Fraunces) read better with a hair of negative tracking. */
   .font-heading {

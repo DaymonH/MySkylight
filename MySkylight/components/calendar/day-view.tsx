@@ -1,13 +1,14 @@
 "use client"
 
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
+import { useLayoutEffect, useMemo, useRef, useState } from "react"
 import { MapPinIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { readableTextOn } from "@/lib/colors"
 import type { OccurrenceOut } from "@/lib/types/calendar"
 import type { WeatherDay } from "@/hooks/use-weather"
 import { WeatherIcon } from "./weather-icon"
-import { packDayEvents, minutesNow } from "./event-layout"
+import { packDayEvents } from "./event-layout"
+import { NowLine, useTodayYMD } from "./now-line"
 
 interface DayViewProps {
   date: Date
@@ -73,13 +74,8 @@ export function DayView({
   const startMinClamp = startHour * 60
   const endMinClamp = endHour * 60
 
-  const [now, setNow] = useState(() => minutesNow())
-  useEffect(() => {
-    const id = setInterval(() => setNow(minutesNow()), 60_000)
-    return () => clearInterval(id)
-  }, [])
-
-  const isToday = toYMD(date) === toYMD(new Date())
+  const todayYMD = useTodayYMD()
+  const isToday = toYMD(date) === todayYMD
   const allDay = occurrences.filter((o) => o.all_day)
   const timed = occurrences.filter((o) => !o.all_day)
   const positioned = packDayEvents(timed)
@@ -202,15 +198,12 @@ export function DayView({
             })}
 
             {/* Now indicator */}
-            {isToday && now >= startMinClamp && now <= endMinClamp && (
-              <div
-                className="pointer-events-none absolute inset-x-0 z-30"
-                style={{ top: ((now - startMinClamp) / 60) * hourHeight }}
-              >
-                <div className="bg-now relative h-px">
-                  <span className="bg-now absolute -top-1 -left-1 size-2 rounded-full" />
-                </div>
-              </div>
+            {isToday && (
+              <NowLine
+                startMin={startMinClamp}
+                endMin={endMinClamp}
+                hourHeight={hourHeight}
+              />
             )}
           </div>
         </div>
