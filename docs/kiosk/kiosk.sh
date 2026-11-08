@@ -14,11 +14,12 @@
 # and, to start an installed web app (PWA) instead of a plain browser tab, put the
 # command that launches it in ~/.termux/kiosk-launch.sh (run as root).
 #
-# After every launch the app is PINNED (Android screen pinning), so the home/recents
-# gestures can't leave it. Unpin by hand with the usual gesture (swipe up and hold, or
-# hold Back + Overview). Set PIN=0 in kiosk.conf to turn pinning off.
+# The app is kept PINNED (Android screen pinning), so the home/recents gestures can't
+# leave it: it is pinned after every launch, and re-pinned if it is in front but has
+# been unpinned. Set PIN=0 in kiosk.conf to turn pinning off.
 # Maintenance: `touch ~/.termux/kiosk.pause` makes the watchdog stand down (remove the
-# file to resume). A relaunch only happens when the app has left the foreground.
+# file to resume); unpin first with the usual gesture (swipe up and hold, or hold
+# Back + Overview). What the watchdog does is logged to ~/.termux/kiosk.log.
 # Undo:  rm ~/.termux/boot/kiosk.sh   (and `pkill -f kiosk.sh` to stop a running copy)
 
 PKG=com.android.chrome            # the app that must be in front (its package name)
@@ -39,16 +40,32 @@ launch() {
   fi
 }
 
-# Pin the app we just launched so it can't be left. Only right after a launch: someone
-# who unpins on purpose to do maintenance isn't re-pinned behind their back.
+LOG="$HOME/.termux/kiosk.log"
+log() {
+  echo "$(date '+%F %T') $*" >> "$LOG"
+  # keep the log small: drop the oldest half once it passes ~200 KB
+  [ "$(wc -c < "$LOG" 2>/dev/null || echo 0)" -gt 200000 ] && tail -n 400 "$LOG" > "$LOG.tmp" && mv "$LOG.tmp" "$LOG"
+}
+
+lockstate() {   # NONE | PINNED | LOCKED
+  as_root dumpsys activity activities | grep -i mLockTaskModeState | head -1 | sed 's/.*=//' | tr -d ' \r'
+}
+
+# Pin the app's task if it is in front and not already pinned.
 pin() {
   [ "${PIN:-1}" = 1 ] || return 0
-  sleep 4
+  [ "$(lockstate)" = NONE ] || return 0
   task=$(as_root dumpsys activity activities | grep "topResumedActivity" | head -1 | grep "$PKG" | sed -n 's/.* t\([0-9][0-9]*\)}.*/\1/p')
-  [ -n "$task" ] && as_root am task lock "$task" >/dev/null 2>&1
+  if [ -n "$task" ]; then
+    as_root am task lock "$task" >/dev/null 2>&1
+    log "pinned task $task -> $(lockstate)"
+  else
+    log "pin skipped: $PKG is not the top activity"
+  fi
 }
 
 command -v termux-wake-lock >/dev/null 2>&1 && termux-wake-lock   # keep Termux alive
+log "watchdog started (PKG=$PKG, root=$ROOT_STYLE)"
 as_root svc power stayon true     # keep the screen on while plugged in
 sleep "${BOOT_DELAY:-45}"         # let the system finish booting
 
@@ -56,8 +73,13 @@ while true; do
   if [ ! -f "$HOME/.termux/kiosk.pause" ]; then
     front=$(as_root dumpsys activity activities | grep -E "topResumedActivity|mResumedActivity" | head -2)
     case "$front" in
-      *"$PKG"*) ;;                # the app is in front: all good
-      *) launch; pin ;;
+      *"$PKG"*) pin ;;            # the app is in front: make sure it is pinned
+      *)
+        log "app not in front ($(echo "$front" | grep -o '[a-z0-9.]*/[A-Za-z0-9.]*' | head -1)); launching"
+        launch
+        sleep 4                   # let it come up before trying to pin it
+        pin
+        ;;
     esac
   fi
   sleep "${LOOP_DELAY:-30}"
