@@ -393,7 +393,7 @@ function Step2({
           <li key={t.id} className="bg-card ring-foreground/5 flex flex-col gap-3 rounded-2xl p-3 shadow-sm ring-1">
             <div className="min-w-0">
               <p className="truncate text-sm font-medium leading-tight">{t.title}</p>
-              <p className="text-muted-foreground text-xs">{describeTaskRrule(t.rrule)}</p>
+              <p className="text-muted-foreground text-xs">{describeTaskRrule(t.rrule, t)}</p>
             </div>
 
             <div className="flex flex-wrap items-center gap-2">

@@ -52,7 +52,10 @@ import {
 } from "@/components/ui/alert-dialog"
 import {
   describeRotation,
+  autoDayName,
   describeTaskRrule,
+  isAutoPlaced,
+  parseByday,
   isPinnedWeekly,
   scheduleDetail,
   withUntil,
@@ -176,11 +179,16 @@ export default function TasksPage({ params }: { params: Promise<{ familyId: stri
     }
     try {
       if (editing) {
-        await updateTask.mutateAsync({ taskId: editing.id, data })
-        toast.success("Task updated")
+        const saved = await updateTask.mutateAsync({ taskId: editing.id, data })
+        // Say so when the app just (re)chose the day, i.e. it was pinned or the day moved.
+        const moved =
+          editing.day_pinned || parseByday(editing.rrule)[0] !== parseByday(saved.rrule)[0]
+        const day = isAutoPlaced(saved) && moved ? autoDayName(saved.rrule) : null
+        toast.success(day ? `Task updated. Scheduled on ${day} to balance chores.` : "Task updated")
       } else {
-        await createTask.mutateAsync(data)
-        toast.success("Task created")
+        const saved = await createTask.mutateAsync(data)
+        const day = isAutoPlaced(saved) ? autoDayName(saved.rrule) : null
+        toast.success(day ? `Task created. Scheduled on ${day} to balance chores.` : "Task created")
       }
       setSheetOpen(false)
     } catch {
@@ -536,7 +544,7 @@ function TaskRow({
           </span>
         </p>
         <div className="mt-1 flex flex-wrap items-center gap-1.5">
-          <Badge variant="secondary">{describeTaskRrule(task.rrule)}</Badge>
+          <Badge variant="secondary">{describeTaskRrule(task.rrule, task)}</Badge>
           {task.assignment_strategy === "rotating" && (
             <Badge variant="secondary" className="gap-1">
               <RepeatIcon className="size-3" /> Rotating ·{" "}

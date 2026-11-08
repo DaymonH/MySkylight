@@ -112,6 +112,23 @@ export function isPinnedWeekly(rrule: string | null): boolean {
   return !!rrule && /FREQ=WEEKLY/i.test(rrule) && /BYDAY=/i.test(rrule)
 }
 
+/**
+ * True when the app (not the user) chose this weekly chore's day: a weekly rule
+ * with a concrete day that isn't pinned. Chores saved before auto-day existed
+ * default to unpinned too, so they read as auto as well (the balancer may move them).
+ */
+export function isAutoPlaced(task: { rrule: string | null; day_pinned?: boolean }): boolean {
+  return isPinnedWeekly(task.rrule) && task.day_pinned === false
+}
+
+/** "Tuesdays" for the single day of an auto-placed chore, or null if it has none/several. */
+export function autoDayName(rrule: string | null): string | null {
+  const days = parseByday(rrule)
+  if (days.length !== 1) return null
+  const d = WEEKDAYS.find((w) => w.code === days[0])
+  return d ? `${d.label}s` : null
+}
+
 /** Pull the UNTIL date out of an rrule as YYYY-MM-DD, or null if open-ended. */
 export function parseUntil(rrule: string | null): string | null {
   if (!rrule) return null
@@ -150,7 +167,10 @@ export function weekdayOf(ymd: string): WeekdayCode {
 }
 
 /** Human-readable summary of a task's recurrence, for list rows. */
-export function describeTaskRrule(rrule: string | null): string {
+export function describeTaskRrule(
+  rrule: string | null,
+  task?: { day_pinned?: boolean },
+): string {
   if (!rrule) return "One-time"
   const preset = TASK_RRULE_OPTIONS.find((o) => o.value === rrule)
   if (preset) return preset.label
@@ -161,7 +181,8 @@ export function describeTaskRrule(rrule: string | null): string {
       const list = WEEKDAYS.filter((d) => days.includes(d.code))
         .map((d) => d.label)
         .join(", ")
-      return withEnd(list, rrule)
+      const auto = isAutoPlaced({ rrule, day_pinned: task?.day_pinned })
+      return withEnd(auto ? `${list} (auto)` : list, rrule)
     }
   }
   const iv = parseInterval(rrule)
