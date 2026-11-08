@@ -622,3 +622,30 @@
     opacity: 0;
   }
 }
+
+/* Confetti for the all-done celebration (components/tasks/all-done-celebration.tsx). */
+@keyframes confetti-fall {
+  0% {
+    opacity: 1;
+    transform: translate(0, 0) rotate(0deg);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(var(--x), 340px) rotate(var(--r));
+  }
+}
+.confetti-piece {
+  position: absolute;
+  top: -12px;
+  width: 8px;
+  height: 14px;
+  border-radius: 2px;
+  opacity: 0;
+  animation: confetti-fall 2.2s ease-in forwards;
+  animation-delay: var(--d);
+}
+@media (prefers-reduced-motion: reduce) {
+  .confetti-piece {
+    animation: none;
+  }
+}

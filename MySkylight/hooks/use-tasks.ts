@@ -10,6 +10,7 @@ import type {
 } from "@/lib/types/balance"
 import type {
   MissedClearOut,
+  OccurrenceMoveOut,
   RotationOverrideOut,
   RotationOverrideScope,
   RoutineCreatePayload,
@@ -382,6 +383,53 @@ export function useClearMissed(familyId: string) {
       api.put<MissedClearOut>(`/families/${familyId}/missed-chores`, { through }),
     onSettled: () => {
       qc.invalidateQueries({ queryKey: ["task-occurrences", familyId] })
+    },
+  })
+}
+
+// ── Do it tomorrow (move one occurrence) ─────────────────────────────────────
+
+/**
+ * Push a single occurrence to a later day without touching the series' cadence
+ * (unlike "Move to today", which re-phases it). The original date shows nothing and
+ * the new date shows the chore. A PUT to a fixed key, so safe to retry on a blip.
+ */
+export function useMoveOccurrence(familyId: string) {
+  const api = useApi()
+  const qc = useQueryClient()
+  return useMutation({
+    ...RETRY_TRANSPORT,
+    mutationFn: ({
+      taskId,
+      occurrenceDate,
+      toDate,
+    }: {
+      taskId: string
+      occurrenceDate: string
+      toDate: string
+    }) =>
+      api.put<OccurrenceMoveOut>(
+        `/families/${familyId}/tasks/${taskId}/occurrences/${occurrenceDate}/move`,
+        { to_date: toDate },
+      ),
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: ["task-occurrences", familyId] })
+      qc.invalidateQueries({ queryKey: ["task-streak", familyId] })
+    },
+  })
+}
+
+/** Undo a move, by the occurrence's ORIGINAL date. */
+export function useClearOccurrenceMove(familyId: string) {
+  const api = useApi()
+  const qc = useQueryClient()
+  return useMutation({
+    ...RETRY_TRANSPORT,
+    mutationFn: ({ taskId, occurrenceDate }: { taskId: string; occurrenceDate: string }) =>
+      api.delete(`/families/${familyId}/tasks/${taskId}/occurrences/${occurrenceDate}/move`),
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: ["task-occurrences", familyId] })
+      qc.invalidateQueries({ queryKey: ["task-streak", familyId] })
     },
   })
 }

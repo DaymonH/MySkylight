@@ -23,6 +23,7 @@ export interface TaskOut {
   rotation_anchor_date: string | null // YYYY-MM-DD; null falls back to start_date
   star_value: number
   estimated_minutes: number | null // rough time-to-do (F30); weight for the balancer
+  icon: string | null // optional emoji shown beside the chore
   created_at: string
   updated_at: string
   // The full roster, in rotation order (matters when rotating).
@@ -63,6 +64,11 @@ export interface TaskOccurrenceOut {
   // Dismissed by "Clear missed": excused from the Missed list. Not a completion —
   // it earned no stars.
   is_dismissed: boolean
+  // The chore's emoji, if it has one.
+  icon: string | null
+  // "Do it tomorrow": this occurrence was pushed here from `moved_from` (YYYY-MM-DD).
+  is_moved: boolean
+  moved_from: string | null
 }
 
 /** Result of `PUT /families/{id}/missed-chores`. `previous_cleared_through` is what
@@ -103,6 +109,7 @@ export interface TaskCreatePayload {
   rotation_anchor_date?: string | null
   star_value?: number
   estimated_minutes?: number | null
+  icon?: string | null
   // Order is the rotation roster order when rotating.
   member_ids?: string[]
 }
@@ -115,3 +122,10 @@ export interface RoutineCreatePayload {
 }
 
 export type RoutineUpdatePayload = Partial<RoutineCreatePayload>
+
+/** Result of `PUT /families/{id}/tasks/{task}/occurrences/{date}/move`. */
+export interface OccurrenceMoveOut {
+  task_id: string
+  from_date: string
+  to_date: string
+}

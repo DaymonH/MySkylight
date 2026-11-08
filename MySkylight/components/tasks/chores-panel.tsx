@@ -8,6 +8,7 @@ import {
   ArrowLeftRightIcon,
   BanIcon,
   CalendarArrowDownIcon,
+  CalendarClockIcon,
   CheckIcon,
   EllipsisVerticalIcon,
   PartyPopperIcon,
@@ -21,8 +22,10 @@ import { useApi } from "@/hooks/use-api"
 import { useRealtime } from "@/hooks/use-realtime"
 import { useTodayYMD } from "@/hooks/use-today"
 import {
+  useClearOccurrenceMove,
   useClearRotationOverride,
   useCompleteTask,
+  useMoveOccurrence,
   useMoveTaskToToday,
   useRoutines,
   useSetRotationOverride,
@@ -45,7 +48,7 @@ import { ChoreFilterBar } from "@/components/tasks/chore-filter-bar"
 import { ClearMissedButton } from "@/components/tasks/clear-missed-button"
 import { StarPop } from "@/components/tasks/star-pop"
 import { cn } from "@/lib/utils"
-import { isDefiniteClientError } from "@/lib/api-client"
+import { ApiError, isDefiniteClientError } from "@/lib/api-client"
 import {
   type ChoreFilters,
   DEFAULT_FILTERS,
@@ -118,6 +121,8 @@ export function ChoresPanel({ familyId }: { familyId: string }) {
   const setOverride = useSetRotationOverride(familyId)
   const clearOverride = useClearRotationOverride(familyId)
   const moveTask = useMoveTaskToToday(familyId)
+  const moveOccurrence = useMoveOccurrence(familyId)
+  const clearMove = useClearOccurrenceMove(familyId)
 
   const { data: memberships = [] } = useQuery({
     queryKey: ["me", "memberships"],
@@ -229,6 +234,31 @@ export function ChoresPanel({ familyId }: { familyId: string }) {
     )
   }
 
+  // "Do it tomorrow": push just this occurrence to a later day, leaving the series'
+  // cadence alone. A missed one lands on today instead. Hidden for daily chores —
+  // tomorrow already has its own occurrence, so there's nowhere to put it.
+  function deferOccurrence(o: TaskOccurrenceOut) {
+    const toDate = o.occurrence_date < today ? today : addDaysYMD(o.occurrence_date, 1)
+    moveOccurrence.mutate(
+      { taskId: o.task_id, occurrenceDate: o.occurrence_date, toDate },
+      {
+        onSuccess: () =>
+          toast.success(`${o.title} moved to ${dayLabel(toDate, today)}`, {
+            action: {
+              label: "Undo",
+              onClick: () =>
+                clearMove.mutate(
+                  { taskId: o.task_id, occurrenceDate: o.occurrence_date },
+                  { onError: () => toast.error("Couldn't undo. Please try again.") },
+                ),
+            },
+          }),
+        onError: (err) =>
+          toast.error(err instanceof ApiError && err.message ? err.message : "Couldn't move this chore."),
+      },
+    )
+  }
+
   // When a member filter is active, only show the avatars that pass it.
   function visibleMembersOf(o: TaskOccurrenceOut) {
     if (filters.memberIds === null) return o.members
@@ -326,6 +356,8 @@ export function ChoresPanel({ familyId }: { familyId: string }) {
                     onSkip={(scope) => skip(o, scope)}
                     onReset={() => resetRotation(o)}
                     onMoveToToday={() => moveToToday(o)}
+                    canDefer={freqByTaskId.get(o.task_id) !== "daily"}
+                    onDefer={() => deferOccurrence(o)}
                   />
                 ))}
               </ul>
@@ -355,6 +387,8 @@ export function ChoresPanel({ familyId }: { familyId: string }) {
                     onSkip={(scope) => skip(o, scope)}
                     onReset={() => resetRotation(o)}
                     onMoveToToday={() => moveToToday(o)}
+                    canDefer={freqByTaskId.get(o.task_id) !== "daily"}
+                    onDefer={() => deferOccurrence(o)}
                   />
                 ))}
               </ul>
@@ -380,6 +414,8 @@ function ChoreListRow({
   onSkip,
   onReset,
   onMoveToToday,
+  canDefer,
+  onDefer,
 }: {
   occurrence: TaskOccurrenceOut
   visibleMembers: MemberRow[]
@@ -394,11 +430,18 @@ function ChoreListRow({
   onSkip: (scope: "occurrence" | "turn") => void
   onReset: () => void
   onMoveToToday: () => void
+  /** Offer "Do it tomorrow" (just this occurrence). False for a daily chore. */
+  canDefer?: boolean
+  onDefer?: () => void
 }) {
   const isRotating = o.up_next != null
   // "Move to today" re-phases an interval chore to today; pointless on a today row.
   const showMove = !!canMove && o.occurrence_date !== today
-  const showMenu = canManage && (isRotating || showMove)
+  // Nothing to defer once someone has done it (the backend refuses too).
+  const showDefer = !!canDefer && o.completed_member_ids.length === 0 && !o.is_skipped
+  const deferLabel =
+    today && o.occurrence_date < today ? "Do it today (just once)" : "Do it tomorrow"
+  const showMenu = canManage && (isRotating || showMove || showDefer)
   const multiDayTurn = o.rotation_unit !== "occurrence" || o.rotation_interval > 1
   const swapTargets = allMembers.filter((m) => !o.members.some((mm) => mm.id === m.id))
 
@@ -416,10 +459,17 @@ function ChoreListRow({
             o.is_skipped && "text-muted-foreground line-through",
           )}
         >
+          {o.icon && <span className="mr-1.5">{o.icon}</span>}
           {o.title}
         </p>
         <div className="text-muted-foreground mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs">
           {subLabel && <span>{subLabel}</span>}
+          {o.is_moved && o.moved_from && (
+            <span className="inline-flex items-center gap-0.5">
+              <CalendarClockIcon className="size-3" /> Moved from{" "}
+              {dayLabel(o.moved_from, today ?? o.moved_from)}
+            </span>
+          )}
           {routineName && <span>{routineName}</span>}
           {o.star_value > 0 && (
             <span className="inline-flex items-center gap-0.5 text-amber-500">
@@ -513,6 +563,14 @@ function ChoreListRow({
                   {isRotating && <DropdownMenuSeparator />}
                   <DropdownMenuItem onClick={onMoveToToday}>
                     <CalendarArrowDownIcon /> Move to today
+                  </DropdownMenuItem>
+                </>
+              )}
+              {showDefer && (
+                <>
+                  {(isRotating || showMove) && <DropdownMenuSeparator />}
+                  <DropdownMenuItem onClick={onDefer}>
+                    <CalendarClockIcon /> {deferLabel}
                   </DropdownMenuItem>
                 </>
               )}
