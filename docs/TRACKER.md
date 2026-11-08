@@ -365,8 +365,8 @@ Goal: pairing/multi-screen, sleep schedule.
 
 Goal: notifications, offline, accessibility, performance, deploy.
 
-- [ ] `[FE]` Web Push subscription + permission flow
-- [ ] `[BE]` Push delivery for reminders + scheduler wiring (delivers Phase 2 reminders)
+- [x] `[FE]` Web Push subscription + permission flow _(done 2026-11-08: `app/app/family/[familyId]/notifications`, `hooks/use-push.ts`, `lib/push.ts`, SW `push`/`notificationclick`)_
+- [x] `[BE]` Push delivery for reminders + scheduler wiring (delivers Phase 2 reminders) _(done 2026-11-08: `app/services/push.py`, migration `022`; also an evening chore nudge)_
 - [ ] `[FE]` Offline PWA: cache shell + last data; queue writes + replay on reconnect
 - [ ] `[FE]` Android install: handle `beforeinstallprompt`, surface "Install app" button
 - [ ] `[FE]` iOS install: show "Add to Home Screen" tooltip when `navigator.standalone === false` + iOS Safari

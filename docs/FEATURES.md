@@ -152,6 +152,22 @@ frontend (FE) pieces, and **acceptance criteria** (AC) that define "done".
   - **Overlap warning (calendar):** the event sheet warns when a selected person is already on an
     overlapping timed event (`lib/event-conflicts.ts`). Warning only — it never blocks saving — and
     limited to the events loaded for the visible range.
+- **Update (2026-11-08) — push notifications: event reminders + evening chore nudge (BE + FE):** the
+  reminders the event form always saved are finally **delivered**, and the "chore reminders & overdue
+  nudges" backlog item below is built as a daily nudge.
+  - **What phones get:** a reminder at each of an event's reminder times (to the people it's assigned to,
+    via `Member.user_id`; a family-wide event, or one for a child with no login, goes to every phone that
+    opted in), and one **"Chores still to do — Mia: 2 · Dev: 1"** nudge per family each evening at 17:30
+    family time, only if something's left. Per-phone switches for each kind.
+  - **How:** a per-minute APScheduler job (`app/services/push.py`, `PUSH_ENABLED`, `CHORE_NUDGE_TIME`);
+    every send is claimed first in `push_sent` so restarts/overlaps never double-send; reminders >5 min
+    late are skipped, not sent stale. Dead subscriptions (404/410) are removed at once, flaky ones after 5
+    failures. Migration `022`: `push_subscriptions`, `push_sent`.
+  - **Zero setup:** the server's VAPID key pair is generated on first use and stored beside the SQLite DB in
+    the data volume (same approach as workout-api) — no secret to configure.
+  - **FE:** **Notifications** in the phone menu (`app/app/family/[familyId]/notifications`): turn on for
+    this phone, two switches, "Send a test". `push`/`notificationclick` handlers in the service worker
+    route; iPhone needs the app added to the Home Screen first (the page says so).
 - **Update (2026-11-07) — star feedback on the wall display:** the kiosk chore rows showed no star value
   (the phone list already did). Rows now show **★ N**, completing a chore floats a **+N ★**
   (`components/tasks/star-pop.tsx`, respects reduced-motion), and each person's card header shows their
