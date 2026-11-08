@@ -352,8 +352,8 @@ Goal: pairing/multi-screen, sleep schedule.
 - [ ] `[BE]` Pairing: issue/redeem short code, device-scoped token; `/devices/pair` — **F12**
 - [ ] `[FE]` Pairing screen (generate/enter code) + device list/management in `/app` — **F12**
 - [ ] `[ ] ` AC: two paired screens share data; unpair works; cross-household link
-- [ ] `[BE]` Sleep schedule + scheduler emits sleep/wake; `/devices/{id}/settings` — **F09**
-- [ ] `[FE]` Sleep overlay on `/device` (clock/blank) + wake-lock; settings UI — **F09**
+- [ ] `[BE]` Sleep schedule + scheduler emits sleep/wake; `/devices/{id}/settings` — **F09** _(deferred: the schedule is device-local until F12 pairing gives a device identity)_
+- [x] `[FE]` Sleep overlay on `/device` (clock/blank) + wake-lock; settings UI — **F09** _(done 2026-11-08, device-local: `components/sleep-overlay.tsx`, `hooks/use-sleep-settings.ts`, `lib/sleep.ts`; Settings → Night sleep. Per-device backend storage waits on F12 pairing)_
 - [ ] `[ ] ` AC: device sleeps/wakes on schedule, per device
 - [ ] `[FE]` Orientation (landscape/portrait) + default-view settings
 - [ ] `[BE]` Realtime: emit `device.*` (settings/sleep)
@@ -475,7 +475,10 @@ app/
 ├── page.tsx                           # landing / redirect
 ├── sign-in/[[...sign-in]]/page.tsx    # Clerk <SignIn />
 ├── sign-up/[[...sign-up]]/page.tsx    # Clerk <SignUp />
-├── device/{layout,page}.tsx           # kiosk surface
+├── device/                            # kiosk surface (layout: icon rail + sleep overlay + wake lock)
+│   ├── page.tsx                       # Today — landing screen (clock, weather, events, chores, meals)
+│   ├── calendar/page.tsx              # full calendar (week by default)
+│   └── {chores,lists,meals,recipes,rewards}/page.tsx
 ├── app/
 │   ├── layout.tsx                     # companion app shell (UserButton, nav)
 │   ├── page.tsx                       # dashboard (redirects to onboarding if no family)
