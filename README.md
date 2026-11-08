@@ -12,9 +12,9 @@ haven't started. Details in [docs/TRACKER.md](./docs/TRACKER.md).
 ## Verify it in under a minute
 
 ```bash
-cd MySkylightBackend
+# Backend lives in the HomeServerAPI repo (skylight-api/)
+git clone https://github.com/DaymonH/HomeServerAPI && cd HomeServerAPI/skylight-api
 uv run --extra dev pytest -q
-# Expected: 194 passed in ~11s
 ```
 
 That suite is not decorative. It includes `test_authz.py` and `test_calendar_authz.py` (can a member
@@ -24,9 +24,9 @@ app that would actually hurt if it were wrong, so it's the part with the most te
 
 ```bash
 # What the API surface looks like
-cat MySkylightBackend/docs/api.md
+cat HomeServerAPI/skylight-api/docs/api.md
 # The data model, generated from the live schema
-cat MySkylightBackend/docs/schema.sql
+cat HomeServerAPI/skylight-api/docs/schema.sql
 ```
 
 ## Architecture
@@ -38,7 +38,7 @@ Same data, same realtime stream, different assumptions about who's holding it.
 | | |
 |---|---|
 | **Frontend** — `MySkylight/` | Next.js 16, React 19, Tailwind v4, shadcn/ui. 19 routes across a full-screen kiosk view (`/device`) and a mobile PWA (`/app`), plus invite acceptance and auth flows. 95 components/pages. |
-| **Backend** — `MySkylightBackend/` | FastAPI + SQLAlchemy (async) + SQLite, 19 Alembic migrations, 15 routers, 16 service modules. Clerk for identity only — families, roles, and invitations live in this database. Realtime via SSE; background refresh via APScheduler. |
+| **Backend** — [`HomeServerAPI/skylight-api`](https://github.com/DaymonH/HomeServerAPI/tree/main/skylight-api) | FastAPI + SQLAlchemy (async) + SQLite, 24 Alembic migrations, 15 routers, 16 service modules. Clerk for identity only — families, roles, and invitations live in this database. Realtime via SSE; background refresh via APScheduler. |
 
 **Layering:** `routers/` handle HTTP and nothing else, `services/` hold the domain logic
 (calendar recurrence, chore balancing, CalDAV sync, rewards, weather), `models/` and `schemas/` keep
@@ -48,8 +48,8 @@ interface — the project moved from DeepSeek to Gemini Flash-Lite without touch
 ## Running it
 
 ```bash
-# Backend
-cd MySkylightBackend
+# Backend (separate repo: DaymonH/HomeServerAPI)
+cd HomeServerAPI/skylight-api
 cp .env.example .env          # fill in Clerk keys; GEMINI_API_KEY optional
 uv run alembic upgrade head
 uv run uvicorn app.main:app --reload
@@ -74,7 +74,7 @@ endpoints return 503 and everything else works normally — the AI features are 
 - **Scope was cut on purpose, and written down.** Instacart checkout (F05) descoped, photo screensaver
   (F16) parked, external-calendar *writes* (F19/F21/F22) descoped in favor of read-only sync. Each is
   recorded in the tracker with the reason rather than left as a silent gap.
-- **SQLite, deliberately.** One family, one Pi. [docs/postgres-migration.md](./MySkylightBackend/docs/postgres-migration.md)
+- **SQLite, deliberately.** One family, one Pi. [docs/postgres-migration.md](https://github.com/DaymonH/HomeServerAPI/tree/main/skylight-api/docs/postgres-migration.md)
   covers the move if that stops being true.
 
 ## Not done yet
@@ -90,13 +90,14 @@ tests are run locally. External calendar sync is read-only.
 | [docs/PLAN.md](./docs/PLAN.md) | Vision, architecture, data model, API surface, phased roadmap, risks |
 | [docs/FEATURES.md](./docs/FEATURES.md) | Every feature spec'd with acceptance criteria (`Fxx` IDs) |
 | [docs/TRACKER.md](./docs/TRACKER.md) | Living checklist — 195 tasks across 10 phases, with what was cut and why |
-| [MySkylightBackend/docs/api.md](./MySkylightBackend/docs/api.md) | Generated API reference |
+| [skylight-api/docs/api.md](https://github.com/DaymonH/HomeServerAPI/tree/main/skylight-api/docs/api.md) | Generated API reference |
 
 ## Layout
 
 ```
 MySkylight/
 ├── MySkylight/            ← Next.js frontend (kiosk + mobile PWA)
-├── MySkylightBackend/     ← FastAPI backend (app/, tests/, alembic/, docs/)
 └── docs/                  ← plan, feature specs, tracker
+
+Backend: github.com/DaymonH/HomeServerAPI → skylight-api/
 ```
