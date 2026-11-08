@@ -610,6 +610,7 @@ export function CalendarView({
                 setAnchor(new Date(`${date}T00:00:00`))
               }}
               large={isDevice}
+              compact={isPhone}
             />
           </div>
         ) : view === "week" ? (
