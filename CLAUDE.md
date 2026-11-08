@@ -61,5 +61,19 @@ Clerk token, and `lib/sse.ts` does the framing.
 - The backend's `CORS_ORIGINS` must list the site's origin, since the browser now calls it cross-origin.
 - Regular API calls now go direct too (see Stack above); the proxy is only the fallback, so a missing/wrong `NEXT_PUBLIC_API_BASE_URL` silently puts the bill back for *everything*, not just SSE.
 
+## The wall-display kiosk tablet (read `docs/kiosk/README.md` before touching it)
+The `/device` kiosk is a **rooted userdebug Android 12 tablet** (WF3205T) running the site as a
+**Kiwi Browser PWA**, pinned full-screen, kept alive by a root watchdog (`docs/kiosk/kiosk.sh`,
+started by Termux:Boot). Gotchas that cost hours — don't rediscover them:
+- **Fully Kiosk Browser can't work here:** the ROM only allows its built-in WebView **v95**, and the
+  Tailwind v4 CSS needs Chrome ≥ ~111 (`@layer`, `color-mix()`), so it renders as unstyled HTML.
+  Don't suggest WebView-based kiosk apps for this tablet.
+- Root is AOSP-style: use **`su 0 <cmd>`**, not `su -c`. Operate it from the Mac over `adb`
+  (wireless debugging; `adb mdns services` finds it) — the user doesn't want to type on the tablet.
+- The PWA is a Kiwi *shortcut*, not an app: `docs/kiosk/make-launch-recipe.py` extracts its launch
+  recipe; `docs/kiosk/install-to-tablet.sh` installs everything. Unpinning pauses the watchdog 30 min.
+- Browsers must keep cookies (Clerk dev-instance handshake), and `/manifest.json` /
+  `/device-manifest.json` must be reachable without login (PR #11) for Chrome to offer "Install app".
+
 ## Never edit
 `.env*` / secrets. `NEXT_PUBLIC_*` are the only client-exposed vars.
