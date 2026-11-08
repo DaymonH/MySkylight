@@ -14,6 +14,7 @@ import {
 
 import {
   useCleanupDuplicateEvents,
+  useDeleteSubscribedFeed,
   useDisconnectExternalAccount,
   useSetCalendarColor,
   useSetCalendarSync,
@@ -85,6 +86,7 @@ export function ExternalAccountCard({
   const syncAccount = useSyncExternalAccount(familyId)
   const cleanupDuplicates = useCleanupDuplicateEvents(familyId)
   const disconnect = useDisconnectExternalAccount(familyId)
+  const deleteFeed = useDeleteSubscribedFeed(familyId)
   const setSync = useSetCalendarSync(familyId)
   const setColor = useSetCalendarColor(familyId)
 
@@ -92,6 +94,9 @@ export function ExternalAccountCard({
   // dropdown. If it lived inside a DropdownMenuItem, the menu closing would
   // unmount it and it would flash shut, so we open it via state instead.
   const [confirmDisconnect, setConfirmDisconnect] = useState(false)
+  // Subscribed feeds can each be deleted outright (a sync switch only hides one).
+  const isFeeds = account.provider === "ics"
+  const [feedToDelete, setFeedToDelete] = useState<ExternalCalendarOut | null>(null)
 
   const needsReauth = account.status === "needs_reauth"
 
@@ -144,6 +149,18 @@ export function ExternalAccountCard({
     disconnect.mutate(account.id, {
       onSuccess: () => toast.success("Account disconnected"),
       onError: () => toast.error("Couldn't disconnect. Please try again."),
+    })
+  }
+
+  function handleDeleteFeed() {
+    if (!feedToDelete) return
+    const name = feedToDelete.name
+    deleteFeed.mutate(feedToDelete.id, {
+      onSuccess: () => {
+        setFeedToDelete(null)
+        toast.success(`Deleted “${name}”`)
+      },
+      onError: () => toast.error("Couldn't delete that feed. Please try again."),
     })
   }
 
@@ -263,7 +280,7 @@ export function ExternalAccountCard({
                   }
                 >
                   <Trash2Icon />
-                  Disconnect
+                  {isFeeds ? "Remove all feeds" : "Disconnect"}
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -325,6 +342,17 @@ export function ExternalAccountCard({
                           disabled={isPending}
                           aria-label={`Sync ${cal.name}`}
                         />
+                        {isFeeds && (
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            aria-label={`Delete ${cal.name}`}
+                            className="text-muted-foreground hover:text-destructive -mr-1"
+                            onClick={() => setFeedToDelete(cal)}
+                          >
+                            <Trash2Icon />
+                          </Button>
+                        )}
                       </div>
                     </li>
                   )
@@ -352,6 +380,37 @@ export function ExternalAccountCard({
           </div>
         </CardContent>
       </Card>
+
+      <AlertDialog
+        open={feedToDelete !== null}
+        onOpenChange={(open) => {
+          if (!open) setFeedToDelete(null)
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete &ldquo;{feedToDelete?.name}&rdquo;?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This removes the feed <strong>and the events it added</strong> to your
+              calendar. To just pause it, turn its sync switch off instead.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteFeed.isPending}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              onClick={(e) => {
+                // Stay open until the request settles (handleDeleteFeed closes it).
+                e.preventDefault()
+                handleDeleteFeed()
+              }}
+              disabled={deleteFeed.isPending}
+            >
+              Delete feed
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AlertDialog open={confirmDisconnect} onOpenChange={setConfirmDisconnect}>
         <AlertDialogContent>

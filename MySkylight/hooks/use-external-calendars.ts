@@ -83,6 +83,25 @@ export function useDisconnectExternalAccount(familyId: string) {
 }
 
 /**
+ * Delete one subscribed `.ics` feed. Unlike turning sync off (which only hides its
+ * events), this removes the feed and the events it mirrored in. Subscribed feeds
+ * only — the backend refuses Google/Apple calendars, which are re-discovered on
+ * every sync. Refresh the accounts list and the occurrence cache.
+ */
+export function useDeleteSubscribedFeed(familyId: string) {
+  const api = useApi()
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (extCalId: string) =>
+      api.delete(`/families/${familyId}/external/calendars/${extCalId}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["external-accounts", familyId] })
+      qc.invalidateQueries({ queryKey: ["occurrences", familyId] })
+    },
+  })
+}
+
+/**
  * Turn read-only mirroring of a discovered external calendar on or off. Enabling
  * re-pulls its events on the next sync; disabling hides them. Either way refresh
  * the accounts list and the occurrence cache.
