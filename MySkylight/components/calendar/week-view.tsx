@@ -13,7 +13,9 @@ import { NowLine } from "./now-line"
 import { useTodayYMD } from "@/hooks/use-today"
 
 interface WeekViewProps {
-  startDate: Date // Sunday of the week
+  startDate: Date // Sunday of the week (or the first day of a shorter phone window)
+  /** How many consecutive days to show. Default 7; the phone layout passes 3. */
+  dayCount?: number
   occurrences: OccurrenceOut[]
   onEventClick: (occ: OccurrenceOut) => void
   /** Tap an empty spot in a day column: start a new event at that date + time. */
@@ -42,6 +44,7 @@ function fmt12(h: number) {
 
 export function WeekView({
   startDate,
+  dayCount = 7,
   occurrences,
   onEventClick,
   onSlotClick,
@@ -89,12 +92,12 @@ export function WeekView({
   useLayoutEffect(() => {
     const el = gridRef.current
     if (!el) return
-    const update = () => setColWidth(el.clientWidth / 7)
+    const update = () => setColWidth(el.clientWidth / dayCount)
     update()
     const ro = new ResizeObserver(update)
     ro.observe(el)
     return () => ro.disconnect()
-  }, [])
+  }, [dayCount])
   const drag = useEventDrag({
     hourHeight,
     startMin: startMinClamp,
@@ -106,12 +109,12 @@ export function WeekView({
 
   const days = useMemo(
     () =>
-      Array.from({ length: 7 }, (_, i) => {
+      Array.from({ length: dayCount }, (_, i) => {
         const d = new Date(startDate)
         d.setDate(d.getDate() + i)
         return d
       }),
-    [startDate]
+    [startDate, dayCount]
   )
 
   const todayYMD = useTodayYMD()
@@ -148,7 +151,7 @@ export function WeekView({
       {/* Sticky day header */}
       <div
         className="z-10 grid flex-shrink-0 border-b bg-background"
-        style={{ gridTemplateColumns: "3.5rem repeat(7, 1fr)" }}
+        style={{ gridTemplateColumns: `3.5rem repeat(${dayCount}, 1fr)` }}
       >
         <div className="border-r" />
         {days.map((d, i) => {
@@ -193,7 +196,7 @@ export function WeekView({
       {hasAllDay && (
         <div
           className="grid flex-shrink-0 border-b"
-          style={{ gridTemplateColumns: "3.5rem repeat(7, 1fr)" }}
+          style={{ gridTemplateColumns: `3.5rem repeat(${dayCount}, 1fr)` }}
         >
           <div className="flex items-center justify-end border-r px-1.5 py-1 text-[10px] text-muted-foreground uppercase">
             All day
@@ -242,7 +245,11 @@ export function WeekView({
           </div>
 
           {/* Day columns */}
-          <div ref={gridRef} className="grid flex-1 grid-cols-7">
+          <div
+            ref={gridRef}
+            className="grid flex-1"
+            style={{ gridTemplateColumns: `repeat(${dayCount}, minmax(0, 1fr))` }}
+          >
             {days.map((d, i) => {
               const ymd = toYMD(d)
               const isToday = ymd === todayYMD

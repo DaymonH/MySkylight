@@ -31,6 +31,7 @@ import { MemberFilter } from "./member-filter"
 import { CalendarFilter } from "./calendar-filter"
 import { MonthView } from "./month-view"
 import { WeekView } from "./week-view"
+import { useMediaQuery } from "@/hooks/use-media-query"
 import { DayView } from "./day-view"
 import { ScheduleView } from "./schedule-view"
 import { CountdownStrip } from "./countdown-strip"
@@ -78,6 +79,13 @@ function weekStart(d: Date) {
   return s
 }
 
+// The "week" view shows 7 days (Sun–Sat) on tablets/desktop/wall display, but only 3
+// consecutive days starting at the anchor on a phone, where 7 columns are unreadable.
+const PHONE_WEEK_DAYS = 3
+function windowStart(d: Date, span: number) {
+  return span === 7 ? weekStart(d) : new Date(d.getFullYear(), d.getMonth(), d.getDate())
+}
+
 const MONTH_NAMES = [
   "January",
   "February",
@@ -95,7 +103,8 @@ const MONTH_NAMES = [
 
 function rangeForView(
   view: CalendarView,
-  anchor: Date
+  anchor: Date,
+  span = 7
 ): { from: string; to: string } {
   if (view === "month") {
     const y = anchor.getFullYear(),
@@ -106,9 +115,9 @@ function rangeForView(
     }
   }
   if (view === "week") {
-    const ws = weekStart(anchor)
+    const ws = windowStart(anchor, span)
     const we = new Date(ws)
-    we.setDate(we.getDate() + 6)
+    we.setDate(we.getDate() + span - 1)
     return { from: toYMD(ws), to: toYMD(we) }
   }
   if (view === "day") {
@@ -121,13 +130,13 @@ function rangeForView(
   return { from: toYMD(anchor), to: toYMD(we) }
 }
 
-function navLabel(view: CalendarView, anchor: Date) {
+function navLabel(view: CalendarView, anchor: Date, span = 7) {
   if (view === "month")
     return `${MONTH_NAMES[anchor.getMonth()]} ${anchor.getFullYear()}`
   if (view === "week") {
-    const ws = weekStart(anchor)
+    const ws = windowStart(anchor, span)
     const we = new Date(ws)
-    we.setDate(we.getDate() + 6)
+    we.setDate(we.getDate() + span - 1)
     if (ws.getMonth() === we.getMonth())
       return `${MONTH_NAMES[ws.getMonth()]} ${ws.getDate()}–${we.getDate()}, ${ws.getFullYear()}`
     return `${MONTH_NAMES[ws.getMonth()]} ${ws.getDate()} – ${MONTH_NAMES[we.getMonth()]} ${we.getDate()}`
@@ -142,10 +151,10 @@ function navLabel(view: CalendarView, anchor: Date) {
   return "Upcoming"
 }
 
-function navigate(view: CalendarView, anchor: Date, dir: -1 | 1): Date {
+function navigate(view: CalendarView, anchor: Date, dir: -1 | 1, span = 7): Date {
   const d = new Date(anchor)
   if (view === "month") d.setMonth(d.getMonth() + dir)
-  else if (view === "week") d.setDate(d.getDate() + dir * 7)
+  else if (view === "week") d.setDate(d.getDate() + dir * span)
   else if (view === "day") d.setDate(d.getDate() + dir)
   return d
 }
@@ -157,6 +166,9 @@ export function CalendarView({
   surface = "app",
 }: CalendarViewProps) {
   const isDevice = surface === "device"
+  // Phone-sized screen on the companion app: the week view shows 3 days, not 7.
+  const isPhone = useMediaQuery("(max-width: 639px)") && !isDevice
+  const weekSpan = isPhone ? PHONE_WEEK_DAYS : 7
 
   const [view, setView] = useState<CalendarView>(() => {
     if (storageKey && typeof window !== "undefined") {
@@ -228,7 +240,7 @@ export function CalendarView({
   )
   const { hidden, toggle, showAll, hideAll } = useHiddenCalendars(familyId, surface)
 
-  const { from, to } = rangeForView(view, anchor)
+  const { from, to } = rangeForView(view, anchor, weekSpan)
   const { data: occurrences = [], isLoading } = useOccurrences(
     familyId,
     from,
@@ -286,15 +298,15 @@ export function CalendarView({
   const weatherDates = useMemo(() => {
     if (view === "day") return [toYMD(anchor)]
     if (view === "week") {
-      const ws = weekStart(anchor)
-      return Array.from({ length: 7 }, (_, i) => {
+      const ws = windowStart(anchor, weekSpan)
+      return Array.from({ length: weekSpan }, (_, i) => {
         const d = new Date(ws)
         d.setDate(d.getDate() + i)
         return toYMD(d)
       })
     }
     return []
-  }, [view, anchor])
+  }, [view, anchor, weekSpan])
   const weatherByDate = useWeatherDays(familyId, coords, weatherDates)
 
   const createEvent = useCreateEvent(familyId)
@@ -478,7 +490,7 @@ export function CalendarView({
               variant="ghost"
               size={isDevice ? "icon" : "icon-sm"}
               className="rounded-none border-r"
-              onClick={() => setAnchor(navigate(view, anchor, -1))}
+              onClick={() => setAnchor(navigate(view, anchor, -1, weekSpan))}
               aria-label="Previous"
             >
               <ChevronLeftIcon />
@@ -487,7 +499,7 @@ export function CalendarView({
               variant="ghost"
               size={isDevice ? "icon" : "icon-sm"}
               className="rounded-none"
-              onClick={() => setAnchor(navigate(view, anchor, 1))}
+              onClick={() => setAnchor(navigate(view, anchor, 1, weekSpan))}
               aria-label="Next"
             >
               <ChevronRightIcon />
@@ -499,7 +511,7 @@ export function CalendarView({
               isDevice ? "text-2xl" : "text-base sm:text-lg"
             )}
           >
-            {navLabel(view, anchor)}
+            {navLabel(view, anchor, weekSpan)}
           </h2>
         </div>
 
@@ -602,7 +614,8 @@ export function CalendarView({
           </div>
         ) : view === "week" ? (
           <WeekView
-            startDate={weekStart(anchor)}
+            startDate={windowStart(anchor, weekSpan)}
+            dayCount={weekSpan}
             occurrences={visibleOccurrences}
             onEventClick={openEdit}
             onSlotClick={openNew}
