@@ -111,9 +111,42 @@ export function occurrenceDone(o: TaskOccurrenceOut): boolean {
   return o.members.length > 0 && pendingMembers(o).length === 0
 }
 
-/** Overdue = a past, un-skipped occurrence that still has someone on the hook. */
+/** Overdue = a past, un-skipped, un-dismissed occurrence that still has someone on
+ *  the hook. (Dismissed = swept away by "Clear missed", which awards no stars.) */
 export function isOverdue(o: TaskOccurrenceOut, asOf: string): boolean {
-  return o.occurrence_date < asOf && !o.is_skipped && pendingMembers(o).length > 0
+  return (
+    o.occurrence_date < asOf &&
+    !o.is_skipped &&
+    !o.is_dismissed &&
+    pendingMembers(o).length > 0
+  )
+}
+
+/**
+ * How long a missed chore stays on the Missed list, by how often it repeats. A daily
+ * chore missed nine days ago isn't actionable — nobody can still "do Tuesday's
+ * dishes" — so it quietly drops off instead of piling up; a weekly chore stays for
+ * the week it belonged to; monthly and one-off chores hang around longest.
+ * Anything older is simply not listed (it's still swept by "Clear missed").
+ */
+const MISSED_EXPIRY_DAYS: Record<ChoreFrequency, number> = {
+  daily: 1,
+  weekly: 7,
+  monthly: 30,
+  "one-off": 30,
+}
+
+/** Furthest back the Missed query needs to reach (the longest expiry above). */
+export const MISSED_LOOKBACK_DAYS = 30
+
+/** Whether a missed occurrence is still recent enough, for its frequency, to list.
+ *  `asOf` is the same anchor `isOverdue` uses (today, or the viewed week's start). */
+export function withinMissedWindow(
+  o: TaskOccurrenceOut,
+  asOf: string,
+  frequency: ChoreFrequency,
+): boolean {
+  return o.occurrence_date >= addDaysYMD(asOf, -MISSED_EXPIRY_DAYS[frequency])
 }
 
 // ── Filters ───────────────────────────────────────────────────────────────────

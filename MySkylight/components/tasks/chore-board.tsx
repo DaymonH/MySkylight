@@ -17,12 +17,15 @@ import {
   Loader2Icon,
   PartyPopperIcon,
   RepeatIcon,
+  StarIcon,
   Undo2Icon,
 } from "lucide-react"
 import { toast } from "sonner"
 
 import { useApi } from "@/hooks/use-api"
 import { useRealtime } from "@/hooks/use-realtime"
+import { useStarBalances } from "@/hooks/use-rewards"
+import { useTodayYMD } from "@/hooks/use-today"
 import {
   useCompleteTask,
   useClearRotationOverride,
@@ -43,6 +46,8 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { ChoreFilterBar } from "@/components/tasks/chore-filter-bar"
+import { ClearMissedButton } from "@/components/tasks/clear-missed-button"
+import { StarPop } from "@/components/tasks/star-pop"
 import { cn } from "@/lib/utils"
 import { isDefiniteClientError } from "@/lib/api-client"
 import { routineAccent } from "@/lib/colors"
@@ -55,14 +60,15 @@ import {
   dayStripLabel,
   filtersActive,
   formatMinutesTotal,
+  MISSED_LOOKBACK_DAYS,
   isOverdue,
   matchesStatus,
   matchesStatusForMember,
   relativeWeekLabel,
-  todayYMD,
   weekDatesYMD,
   weekRangeLabel,
   weekRangeYMD,
+  withinMissedWindow,
   type CompletionStatus,
 } from "@/lib/chores"
 import { canRephase, classifyFrequency, type ChoreFrequency } from "@/lib/recurrence"
@@ -83,8 +89,6 @@ interface MembershipResponse {
 }
 
 const ANYTIME_KEY = "__anytime__"
-// How far back to look for un-done chores from earlier days.
-const OVERDUE_LOOKBACK_DAYS = 14
 
 function initials(name: string) {
   const parts = name.trim().split(/\s+/)
@@ -155,7 +159,8 @@ export function ChoreBoard({ familyId }: { familyId: string }) {
   useRealtime(familyId)
 
   const api = useApi()
-  const today = todayYMD()
+  // Rolls over at midnight on its own — the wall display never reloads.
+  const today = useTodayYMD()
 
   const [view, setView] = useState<"today" | "week">("today")
   // Whole-week offset from the current week (0 = this week, 1 = next, -1 = last).
@@ -174,7 +179,7 @@ export function ChoreBoard({ familyId }: { familyId: string }) {
   // paging to other weeks (a future week has nothing to "miss" yet).
   const showMissed = view === "today" || weekOffset === 0
   const overdueAnchor = view === "today" ? today : week.start
-  const overdueFrom = addDaysYMD(overdueAnchor, -OVERDUE_LOOKBACK_DAYS)
+  const overdueFrom = addDaysYMD(overdueAnchor, -MISSED_LOOKBACK_DAYS)
   const overdueTo = addDaysYMD(overdueAnchor, -1)
 
   const { data: members = [] } = useQuery({
@@ -190,6 +195,14 @@ export function ChoreBoard({ familyId }: { familyId: string }) {
     overdueFrom,
     overdueTo,
     showMissed,
+  )
+
+  // Spendable stars per member, shown on each person's card. Kept fresh by the
+  // `task.*` / `reward.*` realtime events (they invalidate ["star-balances", …]).
+  const { data: balances = [] } = useStarBalances(familyId)
+  const starsByMember = useMemo(
+    () => new Map(balances.map((b) => [b.member_id, b.available])),
+    [balances],
   )
 
   const complete = useCompleteTask(familyId)
@@ -255,7 +268,12 @@ export function ChoreBoard({ familyId }: { familyId: string }) {
   const overdueItems = useMemo(
     () =>
       applyFilters(pastOccs, filters, freqByTaskId)
-        .filter((o) => isOverdue(o, overdueAnchor) && matchesStatus(o, filters.status))
+        .filter(
+          (o) =>
+            isOverdue(o, overdueAnchor) &&
+            withinMissedWindow(o, overdueAnchor, freqByTaskId.get(o.task_id) ?? "one-off") &&
+            matchesStatus(o, filters.status),
+        )
         .sort((a, b) =>
           a.occurrence_date === b.occurrence_date
             ? a.title.localeCompare(b.title)
@@ -432,6 +450,8 @@ export function ChoreBoard({ familyId }: { familyId: string }) {
           <div className="flex flex-col gap-4">
             {overdueItems.length > 0 && (
               <OverdueSection
+                familyId={familyId}
+                clearThrough={overdueTo}
                 items={overdueItems}
                 members={members}
                 today={today}
@@ -485,6 +505,15 @@ export function ChoreBoard({ familyId }: { familyId: string }) {
                           {doneCount} / {items.length} done
                         </p>
                       </div>
+                      {starsByMember.has(member.id) && (
+                        <span
+                          className="flex shrink-0 items-center gap-1 rounded-full bg-amber-100 px-3 py-1 text-base font-semibold text-amber-700 dark:bg-amber-950/50 dark:text-amber-300"
+                          title="Stars available to spend"
+                        >
+                          <StarIcon className="size-4 fill-amber-400 text-amber-400" />
+                          {starsByMember.get(member.id)}
+                        </span>
+                      )}
                       {allDone && (
                         <span className="text-2xl" role="img" aria-label="All done">
                           🎉
@@ -642,6 +671,8 @@ function EmptyState({ filtered }: { filtered: boolean }) {
 
 /** The "Missed" section: un-done chores from earlier days, grouped under one card. */
 function OverdueSection({
+  familyId,
+  clearThrough,
   items,
   members,
   today,
@@ -654,6 +685,9 @@ function OverdueSection({
   onReset,
   onMoveToToday,
 }: {
+  familyId: string
+  /** Last day (YYYY-MM-DD) that "Clear" dismisses — the day before this section's anchor. */
+  clearThrough: string
   items: TaskOccurrenceOut[]
   members: MemberRow[]
   today: string
@@ -672,6 +706,9 @@ function OverdueSection({
         <AlertTriangleIcon className="size-5 text-amber-600 dark:text-amber-400" />
         <p className="text-lg font-semibold leading-tight">Missed ({items.length})</p>
         <p className="text-muted-foreground ml-auto text-sm">From earlier days — still not done.</p>
+        {canManage && (
+          <ClearMissedButton familyId={familyId} through={clearThrough} count={items.length} />
+        )}
       </header>
       <ul className="flex flex-col gap-2">
         {items.map((o) => {
@@ -755,11 +792,19 @@ function ChoreRow({
     occurrence.rotation_unit !== "occurrence" || occurrence.rotation_interval > 1
   const swapTargets = allMembers.filter((m) => m.id !== currentMemberId)
 
+  // "+N ★" feedback on completing (not on undoing). Optimistic, like the check itself.
+  const [popKey, setPopKey] = useState(0)
+  const stars = occurrence.star_value
+
   return (
-    <div className="flex items-stretch gap-1.5">
+    <div className="relative flex items-stretch gap-1.5">
+      <StarPop amount={stars} popKey={popKey} />
       <button
         type="button"
-        onClick={onToggle}
+        onClick={() => {
+          if (!done) setPopKey((k) => k + 1)
+          onToggle()
+        }}
         aria-pressed={done}
         className={cn(
           "flex flex-1 items-center gap-3.5 rounded-2xl border px-4 py-3.5 text-left transition-colors",
@@ -794,6 +839,18 @@ function ChoreRow({
             </span>
           ) : null}
         </span>
+        {stars > 0 && (
+          <span
+            className={cn(
+              "flex shrink-0 items-center gap-0.5 text-sm font-semibold text-amber-600 dark:text-amber-400",
+              done && "opacity-40",
+            )}
+            title={`${stars} star${stars === 1 ? "" : "s"}`}
+          >
+            <StarIcon className="size-3.5 fill-amber-400 text-amber-400" />
+            {stars}
+          </span>
+        )}
         {minutes != null && minutes > 0 && (
           <span
             className={cn(
