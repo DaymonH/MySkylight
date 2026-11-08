@@ -1,19 +1,22 @@
 "use client"
 
-import { useLayoutEffect, useMemo, useRef, useState } from "react"
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 import { MapPinIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { readableTextOn } from "@/lib/colors"
 import type { OccurrenceOut } from "@/lib/types/calendar"
 import type { WeatherDay } from "@/hooks/use-weather"
 import { WeatherIcon } from "./weather-icon"
-import { packDayEvents } from "./event-layout"
-import { NowLine, useTodayYMD } from "./now-line"
+import { packDayEvents, minutesNow, slotTimeFromOffset } from "./event-layout"
+import { NowLine } from "./now-line"
+import { useTodayYMD } from "@/hooks/use-today"
 
 interface DayViewProps {
   date: Date
   occurrences: OccurrenceOut[]
   onEventClick: (occ: OccurrenceOut) => void
+  /** Tap an empty spot: start a new event on this day at that time. */
+  onSlotClick?: (date: string, time: string) => void
   weather?: WeatherDay
   large?: boolean
   /** First hour shown in the time grid (0–23). Default 7 (7 AM). */
@@ -36,6 +39,7 @@ export function DayView({
   date,
   occurrences,
   onEventClick,
+  onSlotClick,
   weather,
   large = false,
   dayStartHour = 7,
@@ -76,6 +80,17 @@ export function DayView({
 
   const todayYMD = useTodayYMD()
   const isToday = toYMD(date) === todayYMD
+
+  // Phone: the hour range scrolls, so open with the "now" line in view (see WeekView).
+  useEffect(() => {
+    const el = scrollRef.current
+    if (!el || !isToday || availH == null) return
+    if (el.scrollHeight <= el.clientHeight + 1) return
+    const nowMin = minutesNow()
+    if (nowMin < startMinClamp || nowMin > endMinClamp) return
+    const y = ((nowMin - startMinClamp) / 60) * hourHeight
+    el.scrollTop = Math.max(0, y - el.clientHeight / 3)
+  }, [availH, isToday]) // eslint-disable-line react-hooks/exhaustive-deps
   const allDay = occurrences.filter((o) => o.all_day)
   const timed = occurrences.filter((o) => !o.all_day)
   const positioned = packDayEvents(timed)
@@ -128,7 +143,27 @@ export function DayView({
           </div>
 
           {/* Event column */}
-          <div className="relative flex-1">
+          <div
+            className="relative flex-1"
+            onClick={
+              onSlotClick
+                ? (e) => {
+                    // Events are buttons; only an empty spot starts a new one.
+                    if ((e.target as HTMLElement).closest("button")) return
+                    const top = e.currentTarget.getBoundingClientRect().top
+                    onSlotClick(
+                      toYMD(date),
+                      slotTimeFromOffset(
+                        e.clientY - top,
+                        startMinClamp,
+                        endMinClamp,
+                        hourHeight,
+                      ),
+                    )
+                  }
+                : undefined
+            }
+          >
             {/* Hour gridlines as real bordered rows. These paint crisply at any
                 browser zoom / OS display-scaling, whereas a repeating
                 linear-gradient drops whole bands of 1px lines on sub-pixel

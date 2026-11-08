@@ -77,7 +77,13 @@ export interface EventCreatePayload {
   reminder_minutes?: number[]
 }
 
+/** Which occurrences an edit applies to, for a repeating event. */
+export type EditScope = "this" | "following" | "all"
+
 export interface EventUpdatePayload extends Partial<EventCreatePayload> {
-  edit_mode?: "this" | "following" | "all"
+  edit_mode?: EditScope
   occurrence_date?: string
+  /** The edited occurrence's ORIGINAL start (before this edit) — lets an "all" edit
+   *  shift the series instead of re-anchoring it at this occurrence. */
+  occurrence_start_dt?: string
 }

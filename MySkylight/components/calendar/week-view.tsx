@@ -1,18 +1,21 @@
 "use client"
 
-import { useMemo, useLayoutEffect, useRef, useState } from "react"
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 import { cn } from "@/lib/utils"
 import { readableTextOn } from "@/lib/colors"
 import type { OccurrenceOut } from "@/lib/types/calendar"
 import type { WeatherDay } from "@/hooks/use-weather"
 import { WeatherIcon } from "./weather-icon"
-import { packDayEvents } from "./event-layout"
-import { NowLine, useTodayYMD } from "./now-line"
+import { packDayEvents, minutesNow, slotTimeFromOffset } from "./event-layout"
+import { NowLine } from "./now-line"
+import { useTodayYMD } from "@/hooks/use-today"
 
 interface WeekViewProps {
   startDate: Date // Sunday of the week
   occurrences: OccurrenceOut[]
   onEventClick: (occ: OccurrenceOut) => void
+  /** Tap an empty spot in a day column: start a new event at that date + time. */
+  onSlotClick?: (date: string, time: string) => void
   weatherByDate?: Record<string, WeatherDay>
   large?: boolean
   /** First hour shown in the time grid (0–23). Default 7 (7 AM). */
@@ -37,6 +40,7 @@ export function WeekView({
   startDate,
   occurrences,
   onEventClick,
+  onSlotClick,
   weatherByDate,
   large = false,
   dayStartHour = 7,
@@ -85,6 +89,21 @@ export function WeekView({
   )
 
   const todayYMD = useTodayYMD()
+
+  // On a phone the grid scrolls (the hour range doesn't fit), and opening at the top
+  // of the morning hides what's happening now. When this week contains today, land
+  // the "now" line about a third of the way down. The wall display fits the whole
+  // range without scrolling, so this is a no-op there.
+  const weekHasToday = days.some((d) => toYMD(d) === todayYMD)
+  useEffect(() => {
+    const el = scrollRef.current
+    if (!el || !weekHasToday || availH == null) return
+    if (el.scrollHeight <= el.clientHeight + 1) return
+    const nowMin = minutesNow()
+    if (nowMin < startMinClamp || nowMin > endMinClamp) return
+    const y = ((nowMin - startMinClamp) / 60) * hourHeight
+    el.scrollTop = Math.max(0, y - el.clientHeight / 3)
+  }, [availH, weekHasToday]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const byDay = useMemo(() => {
     const map = new Map<string, OccurrenceOut[]>()
@@ -210,6 +229,24 @@ export function WeekView({
                     "relative border-r last:border-r-0",
                     isToday && "bg-primary/5"
                   )}
+                  onClick={
+                    onSlotClick
+                      ? (e) => {
+                          // Events are buttons; only an empty spot starts a new one.
+                          if ((e.target as HTMLElement).closest("button")) return
+                          const top = e.currentTarget.getBoundingClientRect().top
+                          onSlotClick(
+                            ymd,
+                            slotTimeFromOffset(
+                              e.clientY - top,
+                              startMinClamp,
+                              endMinClamp,
+                              hourHeight,
+                            ),
+                          )
+                        }
+                      : undefined
+                  }
                 >
                   {/* Hour gridlines as real bordered rows. These paint crisply at
                       any browser zoom / OS display-scaling, whereas a repeating

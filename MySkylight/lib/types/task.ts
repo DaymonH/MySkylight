@@ -60,6 +60,16 @@ export interface TaskOccurrenceOut {
   // is in effect; `is_skipped` = excused this occurrence (no one assigned).
   is_overridden: boolean
   is_skipped: boolean
+  // Dismissed by "Clear missed": excused from the Missed list. Not a completion —
+  // it earned no stars.
+  is_dismissed: boolean
+}
+
+/** Result of `PUT /families/{id}/missed-chores`. `previous_cleared_through` is what
+ *  the Undo toast sends back to restore. */
+export interface MissedClearOut {
+  missed_cleared_through: string | null
+  previous_cleared_through: string | null
 }
 
 export type RotationOverrideScope = "occurrence" | "turn"

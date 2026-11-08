@@ -38,6 +38,15 @@ frontend (FE) pieces, and **acceptance criteria** (AC) that define "done".
   overrides (this/following/all); `/events`, `/events/{id}/occurrences`.
 - **FE:** Event create/edit sheet (title, time, all-day, location, repeat, members, reminder, color).
 - **AC:** Create/edit/delete single + recurring events; "edit this occurrence only" works; reminders persist.
+- **Update (2026-11-07) — per-occurrence edit/delete in the UI (BE + FE):** the backend already
+  supported this/following/all, but the sheet always sent "all". Saving a repeating event now asks
+  **This event / This and following / All events** (`ScopePicker` in `event-sheet.tsx`); deleting offers
+  **This event** (cancels just that date) or **All**. "This event" is disabled once you've changed who's
+  assigned, reminders, repeat or all-day — those are series-wide and the backend ignores them per-date.
+  **Also fixed a data-loss bug:** "all" used to write the clicked occurrence's start onto the series, so
+  editing a title from a later week moved the series' start and dropped every earlier occurrence. The
+  client now sends `occurrence_start_dt`, and `_anchor_all_edit_to_series` shifts the series by the
+  occurrence's delta instead (tests in `tests/test_calendar.py`).
 - **Status (2026-06-20):** Removed the local `Calendar` container (migration `012`, "Model B"). Native
   events belong to the family and are colored by their assigned member (fallback `DEFAULT_EVENT_COLOR`) —
   there's no "choose a calendar" step. Synced events reference their source via `Event.external_calendar_id`
@@ -126,6 +135,19 @@ frontend (FE) pieces, and **acceptance criteria** (AC) that define "done".
   companion `FamilyMenu` now links **Chores** (the do/check view) separately from **Manage tasks** (the
   CRUD page). No backend change — `GET …/tasks/occurrences?from&to` already served arbitrary ranges.
   `next build` + typecheck + eslint clean; 25 backend task tests still green. Live two-device smoke pending.
+- **Update (2026-11-07) — star feedback on the wall display:** the kiosk chore rows showed no star value
+  (the phone list already did). Rows now show **★ N**, completing a chore floats a **+N ★**
+  (`components/tasks/star-pop.tsx`, respects reduced-motion), and each person's card header shows their
+  **available star balance** (`useStarBalances`, kept live by the `task.*`/`reward.*` SSE events).
+- **Update (2026-11-07) — Missed list no longer piles up: auto-expire + "Clear" (BE + FE):** the Missed
+  section used to list every un-done chore from the last 14 days, and the only way to empty it was to tick
+  each row — which *awarded stars* for chores nobody did. Now (1) **missed chores expire by cadence**
+  (`withinMissedWindow` in `lib/chores.ts`: daily 1 day, weekly 7, monthly/one-off 30), and (2) a **Clear**
+  button on the Missed header (owner/adult, both surfaces; `components/tasks/clear-missed-button.tsx`)
+  dismisses everything up to the section's anchor in one tap behind a confirm, with an **Undo** toast.
+  **Clearing is not completing — no star is awarded** and streaks still see the miss. Backend:
+  `PUT /families/{id}/missed-chores {through}` sets `families.missed_cleared_through` (migration `020`,
+  strictly before the household's today; `null`/earlier restores); occurrences carry `is_dismissed`.
 - **Update (2026-07-14) — "Move to today": re-phase a missed chore's cadence (BE + FE):** fixes the
   "did the every-other-day chore today but it still wants tomorrow" problem. A chore's recurrence is a
   pure function of `start_date` + `rrule`, so a missed occurrence's next instance stayed locked to the
@@ -248,6 +270,11 @@ frontend (FE) pieces, and **acceptance criteria** (AC) that define "done".
 - **BE:** Occurrence expansion endpoint with date-range params.
 - **FE:** Day / Week / Month / Schedule(list) components; view toggle; remembers per-device choice.
 - **AC:** All four views render the same events correctly, including recurring + all-day.
+- **Update (2026-11-07):** **tap an empty spot in the Day/Week grid to create an event at that time**
+  (snapped to 30 min); on phone the grid **opens scrolled to "now"**. The wall display now **rolls over
+  at midnight on its own** — the calendar anchor, countdown window, chore board and phone chores panel
+  all follow `useTodayYMD()` (`hooks/use-today.ts`) instead of computing "today" once per render
+  (freshness is SSE-only, so nothing used to happen at midnight). Navigating pins the date until "Today".
 - _Phase 2_
 
 ### F07 — Weather
@@ -801,6 +828,11 @@ frontend (FE) pieces, and **acceptance criteria** (AC) that define "done".
   one-tap US-Holidays fill) on the integrations page; the feed renders in the existing account card.
   **Zero-touch on deploy:** migration `019` seeds the US-Holidays subscription for every family, so holidays
   appear after deploy with no app interaction (the 5-min scheduler does the first pull).
+  **Update (2026-11-07) — delete a single feed:** every feed shares one "Subscribed feeds" account, so the
+  only removal was *Disconnect* (all feeds) — a phone user could just toggle one feed's sync off. Each feed
+  row now has a trash button (confirm) → **`DELETE /families/{id}/external/calendars/{id}`**, which
+  soft-deletes that feed's mirrored events and removes the feed (and the empty container with the last one).
+  Subscribed feeds only — Google/Apple calendars are re-discovered each sync, so they keep the sync switch.
 
 ---
 
