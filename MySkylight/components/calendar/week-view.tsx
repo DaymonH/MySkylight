@@ -4,6 +4,8 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 import { cn } from "@/lib/utils"
 import { readableTextOn } from "@/lib/colors"
 import type { OccurrenceOut } from "@/lib/types/calendar"
+import { useEventDrag } from "@/hooks/use-event-drag"
+import type { Span } from "@/lib/event-drag"
 import type { WeatherDay } from "@/hooks/use-weather"
 import { WeatherIcon } from "./weather-icon"
 import { packDayEvents, minutesNow, slotTimeFromOffset } from "./event-layout"
@@ -16,6 +18,8 @@ interface WeekViewProps {
   onEventClick: (occ: OccurrenceOut) => void
   /** Tap an empty spot in a day column: start a new event at that date + time. */
   onSlotClick?: (date: string, time: string) => void
+  /** Drag an event to move it (any day) or its bottom edge to resize it. */
+  onEventMove?: (occ: OccurrenceOut, span: Span) => void
   weatherByDate?: Record<string, WeatherDay>
   large?: boolean
   /** First hour shown in the time grid (0–23). Default 7 (7 AM). */
@@ -41,6 +45,7 @@ export function WeekView({
   occurrences,
   onEventClick,
   onSlotClick,
+  onEventMove,
   weatherByDate,
   large = false,
   dayStartHour = 7,
@@ -77,6 +82,27 @@ export function WeekView({
   const totalHeight = spanHours * hourHeight
   const startMinClamp = startHour * 60
   const endMinClamp = endHour * 60
+
+  // One day column's width, for turning a horizontal drag into "N days over".
+  const gridRef = useRef<HTMLDivElement>(null)
+  const [colWidth, setColWidth] = useState(0)
+  useLayoutEffect(() => {
+    const el = gridRef.current
+    if (!el) return
+    const update = () => setColWidth(el.clientWidth / 7)
+    update()
+    const ro = new ResizeObserver(update)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+  const drag = useEventDrag({
+    hourHeight,
+    startMin: startMinClamp,
+    endMin: endMinClamp,
+    columnWidth: colWidth,
+    touchEnabled: large, // finger-drag only on the wall display; a phone's grid must scroll
+    onCommit: (occ, span) => onEventMove?.(occ, span),
+  })
 
   const days = useMemo(
     () =>
@@ -216,7 +242,7 @@ export function WeekView({
           </div>
 
           {/* Day columns */}
-          <div className="grid flex-1 grid-cols-7">
+          <div ref={gridRef} className="grid flex-1 grid-cols-7">
             {days.map((d, i) => {
               const ymd = toYMD(d)
               const isToday = ymd === todayYMD
@@ -276,7 +302,8 @@ export function WeekView({
                       <button
                         key={j}
                         onClick={() => onEventClick(p.occ)}
-                        className="absolute z-10 overflow-hidden rounded-md px-1.5 py-0.5 text-left shadow-sm ring-1 ring-black/5 transition-shadow hover:z-20 hover:shadow-md active:shadow-md"
+                        {...(onEventMove ? drag.eventProps(p.occ) : {})}
+                        className="absolute z-10 overflow-hidden rounded-md px-1.5 py-0.5 text-left shadow-sm ring-1 ring-black/5 transition-shadow select-none hover:z-20 hover:shadow-md active:shadow-md"
                         style={{
                           top,
                           height,
@@ -284,6 +311,7 @@ export function WeekView({
                           width: `calc(${widthPct}% - 4px)`,
                           backgroundColor: p.occ.effective_color,
                           color: readableTextOn(p.occ.effective_color),
+                          ...(onEventMove ? drag.style(p.occ, height) : {}),
                         }}
                       >
                         <span className="block truncate text-xs leading-tight font-medium">
@@ -296,6 +324,17 @@ export function WeekView({
                               minute: "2-digit",
                             })}
                           </span>
+                        )}
+                        {onEventMove && drag.canDrag(p.occ) && height > 24 && (
+                          <span
+                            aria-hidden
+                            {...drag.handleProps(p.occ)}
+                            className={cn(
+                              "absolute inset-x-0 bottom-0 cursor-ns-resize",
+                              large ? "h-4" : "h-2"
+                            )}
+                            style={large ? { touchAction: "none" } : undefined}
+                          />
                         )}
                       </button>
                     )

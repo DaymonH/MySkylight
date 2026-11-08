@@ -38,6 +38,18 @@ import { EventSheet } from "./event-sheet"
 import { FlyerImportDialog } from "./flyer-import-dialog"
 import { CalendarSkeleton } from "./calendar-skeleton"
 import { Button } from "@/components/ui/button"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import { ScopePicker } from "./scope-picker"
+import type { Span } from "@/lib/event-drag"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { cn } from "@/lib/utils"
 import type {
@@ -168,6 +180,10 @@ export function CalendarView({
   const [defaultTime, setDefaultTime] = useState<string | undefined>()
   const [editing, setEditing] = useState<OccurrenceOut | undefined>()
   const [importOpen, setImportOpen] = useState(false)
+  // A repeating event dragged to a new time: waits here while we ask which
+  // occurrences it applies to.
+  const [pendingMove, setPendingMove] = useState<{ occ: OccurrenceOut; span: Span } | null>(null)
+  const [moveScope, setMoveScope] = useState<EditScope>("this")
 
   const api = useApi()
 
@@ -357,6 +373,65 @@ export function CalendarView({
     }
   }
 
+  /** Save a drag/resize. Undo restores the old time (not offered after a "following"
+   *  edit, which splits the series and so can't be cleanly reversed). */
+  async function commitMove(occ: OccurrenceOut, span: Span, scope: EditScope, offerUndo = true) {
+    const update: EventUpdatePayload = {
+      start_dt: span.start.toISOString(),
+      end_dt: span.end.toISOString(),
+      edit_mode: scope,
+    }
+    if (occ.is_recurring) {
+      update.occurrence_date = occ.occurrence_date
+      if (scope === "all") update.occurrence_start_dt = occ.start_dt
+    }
+    try {
+      await updateEvent.mutateAsync({ eventId: occ.event_id, data: update })
+      const when = span.start.toLocaleString(undefined, {
+        weekday: "short",
+        hour: "numeric",
+        minute: "2-digit",
+      })
+      toast.success(`${occ.title} moved to ${when}`, {
+        action:
+          offerUndo && scope !== "following"
+            ? {
+                label: "Undo",
+                onClick: () =>
+                  // Same edit, aimed back at the original time. For "all", the
+                  // occurrence's *current* start is what the series must shift from.
+                  void commitMove(
+                    { ...occ, start_dt: span.start.toISOString() },
+                    { start: new Date(occ.start_dt), end: new Date(occ.end_dt) },
+                    scope,
+                    false
+                  ),
+              }
+            : undefined,
+      })
+    } catch {
+      toast.error("Couldn't move the event. Please try again.")
+    }
+  }
+
+  function handleEventMove(occ: OccurrenceOut, span: Span) {
+    if (!occ.is_recurring) {
+      void commitMove(occ, span, "all")
+      return
+    }
+    // One occurrence of a series can't sensibly hop to another day by dragging (its
+    // series is anchored to a weekday/date); changing the day goes through the editor.
+    const sameDay = toYMD(span.start) === toYMD(new Date(occ.start_dt))
+    if (!sameDay) {
+      toast("Repeating events can only be dragged within their day", {
+        description: "Open the event to change its day.",
+      })
+      return
+    }
+    setMoveScope("this")
+    setPendingMove({ occ, span })
+  }
+
   async function handleDelete(scope: EditScope = "all") {
     if (!editing) return
     try {
@@ -531,6 +606,7 @@ export function CalendarView({
             occurrences={visibleOccurrences}
             onEventClick={openEdit}
             onSlotClick={openNew}
+            onEventMove={handleEventMove}
             weatherByDate={weatherByDate}
             large={isDevice}
             dayStartHour={dayStartHour}
@@ -542,6 +618,7 @@ export function CalendarView({
             occurrences={visibleOccurrences}
             onEventClick={openEdit}
             onSlotClick={openNew}
+            onEventMove={handleEventMove}
             weather={weatherByDate[toYMD(anchor)]}
             large={isDevice}
             dayStartHour={dayStartHour}
@@ -571,6 +648,38 @@ export function CalendarView({
         editing={editing}
         existing={occurrences}
       />
+
+      <AlertDialog
+        open={pendingMove !== null}
+        onOpenChange={(open) => {
+          if (!open) setPendingMove(null)
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Change repeating event</AlertDialogTitle>
+            <AlertDialogDescription>
+              Choose which events get the new time. This updates them for everyone in the family.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <ScopePicker
+            value={moveScope}
+            onChange={setMoveScope}
+            options={["this", "following", "all"]}
+          />
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (pendingMove) void commitMove(pendingMove.occ, pendingMove.span, moveScope)
+                setPendingMove(null)
+              }}
+            >
+              Save
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <FlyerImportDialog
         open={importOpen}
