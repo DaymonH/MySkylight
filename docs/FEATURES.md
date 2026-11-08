@@ -649,6 +649,9 @@ frontend (FE) pieces, and **acceptance criteria** (AC) that define "done".
   task lists and the save toast names the chosen day. Every weekly cadence (every week, every N weeks) gets one
   optional **Day** row (Auto by default, Mon–Sun chips, a Weekdays shortcut); chosen days are saved as
   `[INTERVAL=N;]BYDAY=…` and pinned. The old "Custom days…" Repeat entry is gone.
+  Every-2–28-days and monthly chores get a **Start day** row (Auto or **On a date**): Auto lets the
+  balancer pick which of the N possible starting days (or day of month: 1/8/15/22) spreads load best;
+  a chosen date is pinned and never moved. Labelled "(auto)" like weekly chores.
 ### F28 — Recipe → Grocery List (ingredient aggregation) ⭐
 
 > _Inspired by **Skylight**'s "advanced grocery integration" (auto-calculates ingredient quantities for

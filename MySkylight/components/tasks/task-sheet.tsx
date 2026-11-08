@@ -34,8 +34,10 @@ import {
 } from "@/components/ui/alert-dialog"
 import {
   CUSTOM_INTERVAL,
+  formatTaskDate,
   intervalRrule,
   isCustomInterval,
+  isPhaseAuto,
   isPinnedWeekly,
   parseByday,
   parseInterval,
@@ -68,6 +70,8 @@ const schema = z.object({
   // from it — the app picks that (or the user pins it with "Custom days…").
   start_date: z.string(),
   starts_immediately: z.boolean(),
+  // Every-N-days / monthly: true = the user picked the starting date; false = Auto.
+  start_pinned: z.boolean(),
   // The recurrence *pattern* only (FREQ/INTERVAL/BYDAY); the end date lives in
   // `end_date` and is spliced in as UNTIL when saving.
   rrule: z.string(),
@@ -86,7 +90,8 @@ const schema = z.object({
     const oneOff = !v.rrule || v.rrule === "none"
     // A one-off needs a date; a recurring chore needs one only when it isn't
     // starting right away.
-    if ((oneOff || !v.starts_immediately) && !v.start_date) {
+    const pinnedStart = !oneOff && isPhaseAuto(v.rrule) && v.start_pinned
+    if ((oneOff || pinnedStart || !v.starts_immediately) && !v.start_date) {
       ctx.addIssue({
         code: "custom",
         path: ["start_date"],
@@ -142,6 +147,7 @@ export function TaskSheet({
     handleSubmit,
     control,
     reset,
+    setValue,
     formState: { errors },
   } = useForm<TaskFormValues>({
     resolver: zodResolver(schema),
@@ -153,6 +159,7 @@ export function TaskSheet({
       color: null,
       start_date: todayYMD(),
       starts_immediately: true,
+      start_pinned: false,
       rrule: "none",
       end_date: "",
       star_value: 1,
@@ -200,6 +207,7 @@ export function TaskSheet({
         color: editing.color ?? null,
         start_date: editing.start_date,
         starts_immediately: true,
+        start_pinned: editing.day_pinned && isPhaseAuto(pattern),
         rrule: pattern,
         end_date: parseUntil(stored) ?? "",
         star_value: editing.star_value,
@@ -222,6 +230,7 @@ export function TaskSheet({
         color: null,
         start_date: todayYMD(),
         starts_immediately: true,
+        start_pinned: false,
         rrule: "none",
         end_date: "",
         star_value: 1,
@@ -240,6 +249,7 @@ export function TaskSheet({
   const rotationUnit = useWatch({ control, name: "rotation_unit" })
   const startDate = useWatch({ control, name: "start_date" })
   const startsImmediately = useWatch({ control, name: "starts_immediately" })
+  const startPinned = useWatch({ control, name: "start_pinned" })
   const rrulePattern = useWatch({ control, name: "rrule" })
   const isRecurring = !!rrulePattern && rrulePattern !== "none"
   // Plain weekly / every-N-weeks: the app picks the weekday.
@@ -360,7 +370,7 @@ export function TaskSheet({
                 )}
               </div>
             )}
-            {isRecurring && !editing && (
+            {isRecurring && !editing && !(isPhaseAuto(rrulePattern) && startPinned) && (
               <div className="space-y-2">
                 <Controller
                   name="starts_immediately"
@@ -499,6 +509,66 @@ export function TaskSheet({
                               ))}
                             </SelectContent>
                           </Select>
+                        </div>
+                      )}
+
+                      {isPhaseAuto(field.value) && (
+                        <div className="flex flex-col gap-1.5 pt-2">
+                          <Label className="text-muted-foreground text-xs">Start day</Label>
+                          <Controller
+                            name="start_pinned"
+                            control={control}
+                            render={({ field: pin }) => (
+                              <div className="flex flex-wrap items-center gap-1.5">
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant={pin.value ? "outline" : "default"}
+                                  className="rounded-full"
+                                  onClick={() => pin.onChange(false)}
+                                >
+                                  Auto
+                                </Button>
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant={pin.value ? "default" : "outline"}
+                                  className="rounded-full"
+                                  onClick={() => {
+                                    pin.onChange(true)
+                                    if (!startDate) setValue("start_date", todayYMD())
+                                  }}
+                                >
+                                  On a date
+                                </Button>
+                              </div>
+                            )}
+                          />
+                          {startPinned ? (
+                            <>
+                              <Input
+                                id="task-start"
+                                type="date"
+                                min={editing ? undefined : todayYMD()}
+                                {...register("start_date")}
+                              />
+                              {errors.start_date && (
+                                <p className="text-destructive text-xs">{errors.start_date.message}</p>
+                              )}
+                              <p className="text-muted-foreground text-xs">
+                                It first happens on this date and repeats from there. The app
+                                won&apos;t move it.
+                              </p>
+                            </>
+                          ) : (
+                            <p className="text-muted-foreground text-xs">
+                              The app picks the starting day that best balances everyone&apos;s
+                              chores.
+                              {editing?.day_pinned === false && editing.start_date >= todayYMD()
+                                ? ` Currently starting ${formatTaskDate(editing.start_date)}.`
+                                : ""}
+                            </p>
+                          )}
                         </div>
                       )}
 

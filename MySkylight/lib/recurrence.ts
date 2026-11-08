@@ -128,6 +128,18 @@ export function isAutoPlaced(task: { rrule: string | null; day_pinned?: boolean 
   return isPinnedWeekly(task.rrule) && task.day_pinned === false
 }
 
+/**
+ * True when the app can pick this chore's starting day: every 2–28 days, or every
+ * month. (Weekly chores get a weekday instead — see `isAutoPlaced`.) Mirrors the
+ * backend's `_auto_kind == "phase"`.
+ */
+export function isPhaseAuto(rrule: string | null): boolean {
+  const iv = parseInterval(rrule)
+  if (!iv) return false
+  if (iv.unit === "day") return iv.n >= 2 && iv.n <= 28
+  return iv.unit === "month" && iv.n === 1 && !/BYMONTHDAY=|BYDAY=/.test(rrule ?? "")
+}
+
 /** "Tuesdays" for the single day of an auto-placed chore, or null if it has none/several. */
 export function autoDayName(rrule: string | null): string | null {
   const days = parseByday(rrule)
@@ -200,7 +212,9 @@ export function describeTaskRrule(
       iv.n > 1
         ? `Every ${iv.n} ${iv.unit}s`
         : { day: "Daily", week: "Weekly", month: "Monthly" }[iv.unit]
-    return withEnd(base, rrule)
+    // Every-N-days / monthly: the app chose the starting day unless the user pinned a date.
+    const auto = task?.day_pinned === false && isPhaseAuto(rrule)
+    return withEnd(auto ? `${base} (auto)` : base, rrule)
   }
   if (rrule.includes("FREQ=YEARLY")) return withEnd("Yearly", rrule)
   return "Repeats"

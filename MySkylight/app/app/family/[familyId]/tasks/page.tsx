@@ -54,6 +54,8 @@ import {
   describeRotation,
   autoDayName,
   describeTaskRrule,
+  formatTaskDate,
+  isPhaseAuto,
   isAutoPlaced,
   parseByday,
   isPinnedWeekly,
@@ -146,6 +148,8 @@ export default function TasksPage({ params }: { params: Promise<{ familyId: stri
 
   async function handleSubmit(values: TaskFormValues) {
     const rotating = values.rotate && values.member_ids.length >= 2
+    const phasePinned =
+      values.rrule !== "none" && isPhaseAuto(values.rrule) && values.start_pinned
     const data: TaskCreatePayload = {
       title: values.title.trim(),
       icon: values.icon.trim() || null,
@@ -154,13 +158,14 @@ export default function TasksPage({ params }: { params: Promise<{ familyId: stri
       color: values.color,
       // One-offs always carry their due date. A recurring chore sends a date only when
       // it shouldn't start right away ("Not before"); editing never re-dates it.
-      ...(values.rrule === "none"
+      // An every-N-days / monthly chore with a chosen start date sends it too.
+      ...(values.rrule === "none" || phasePinned
         ? { start_date: values.start_date }
         : !editing && !values.starts_immediately
           ? { start_date: values.start_date }
           : {}),
-      // True only when the user picked the weekday(s) themselves.
-      day_pinned: isPinnedWeekly(values.rrule),
+      // True only when the user picked the weekday(s) or the start date themselves.
+      day_pinned: isPinnedWeekly(values.rrule) || phasePinned,
       // Splice the optional end date back into the pattern as UNTIL.
       rrule: values.rrule === "none" ? null : withUntil(values.rrule, values.end_date || null),
       // Rotation needs at least two members; otherwise it's just a fixed assignee.
@@ -184,11 +189,27 @@ export default function TasksPage({ params }: { params: Promise<{ familyId: stri
         const moved =
           editing.day_pinned || parseByday(editing.rrule)[0] !== parseByday(saved.rrule)[0]
         const day = isAutoPlaced(saved) && moved ? autoDayName(saved.rrule) : null
-        toast.success(day ? `Task updated. Scheduled on ${day} to balance chores.` : "Task updated")
+        const phaseMoved =
+          isPhaseAuto(saved.rrule) &&
+          !saved.day_pinned &&
+          (editing.day_pinned || editing.start_date !== saved.start_date)
+        toast.success(
+          day
+            ? `Task updated. Scheduled on ${day} to balance chores.`
+            : phaseMoved
+              ? `Task updated. Starts ${formatTaskDate(saved.start_date)} to balance chores.`
+              : "Task updated",
+        )
       } else {
         const saved = await createTask.mutateAsync(data)
         const day = isAutoPlaced(saved) ? autoDayName(saved.rrule) : null
-        toast.success(day ? `Task created. Scheduled on ${day} to balance chores.` : "Task created")
+        toast.success(
+          day
+            ? `Task created. Scheduled on ${day} to balance chores.`
+            : isPhaseAuto(saved.rrule) && !saved.day_pinned
+              ? `Task created. Starts ${formatTaskDate(saved.start_date)} to balance chores.`
+              : "Task created",
+        )
       }
       setSheetOpen(false)
     } catch {
