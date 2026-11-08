@@ -86,3 +86,24 @@ export function minutesNow(): number {
   const d = new Date()
   return d.getHours() * 60 + d.getMinutes()
 }
+
+/**
+ * Wall-clock `HH:MM` for a click inside a time column, snapped *down* to `snap`
+ * minutes. `clientY - columnTop` is the pixel offset into the column; the column
+ * starts at `startMin` and each hour is `hourHeight` px tall. Clamped so the result
+ * is always a valid time inside the visible window.
+ */
+export function slotTimeFromOffset(
+  offsetY: number,
+  startMin: number,
+  endMin: number,
+  hourHeight: number,
+  snap = 30,
+): string {
+  const raw = startMin + (offsetY / hourHeight) * 60
+  const snapped = Math.floor(raw / snap) * snap
+  const clamped = Math.max(startMin, Math.min(snapped, endMin - snap, 23 * 60 + 30))
+  const h = Math.floor(clamped / 60)
+  const m = clamped % 60
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`
+}

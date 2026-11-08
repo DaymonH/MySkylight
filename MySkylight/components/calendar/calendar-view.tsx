@@ -18,6 +18,7 @@ import {
 } from "@/hooks/use-calendars"
 import { useRealtime } from "@/hooks/use-realtime"
 import { useWeatherDays } from "@/hooks/use-weather"
+import { useTodayYMD } from "@/hooks/use-today"
 import { useVisibleHours } from "@/hooks/use-visible-hours"
 import { useActiveMember } from "@/hooks/use-active-member"
 import { useExternalAccounts } from "@/hooks/use-external-calendars"
@@ -41,6 +42,8 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { cn } from "@/lib/utils"
 import type {
   CalendarView,
+  EditScope,
+  EventUpdatePayload,
   MemberBrief,
   OccurrenceOut,
 } from "@/lib/types/calendar"
@@ -151,9 +154,18 @@ export function CalendarView({
     return defaultView
   })
   const { start: dayStartHour, end: dayEndHour } = useVisibleHours()
-  const [anchor, setAnchor] = useState(new Date())
+  // The viewed date. `null` means "follow today": on the always-on wall display the
+  // calendar must roll over to the new day at midnight on its own. Navigating (or
+  // jumping to a day from the month view) pins an explicit date until "Today".
+  const today = useTodayYMD()
+  const [anchorOverride, setAnchor] = useState<Date | null>(null)
+  const anchor = useMemo(
+    () => anchorOverride ?? new Date(`${today}T00:00:00`),
+    [anchorOverride, today]
+  )
   const [sheetOpen, setSheetOpen] = useState(false)
   const [defaultDate, setDefaultDate] = useState<string | undefined>()
+  const [defaultTime, setDefaultTime] = useState<string | undefined>()
   const [editing, setEditing] = useState<OccurrenceOut | undefined>()
   const [importOpen, setImportOpen] = useState(false)
 
@@ -225,11 +237,11 @@ export function CalendarView({
   // and feed that to the strip. Shares the ["occurrences", familyId, …] cache, so
   // realtime/mutation invalidations refresh it too.
   const countdownRange = useMemo(() => {
-    const start = new Date()
-    const end = new Date()
+    const start = new Date(`${today}T00:00:00`)
+    const end = new Date(start)
     end.setDate(end.getDate() + 365)
     return { from: toYMD(start), to: toYMD(end) }
-  }, [])
+  }, [today])
   const { data: countdownOccurrences = [] } = useOccurrences(
     familyId,
     countdownRange.from,
@@ -278,19 +290,22 @@ export function CalendarView({
     if (storageKey) localStorage.setItem(storageKey, v)
   }
 
-  function openNew(date?: string) {
+  function openNew(date?: string, time?: string) {
     setEditing(undefined)
     setDefaultDate(date)
+    setDefaultTime(time)
     setSheetOpen(true)
   }
 
   function openEdit(occ: OccurrenceOut) {
     setEditing(occ)
     setDefaultDate(undefined)
+    setDefaultTime(undefined)
     setSheetOpen(true)
   }
 
-  async function handleSubmit(data: {
+  async function handleSubmit(
+    data: {
     title: string
     start_dt: string
     end_dt: string
@@ -301,7 +316,9 @@ export function CalendarView({
     is_countdown: boolean
     member_ids: string[]
     reminder_minutes: number[]
-  }) {
+    },
+    scope: EditScope = "all"
+  ) {
     const payload = {
       ...data,
       start_dt: new Date(data.start_dt).toISOString(),
@@ -313,11 +330,23 @@ export function CalendarView({
 
     try {
       if (editing) {
-        await updateEvent.mutateAsync({
-          eventId: editing.event_id,
-          data: { ...payload, edit_mode: "all" },
-        })
-        toast.success("Event updated")
+        // A repeating event is edited per occurrence: "this" and "following" are
+        // anchored at the clicked date; "all" also says which occurrence the form's
+        // times belong to, so the backend shifts the series rather than re-anchoring
+        // it at this date (which would drop every earlier occurrence).
+        const update: EventUpdatePayload = { ...payload, edit_mode: scope }
+        if (editing.is_recurring) {
+          update.occurrence_date = editing.occurrence_date
+          if (scope === "all") update.occurrence_start_dt = editing.start_dt
+        }
+        await updateEvent.mutateAsync({ eventId: editing.event_id, data: update })
+        toast.success(
+          scope === "this"
+            ? "Event updated for this date"
+            : scope === "following"
+              ? "This and following events updated"
+              : "Event updated"
+        )
       } else {
         await createEvent.mutateAsync(payload)
         toast.success("Event created")
@@ -328,11 +357,16 @@ export function CalendarView({
     }
   }
 
-  async function handleDelete() {
+  async function handleDelete(scope: EditScope = "all") {
     if (!editing) return
     try {
-      await deleteEvent.mutateAsync({ eventId: editing.event_id })
-      toast.success("Event deleted")
+      // "This event" on a repeating event cancels just that occurrence.
+      const justThisDate = editing.is_recurring && scope === "this"
+      await deleteEvent.mutateAsync({
+        eventId: editing.event_id,
+        occurrenceDate: justThisDate ? editing.occurrence_date : undefined,
+      })
+      toast.success(justThisDate ? "Removed from this date" : "Event deleted")
       setSheetOpen(false)
     } catch {
       toast.error("Couldn't delete the event. Please try again.")
@@ -360,7 +394,7 @@ export function CalendarView({
           <Button
             variant="outline"
             size={isDevice ? "lg" : "sm"}
-            onClick={() => setAnchor(new Date())}
+            onClick={() => setAnchor(null)}
           >
             Today
           </Button>
@@ -496,6 +530,7 @@ export function CalendarView({
             startDate={weekStart(anchor)}
             occurrences={visibleOccurrences}
             onEventClick={openEdit}
+            onSlotClick={openNew}
             weatherByDate={weatherByDate}
             large={isDevice}
             dayStartHour={dayStartHour}
@@ -506,6 +541,7 @@ export function CalendarView({
             date={anchor}
             occurrences={visibleOccurrences}
             onEventClick={openEdit}
+            onSlotClick={openNew}
             weather={weatherByDate[toYMD(anchor)]}
             large={isDevice}
             dayStartHour={dayStartHour}
@@ -531,6 +567,7 @@ export function CalendarView({
         isDeleting={deleteEvent.isPending}
         members={members}
         defaultDate={defaultDate}
+        defaultTime={defaultTime}
         editing={editing}
       />
 
