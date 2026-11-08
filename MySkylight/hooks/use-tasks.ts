@@ -9,6 +9,7 @@ import type {
   BalancePlanRequest,
 } from "@/lib/types/balance"
 import type {
+  MissedClearOut,
   RotationOverrideOut,
   RotationOverrideScope,
   RoutineCreatePayload,
@@ -361,5 +362,26 @@ export function useStreak(
       api.get<StreakOut>(`/families/${familyId}/tasks/${taskId}/streak?member_id=${memberId}`),
     enabled: !!familyId && !!taskId && !!memberId && enabled,
     staleTime: 60_000,
+  })
+}
+
+// ── Clear missed (dismiss without stars) ─────────────────────────────────────
+
+/**
+ * Sweep every missed chore up to and including `through` off the board. This is
+ * NOT a completion — nothing is starred, and streaks still see the miss. Pass the
+ * previous value (or null) back to undo. A PUT of a single value, so it's safe to
+ * retry on a transport blip.
+ */
+export function useClearMissed(familyId: string) {
+  const api = useApi()
+  const qc = useQueryClient()
+  return useMutation({
+    ...RETRY_TRANSPORT,
+    mutationFn: (through: string | null) =>
+      api.put<MissedClearOut>(`/families/${familyId}/missed-chores`, { through }),
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: ["task-occurrences", familyId] })
+    },
   })
 }

@@ -19,6 +19,7 @@ import { toast } from "sonner"
 
 import { useApi } from "@/hooks/use-api"
 import { useRealtime } from "@/hooks/use-realtime"
+import { useTodayYMD } from "@/hooks/use-today"
 import {
   useClearRotationOverride,
   useCompleteTask,
@@ -41,6 +42,8 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { ChoreFilterBar } from "@/components/tasks/chore-filter-bar"
+import { ClearMissedButton } from "@/components/tasks/clear-missed-button"
+import { StarPop } from "@/components/tasks/star-pop"
 import { cn } from "@/lib/utils"
 import { isDefiniteClientError } from "@/lib/api-client"
 import {
@@ -50,11 +53,12 @@ import {
   applyFilters,
   dayLabel,
   filtersActive,
+  MISSED_LOOKBACK_DAYS,
   isOverdue,
   matchesStatus,
-  todayYMD,
   weekDatesYMD,
   weekRangeYMD,
+  withinMissedWindow,
 } from "@/lib/chores"
 import { canRephase, classifyFrequency, type ChoreFrequency } from "@/lib/recurrence"
 import type { TaskOccurrenceOut } from "@/lib/types/task"
@@ -71,7 +75,6 @@ interface MembershipResponse {
   role: "owner" | "adult" | "child" | "viewer"
 }
 
-const OVERDUE_LOOKBACK_DAYS = 14
 
 function initials(name: string) {
   const parts = name.trim().split(/\s+/)
@@ -87,7 +90,8 @@ export function ChoresPanel({ familyId }: { familyId: string }) {
   useRealtime(familyId)
 
   const api = useApi()
-  const today = todayYMD()
+  // Rolls over at midnight on its own — the wall display never reloads.
+  const today = useTodayYMD()
 
   const [view, setView] = useState<"today" | "week">("today")
   const [filters, setFilters] = useState<ChoreFilters>(DEFAULT_FILTERS)
@@ -96,7 +100,7 @@ export function ChoresPanel({ familyId }: { familyId: string }) {
   const mainFrom = view === "today" ? today : week.start
   const mainTo = view === "today" ? today : week.end
   const overdueAnchor = view === "today" ? today : week.start
-  const overdueFrom = addDaysYMD(overdueAnchor, -OVERDUE_LOOKBACK_DAYS)
+  const overdueFrom = addDaysYMD(overdueAnchor, -MISSED_LOOKBACK_DAYS)
   const overdueTo = addDaysYMD(overdueAnchor, -1)
 
   const { data: members = [] } = useQuery({
@@ -158,7 +162,12 @@ export function ChoresPanel({ familyId }: { familyId: string }) {
   const overdueItems = useMemo(
     () =>
       applyFilters(pastOccs, filters, freqByTaskId)
-        .filter((o) => isOverdue(o, overdueAnchor) && matchesStatus(o, filters.status))
+        .filter(
+          (o) =>
+            isOverdue(o, overdueAnchor) &&
+            withinMissedWindow(o, overdueAnchor, freqByTaskId.get(o.task_id) ?? "one-off") &&
+            matchesStatus(o, filters.status),
+        )
         .sort((a, b) =>
           a.occurrence_date === b.occurrence_date
             ? a.title.localeCompare(b.title)
@@ -289,6 +298,13 @@ export function ChoresPanel({ familyId }: { familyId: string }) {
                 <AlertTriangleIcon className="size-4 text-amber-600 dark:text-amber-400" />
                 <h2 className="text-sm font-semibold">Missed ({overdueItems.length})</h2>
                 <span className="text-muted-foreground ml-auto text-xs">Still not done</span>
+                {canManage && (
+                  <ClearMissedButton
+                    familyId={familyId}
+                    through={overdueTo}
+                    count={overdueItems.length}
+                  />
+                )}
               </header>
               <ul className="flex flex-col gap-2">
                 {overdueItems.map((o) => (
@@ -386,8 +402,12 @@ function ChoreListRow({
   const multiDayTurn = o.rotation_unit !== "occurrence" || o.rotation_interval > 1
   const swapTargets = allMembers.filter((m) => !o.members.some((mm) => mm.id === m.id))
 
+  // "+N ★" feedback on completing (not on undoing).
+  const [popKey, setPopKey] = useState(0)
+
   return (
-    <li className="bg-card ring-foreground/5 flex items-center gap-3 rounded-2xl p-3 shadow-sm ring-1">
+    <li className="bg-card ring-foreground/5 relative flex items-center gap-3 rounded-2xl p-3 shadow-sm ring-1">
+      <StarPop amount={o.star_value} popKey={popKey} />
       <span className="size-3 shrink-0 rounded-full" style={{ backgroundColor: o.effective_color }} />
       <div className="min-w-0 flex-1">
         <p
@@ -425,7 +445,10 @@ function ChoreListRow({
               <button
                 key={m.id}
                 type="button"
-                onClick={() => onToggle(m.id)}
+                onClick={() => {
+                  if (!done) setPopKey((k) => k + 1)
+                  onToggle(m.id)
+                }}
                 aria-pressed={done}
                 aria-label={`${done ? "Undo" : "Mark"} ${o.title} done for ${m.name}`}
                 title={m.name}
