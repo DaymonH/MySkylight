@@ -6,6 +6,11 @@ const isPublicRoute = createRouteMatcher([
   "/invite/accept(.*)",
   "/api/webhooks/(.*)",
   "/api/health",
+  // The PWA manifests. Browsers fetch `<link rel="manifest">` WITHOUT credentials, so
+  // behind the login check they 404 and the app can never be installed ("Install app"
+  // never appears). They hold only the app name, icons and start URL — nothing private.
+  "/manifest.json",
+  "/device-manifest.json",
 ])
 
 export default clerkMiddleware(async (auth, req) => {
