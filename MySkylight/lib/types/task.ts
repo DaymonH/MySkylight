@@ -24,6 +24,7 @@ export interface TaskOut {
   star_value: number
   estimated_minutes: number | null // rough time-to-do (F30); weight for the balancer
   icon: string | null // optional emoji shown beside the chore
+  day_pinned: boolean // true when the user picked the weekday(s); false = the app chose
   created_at: string
   updated_at: string
   // The full roster, in rotation order (matters when rotating).
@@ -110,6 +111,7 @@ export interface TaskCreatePayload {
   star_value?: number
   estimated_minutes?: number | null
   icon?: string | null
+  day_pinned?: boolean
   // Order is the rotation roster order when rotating.
   member_ids?: string[]
 }

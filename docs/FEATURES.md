@@ -634,6 +634,18 @@ frontend (FE) pieces, and **acceptance criteria** (AC) that define "done".
   holds (with `start_date = occ[0]`, `k0 = 0` so the chosen starter lands on the first occurrence). No
   schema/API change; +1 test (`test_apply_reanchors_start_to_today_and_clears_past`); suite **173** green.
 
+- **Update (2026-11-08) — auto-day for new chores (BE + FE):** you no longer pick a start date. A weekly
+  or every-N-weeks chore created (or whose schedule changes) as **Every week / Every N weeks** gets its
+  weekday chosen by the balancer on save (`place_auto_day` in `services/tasks.py`): the optimizer runs
+  with this one chore as the only managed item and every other chore as fixed load, and only `rrule` +
+  `start_date` are written (assignments untouched). **Custom days…** pins the day(s) instead
+  (`tasks.day_pinned`, migration `024`), and the balancer's per-chore "keep its day" defaults on for
+  pinned chores. The form's "Starts" is replaced by a **Starts immediately** checkbox with a **Not before**
+  date (the date never picks the weekday; first occurrence = the chosen weekday on/after
+  `max(today, not before)`); one-offs keep a **Due** date; editing never re-dates a chore, and re-places
+  it only when its schedule changes or it goes from pinned back to Auto. Daily, monthly and every-N-days
+  chores start today (no auto weekday yet). Design + plan: `docs/superpowers/specs/2026-11-08-auto-day-chores-design.md`,
+  `docs/superpowers/plans/2026-11-08-auto-day-chores.md`.
 ### F28 — Recipe → Grocery List (ingredient aggregation) ⭐
 
 > _Inspired by **Skylight**'s "advanced grocery integration" (auto-calculates ingredient quantities for

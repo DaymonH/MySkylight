@@ -50,7 +50,13 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
-import { describeRotation, describeTaskRrule, scheduleDetail, withUntil } from "@/lib/recurrence"
+import {
+  describeRotation,
+  describeTaskRrule,
+  isPinnedWeekly,
+  scheduleDetail,
+  withUntil,
+} from "@/lib/recurrence"
 import { cn } from "@/lib/utils"
 import type { MemberBrief } from "@/lib/types/calendar"
 import type { RoutineOut, TaskCreatePayload, TaskOut } from "@/lib/types/task"
@@ -143,7 +149,15 @@ export default function TasksPage({ params }: { params: Promise<{ familyId: stri
       description: values.description?.trim() ? values.description.trim() : null,
       routine_id: values.routine_id === NO_ROUTINE ? null : values.routine_id,
       color: values.color,
-      start_date: values.start_date,
+      // One-offs always carry their due date. A recurring chore sends a date only when
+      // it shouldn't start right away ("Not before"); editing never re-dates it.
+      ...(values.rrule === "none"
+        ? { start_date: values.start_date }
+        : !editing && !values.starts_immediately
+          ? { start_date: values.start_date }
+          : {}),
+      // True only when the user picked the weekday(s) themselves.
+      day_pinned: isPinnedWeekly(values.rrule),
       // Splice the optional end date back into the pattern as UNTIL.
       rrule: values.rrule === "none" ? null : withUntil(values.rrule, values.end_date || null),
       // Rotation needs at least two members; otherwise it's just a fixed assignee.

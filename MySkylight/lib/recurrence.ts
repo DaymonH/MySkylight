@@ -99,6 +99,19 @@ export function stripUntil(rrule: string): string {
     .join(";")
 }
 
+/** Drop BYDAY from a rule — the "Auto" form of a weekly chore the app placed on a day. */
+export function stripByday(rrule: string): string {
+  return rrule
+    .split(";")
+    .filter((p) => !/^BYDAY=/i.test(p))
+    .join(";")
+}
+
+/** True for a weekly rule with chosen days — i.e. the user picked the day(s). */
+export function isPinnedWeekly(rrule: string | null): boolean {
+  return !!rrule && /FREQ=WEEKLY/i.test(rrule) && /BYDAY=/i.test(rrule)
+}
+
 /** Pull the UNTIL date out of an rrule as YYYY-MM-DD, or null if open-ended. */
 export function parseUntil(rrule: string | null): string | null {
   if (!rrule) return null

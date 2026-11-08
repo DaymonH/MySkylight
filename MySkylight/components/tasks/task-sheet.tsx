@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
+import { Checkbox } from "@/components/ui/checkbox"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import {
   Select,
@@ -37,9 +38,11 @@ import {
   CUSTOM_WEEKLY,
   intervalRrule,
   isCustomInterval,
+  isPinnedWeekly,
   parseByday,
   parseInterval,
   parseUntil,
+  stripByday,
   stripUntil,
   TASK_RRULE_OPTIONS,
   WEEKDAYS,
@@ -63,7 +66,11 @@ const schema = z.object({
   routine_id: z.string(),
   // null = inherit the assignee's / default color (no explicit chore color).
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/).nullable(),
-  start_date: z.string().min(1, "Pick a start date"),
+  // One-off: the due date. Recurring: the "Not before" date (used only when
+  // `starts_immediately` is off). The weekday of a recurring chore is never taken
+  // from it — the app picks that (or the user pins it with "Custom days…").
+  start_date: z.string(),
+  starts_immediately: z.boolean(),
   // The recurrence *pattern* only (FREQ/INTERVAL/BYDAY); the end date lives in
   // `end_date` and is spliced in as UNTIL when saving.
   rrule: z.string(),
@@ -78,6 +85,18 @@ const schema = z.object({
   // Empty = anchor the rotation at the start date.
   rotation_anchor_date: z.string(),
 })
+  .superRefine((v, ctx) => {
+    const oneOff = !v.rrule || v.rrule === "none"
+    // A one-off needs a date; a recurring chore needs one only when it isn't
+    // starting right away.
+    if ((oneOff || !v.starts_immediately) && !v.start_date) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["start_date"],
+        message: oneOff ? "Pick a due date" : "Pick a date",
+      })
+    }
+  })
 export type TaskFormValues = z.infer<typeof schema>
 
 interface TaskSheetProps {
@@ -138,6 +157,7 @@ export function TaskSheet({
       routine_id: defaultRoutineId ?? NO_ROUTINE,
       color: null,
       start_date: todayYMD(),
+      starts_immediately: true,
       rrule: "none",
       end_date: "",
       star_value: 1,
@@ -166,7 +186,12 @@ export function TaskSheet({
       // Split the stored rule into its pattern (for the Select + custom controls)
       // and its end date (the separate "Ends" control).
       const stored = editing.rrule ?? ""
-      const pattern = stored ? stripUntil(stored) || "none" : "none"
+      let pattern = stored ? stripUntil(stored) || "none" : "none"
+      // A weekly chore the app placed on a day shows as plain "Every week" (Auto);
+      // only a user-chosen day-set shows under "Custom days…".
+      if (!editing.day_pinned && /FREQ=WEEKLY/i.test(pattern) && parseByday(pattern).length === 1) {
+        pattern = stripByday(pattern)
+      }
       const iv = parseInterval(pattern)
       const repeatVal = selectRepeatValue(pattern)
       // eslint-disable-next-line react-hooks/set-state-in-effect -- reset picker mode alongside the form reset
@@ -181,6 +206,7 @@ export function TaskSheet({
         routine_id: editing.routine_id ?? NO_ROUTINE,
         color: editing.color ?? null,
         start_date: editing.start_date,
+        starts_immediately: true,
         rrule: pattern,
         end_date: parseUntil(stored) ?? "",
         star_value: editing.star_value,
@@ -203,6 +229,7 @@ export function TaskSheet({
         routine_id: defaultRoutineId ?? NO_ROUTINE,
         color: null,
         start_date: todayYMD(),
+        starts_immediately: true,
         rrule: "none",
         end_date: "",
         star_value: 1,
@@ -220,8 +247,11 @@ export function TaskSheet({
   const rotationInterval = useWatch({ control, name: "rotation_interval" })
   const rotationUnit = useWatch({ control, name: "rotation_unit" })
   const startDate = useWatch({ control, name: "start_date" })
+  const startsImmediately = useWatch({ control, name: "starts_immediately" })
   const rrulePattern = useWatch({ control, name: "rrule" })
   const isRecurring = !!rrulePattern && rrulePattern !== "none"
+  // Plain weekly / every-N-weeks: the app picks the weekday.
+  const isAutoWeekly = /FREQ=WEEKLY/i.test(rrulePattern ?? "") && !isPinnedWeekly(rrulePattern)
   const unitLabel = (unit: "occurrence" | "day" | "week" | "month") => {
     const plural = rotationInterval !== 1
     if (unit === "occurrence") return plural ? "times it's due" : "time it's due"
@@ -328,14 +358,50 @@ export function TaskSheet({
               </p>
             </div>
 
-            {/* Start date */}
-            <div className="space-y-1.5">
-              <Label htmlFor="task-start">Starts</Label>
-              <Input id="task-start" type="date" {...register("start_date")} />
-              {errors.start_date && (
-                <p className="text-destructive text-xs">{errors.start_date.message}</p>
-              )}
-            </div>
+            {/* One-off: due date. Recurring (new): start now, or not before a date. */}
+            {!isRecurring && (
+              <div className="space-y-1.5">
+                <Label htmlFor="task-start">Due</Label>
+                <Input id="task-start" type="date" {...register("start_date")} />
+                {errors.start_date && (
+                  <p className="text-destructive text-xs">{errors.start_date.message}</p>
+                )}
+              </div>
+            )}
+            {isRecurring && !editing && (
+              <div className="space-y-2">
+                <Controller
+                  name="starts_immediately"
+                  control={control}
+                  render={({ field }) => (
+                    <div className="flex items-center gap-2">
+                      <Checkbox
+                        id="task-starts-now"
+                        checked={field.value}
+                        onCheckedChange={(v) => field.onChange(v === true)}
+                      />
+                      <Label htmlFor="task-starts-now">Starts immediately</Label>
+                    </div>
+                  )}
+                />
+                {!startsImmediately && (
+                  <div className="space-y-1.5">
+                    <Label htmlFor="task-start" className="text-muted-foreground text-xs">
+                      Not before
+                    </Label>
+                    <Input
+                      id="task-start"
+                      type="date"
+                      min={todayYMD()}
+                      {...register("start_date")}
+                    />
+                    {errors.start_date && (
+                      <p className="text-destructive text-xs">{errors.start_date.message}</p>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Repeat */}
             <div className="space-y-1.5">
@@ -448,6 +514,16 @@ export function TaskSheet({
                             </SelectContent>
                           </Select>
                         </div>
+                      )}
+
+                      {isAutoWeekly && (
+                        <p className="text-muted-foreground pt-1 text-xs">
+                          {editing && parseByday(editing.rrule).length === 1 && !editing.day_pinned
+                            ? `Currently on ${WEEKDAYS.find((d) => d.code === parseByday(editing.rrule)[0])?.label}s. `
+                            : ""}
+                          The app picks the day that best balances everyone&apos;s chores. Choose
+                          &ldquo;Custom days…&rdquo; to pick the day yourself.
+                        </p>
                       )}
 
                       {isRecurring && (

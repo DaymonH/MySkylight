@@ -93,7 +93,7 @@ export function BalanceSheet({
             mode: "rotate" as BalanceMode,
             // Port in the saved estimate; null means the user must set one here.
             minutes: t.estimated_minutes ?? null,
-            lockDay: false,
+            lockDay: t.day_pinned,
             fixedId: t.members[0]?.id ?? allMembers[0] ?? "",
           },
         ]),
