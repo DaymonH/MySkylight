@@ -34,6 +34,49 @@ self.addEventListener("activate", (e) => {
   )
 })
 
+// ── Web Push: event reminders and the evening chore nudge ────────────────────
+// The server sends { title, body, tag, url }. The tag makes a newer notification
+// REPLACE one still sitting unread rather than stacking duplicates.
+self.addEventListener("push", (e) => {
+  let data = {}
+  try {
+    data = e.data ? e.data.json() : {}
+  } catch (err) {
+    data = { body: e.data ? e.data.text() : "" }
+  }
+  e.waitUntil(
+    self.registration.showNotification(data.title || "MySkylight", {
+      body: data.body || "",
+      tag: data.tag || "myskylight",
+      icon: "/icon-192.png",
+      badge: "/icon-192.png",
+      data: { url: data.url || "/app" },
+    })
+  )
+})
+
+// Tapping a notification focuses the app if it's open (navigating it to the target),
+// otherwise opens it — never a second copy alongside the first.
+self.addEventListener("notificationclick", (e) => {
+  e.notification.close()
+  const target = new URL(
+    (e.notification.data && e.notification.data.url) || "/app",
+    self.location.origin
+  ).href
+  e.waitUntil(
+    self.clients
+      .matchAll({ type: "window", includeUncontrolled: true })
+      .then((windows) => {
+        for (const client of windows) {
+          if (client.url.startsWith(self.location.origin) && "focus" in client) {
+            return client.focus().then((c) => ("navigate" in c ? c.navigate(target) : c))
+          }
+        }
+        return self.clients.openWindow(target)
+      })
+  )
+})
+
 self.addEventListener("fetch", (e) => {
   const { request } = e
   const url = new URL(request.url)
