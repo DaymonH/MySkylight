@@ -434,7 +434,7 @@ export function TaskSheet({
                       const unit = existing?.unit ?? "day"
                       setIntervalEvery(String(n))
                       setIntervalUnit(unit)
-                      field.onChange(intervalRrule(n, unit))
+                      field.onChange(intervalRrule(n, unit, parseByday(field.value)))
                     } else {
                       setCustomMode(false)
                       setCustomIntervalMode(false)
@@ -442,6 +442,21 @@ export function TaskSheet({
                     }
                   }
                   const days = parseByday(field.value)
+                  // Every-N-weeks (N ≥ 2) offers an optional pinned weekday; empty = Auto.
+                  const weekly = parseInterval(field.value)
+                  const weeklyN = weekly?.unit === "week" && weekly.n >= 2 ? weekly.n : null
+                  const onToggleIntervalDays = (next: string[]) => {
+                    if (weeklyN === null) return
+                    // Picking a day from the "Every 2 weeks" preset moves it into the
+                    // interval editor so the dropdown keeps matching the rule.
+                    if (next.length) {
+                      setCustomMode(false)
+                      setCustomIntervalMode(true)
+                      setIntervalEvery(String(weeklyN))
+                      setIntervalUnit("week")
+                    }
+                    field.onChange(intervalRrule(weeklyN, "week", next as WeekdayCode[]))
+                  }
                   const onToggleDays = (next: string[]) => {
                     if (next.length === 0) return // keep at least one day selected
                     field.onChange(bydayRrule(next as WeekdayCode[]))
@@ -481,14 +496,14 @@ export function TaskSheet({
                               // Update the rule live for valid entries; defer clamping to
                               // blur so the box can be cleared/retyped without snapping back.
                               if (!Number.isNaN(n) && n >= 1) {
-                                field.onChange(intervalRrule(Math.min(n, 365), intervalUnit))
+                                field.onChange(intervalRrule(Math.min(n, 365), intervalUnit, days))
                               }
                             }}
                             onBlur={() => {
                               const n = parseInt(intervalEvery, 10)
                               const clamped = Number.isNaN(n) || n < 1 ? 2 : Math.min(n, 365)
                               setIntervalEvery(String(clamped))
-                              field.onChange(intervalRrule(clamped, intervalUnit))
+                              field.onChange(intervalRrule(clamped, intervalUnit, days))
                             }}
                           />
                           <Select
@@ -498,7 +513,7 @@ export function TaskSheet({
                               setIntervalUnit(unit)
                               const n = parseInt(intervalEvery, 10)
                               field.onChange(
-                                intervalRrule(Number.isNaN(n) || n < 1 ? 2 : n, unit),
+                                intervalRrule(Number.isNaN(n) || n < 1 ? 2 : n, unit, days),
                               )
                             }}
                           >
@@ -516,13 +531,50 @@ export function TaskSheet({
                         </div>
                       )}
 
+                      {weeklyN !== null && (
+                        <div className="flex flex-col gap-1.5 pt-2">
+                          <Label className="text-muted-foreground text-xs">Day</Label>
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant={days.length === 0 ? "default" : "outline"}
+                              className="rounded-full"
+                              onClick={() => onToggleIntervalDays([])}
+                            >
+                              Auto
+                            </Button>
+                            <ToggleGroup
+                              type="multiple"
+                              variant="outline"
+                              value={days}
+                              onValueChange={onToggleIntervalDays}
+                              className="flex flex-wrap justify-start"
+                            >
+                              {WEEKDAYS.map((d) => (
+                                <ToggleGroupItem
+                                  key={d.code}
+                                  value={d.code}
+                                  aria-label={d.label}
+                                  className="w-12 rounded-full data-[state=on]:border-primary data-[state=on]:bg-primary data-[state=on]:text-primary-foreground data-[state=on]:hover:bg-primary data-[state=on]:hover:text-primary-foreground"
+                                >
+                                  {d.label}
+                                </ToggleGroupItem>
+                              ))}
+                            </ToggleGroup>
+                          </div>
+                        </div>
+                      )}
+
                       {isAutoWeekly && (
                         <p className="text-muted-foreground pt-1 text-xs">
                           {editing && parseByday(editing.rrule).length === 1 && !editing.day_pinned
                             ? `Currently on ${WEEKDAYS.find((d) => d.code === parseByday(editing.rrule)[0])?.label}s. `
                             : ""}
-                          The app picks the day that best balances everyone&apos;s chores. Choose
-                          &ldquo;Custom days…&rdquo; to pick the day yourself.
+                          The app picks the day that best balances everyone&apos;s chores.{" "}
+                          {weeklyN !== null
+                            ? "Pick a day above to choose it yourself."
+                            : "Choose “Custom days…” to pick the day yourself."}
                         </p>
                       )}
 

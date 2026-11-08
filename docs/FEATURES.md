@@ -645,7 +645,9 @@ frontend (FE) pieces, and **acceptance criteria** (AC) that define "done".
   `max(today, not before)`); one-offs keep a **Due** date; editing never re-dates a chore, and re-places
   it only when its schedule changes or it goes from pinned back to Auto. Daily, monthly and every-N-days
   chores start today (no auto weekday yet). Design + plan: `docs/superpowers/specs/2026-11-08-auto-day-chores-design.md`,
-  `docs/superpowers/plans/2026-11-08-auto-day-chores.md`.
+  `docs/superpowers/plans/2026-11-08-auto-day-chores.md`. Auto-placed weekly chores read "Tue (auto)" in
+  task lists and the save toast names the chosen day. Every-N-weeks chores (N ≥ 2) get an optional **Day**
+  picker (Auto by default); a chosen day is saved as `INTERVAL=N;BYDAY=…` and pinned.
 ### F28 — Recipe → Grocery List (ingredient aggregation) ⭐
 
 > _Inspired by **Skylight**'s "advanced grocery integration" (auto-calculates ingredient quantities for

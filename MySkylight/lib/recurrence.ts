@@ -43,27 +43,37 @@ const FREQ_FOR_UNIT: Record<IntervalUnit, string> = {
   month: "MONTHLY",
 }
 
-/** Build an "every N {unit}s" rrule. N=1 collapses to the plain `FREQ=…` preset. */
-export function intervalRrule(n: number, unit: IntervalUnit): string {
+/**
+ * Build an "every N {unit}s" rrule. N=1 collapses to the plain `FREQ=…` preset.
+ * `days` pins weekday(s) and only applies to every-N-weeks (N ≥ 2); every-week
+ * day-sets are the separate "Custom days…" mode.
+ */
+export function intervalRrule(n: number, unit: IntervalUnit, days: WeekdayCode[] = []): string {
   const interval = Math.max(1, Math.floor(n))
   const freq = FREQ_FOR_UNIT[unit]
-  return interval === 1 ? `FREQ=${freq}` : `FREQ=${freq};INTERVAL=${interval}`
+  if (interval === 1) return `FREQ=${freq}`
+  const base = `FREQ=${freq};INTERVAL=${interval}`
+  if (unit !== "week" || !days.length) return base
+  return `${base};BYDAY=${WEEKDAYS.map((d) => d.code).filter((c) => days.includes(c)).join(",")}`
 }
 
 /**
- * Read a plain interval rule into `{ n, unit }`. Returns null for weekly *day-set*
- * rules (BYDAY=…) — those are the separate "Custom days…" mode — and for anything
- * that isn't daily/weekly/monthly. UNTIL (an end date) is ignored.
+ * Read a plain interval rule into `{ n, unit }`. Returns null for every-week day-sets
+ * (BYDAY with no interval) — the separate "Custom days…" mode — and for anything
+ * that isn't daily/weekly/monthly. A BYDAY on an every-N-weeks rule (N ≥ 2) is a
+ * pinned weekday and still reads as an interval. UNTIL (an end date) is ignored.
  */
 export function parseInterval(rrule: string | null): { n: number; unit: IntervalUnit } | null {
-  if (!rrule || rrule.includes("BYDAY=")) return null
+  if (!rrule) return null
   let unit: IntervalUnit | null = null
   if (rrule.includes("FREQ=DAILY")) unit = "day"
   else if (rrule.includes("FREQ=WEEKLY")) unit = "week"
   else if (rrule.includes("FREQ=MONTHLY")) unit = "month"
   if (!unit) return null
   const m = rrule.match(/INTERVAL=(\d+)/)
-  return { n: m ? Math.max(1, parseInt(m[1], 10)) : 1, unit }
+  const n = m ? Math.max(1, parseInt(m[1], 10)) : 1
+  if (rrule.includes("BYDAY=") && !(unit === "week" && n >= 2)) return null
+  return { n, unit }
 }
 
 /** True for an explicit "every N units" (N ≥ 2) — distinct from the named presets. */
@@ -182,7 +192,9 @@ export function describeTaskRrule(
         .map((d) => d.label)
         .join(", ")
       const auto = isAutoPlaced({ rrule, day_pinned: task?.day_pinned })
-      return withEnd(auto ? `${list} (auto)` : list, rrule)
+      const n = parseInterval(rrule)?.n ?? 1
+      const label = n >= 2 ? `Every ${n} weeks on ${list}` : list
+      return withEnd(auto ? `${label} (auto)` : label, rrule)
     }
   }
   const iv = parseInterval(rrule)
