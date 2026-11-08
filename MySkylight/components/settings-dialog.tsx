@@ -14,7 +14,9 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Switch } from "@/components/ui/switch"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import {
   Select,
@@ -24,6 +26,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { useVisibleHours } from "@/hooks/use-visible-hours"
+import { useSleepSettings } from "@/hooks/use-sleep-settings"
 import { PALETTES, usePalette } from "@/hooks/use-palette"
 import { cn } from "@/lib/utils"
 
@@ -55,6 +58,9 @@ export function SettingsButton({
   const { theme, setTheme } = useTheme()
   const { palette, setPalette } = usePalette()
   const { start, end, setRange } = useVisibleHours()
+  const { settings: sleep, update: updateSleep } = useSleepSettings()
+  // Only the wall display (the labelled rail item) sleeps; the phone app never does.
+  const isDevice = !!label
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -233,6 +239,64 @@ export function SettingsButton({
               </div>
             </div>
           </section>
+
+          {/* Screen sleep (wall display only) */}
+          {isDevice && (
+            <section className="grid gap-3">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h3 className="text-sm font-medium">Night sleep</h3>
+                  <p className="text-xs text-muted-foreground">
+                    Turn the screen dark overnight. Tap it to wake; it dims again a few
+                    minutes after the last touch.
+                  </p>
+                </div>
+                <Switch
+                  checked={sleep.enabled}
+                  onCheckedChange={(enabled) => updateSleep({ enabled })}
+                  aria-label="Sleep at night"
+                />
+              </div>
+              {sleep.enabled && (
+                <>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="grid gap-1.5">
+                      <Label htmlFor="sleep-from" className="text-xs text-muted-foreground">
+                        Sleep at
+                      </Label>
+                      <Input
+                        id="sleep-from"
+                        type="time"
+                        value={sleep.from}
+                        onChange={(e) => e.target.value && updateSleep({ from: e.target.value })}
+                      />
+                    </div>
+                    <div className="grid gap-1.5">
+                      <Label htmlFor="sleep-to" className="text-xs text-muted-foreground">
+                        Wake at
+                      </Label>
+                      <Input
+                        id="sleep-to"
+                        type="time"
+                        value={sleep.to}
+                        onChange={(e) => e.target.value && updateSleep({ to: e.target.value })}
+                      />
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <Label htmlFor="sleep-clock" className="text-sm font-normal">
+                      Show a dim clock while asleep
+                    </Label>
+                    <Switch
+                      id="sleep-clock"
+                      checked={sleep.showClock}
+                      onCheckedChange={(showClock) => updateSleep({ showClock })}
+                    />
+                  </div>
+                </>
+              )}
+            </section>
+          )}
         </div>
       </DialogContent>
     </Dialog>

@@ -213,7 +213,8 @@ frontend (FE) pieces, and **acceptance criteria** (AC) that define "done".
     "your chores" ping, evening "still undone" nudge). Belongs with the Phase 9 notifications track (Web
     Push; reuse the Event `Reminder` plumbing). Backend would schedule per-occurrence; FE needs the PWA
     push opt-in. (BE + FE, larger.)
-  - **Parent approval / proof on completion** — optional gate so a kid's check-off needs a parent confirm
+  - **Parent approval / proof on completion** — **decided not to build (2026-11-08):** the kids are too
+    young for it, so no approval gate and no photo proof. (Original idea, kept for context:) optional gate so a kid's check-off needs a parent confirm
     (and/or a photo). Touches the completion model + rewards (stars on approval). (BE + FE.)
 - _Phase 3_
 
@@ -286,6 +287,13 @@ frontend (FE) pieces, and **acceptance criteria** (AC) that define "done".
 - **BE:** Occurrence expansion endpoint with date-range params.
 - **FE:** Day / Week / Month / Schedule(list) components; view toggle; remembers per-device choice.
 - **AC:** All four views render the same events correctly, including recurring + all-day.
+- **Update (2026-11-08) — Today screen is the kiosk's landing view:** `/device` is now **Today**
+  (`components/today/today-screen.tsx`): big clock, date and weather; today's events with what's happening
+  *now* highlighted and finished ones dimmed; each person's chores as a tappable card (progress bar, ★
+  balance, the same +★ pop and all-done confetti as the chore board); and today's planned meals. It reads
+  the same cached queries as the full pages and shares their realtime stream. The full calendar moved to
+  **`/device/calendar`** (the sidebar gets a Today tab; the PWA shortcut still opens `/device`, so it lands on
+  Today). Phone `/app` is unchanged.
 - **Update (2026-11-07):** **tap an empty spot in the Day/Week grid to create an event at that time**
   (snapped to 30 min); on phone the grid **opens scrolled to "now"**. The wall display now **rolls over
   at midnight on its own** — the calendar anchor, countdown window, chore board and phone chores panel
@@ -331,6 +339,15 @@ frontend (FE) pieces, and **acceptance criteria** (AC) that define "done".
   - Note: wake lock is released automatically by the browser when the PWA is backgrounded; re-acquire it
     on `visibilitychange` when the app returns to foreground during active hours.
 - **AC:** Device screen stays on during active hours; goes to sleep overlay at the set time; wakes on schedule; configurable per device.
+- **Update (2026-11-08) — device-local version shipped (FE only):** `/device` now holds a **Wake Lock**
+  (`KeepScreenOn`, `hooks/use-wake-lock.ts`, re-acquired on `visibilitychange`) and a **sleep overlay**
+  (`components/sleep-overlay.tsx`): solid black with an optional very dim clock that drifts a few pixels
+  every 10 min (burn-in), from the configured start to end time (overnight windows handled; equal times
+  mean "off", never "always dark"). **Tap to wake**; it stays awake until 5 min after the last touch, then
+  goes dark again while still in the window. Configured in **Settings → Night sleep** on the wall display
+  only, stored in `localStorage` (`skylight:settings:sleep`, off by default). Pure logic in `lib/sleep.ts`.
+  **Still pending (needs F12 pairing):** per-device settings on the backend and `device.sleep`/`device.wake`
+  events — the schedule is per-browser until a device identity exists.
 - _Phase 8_
 
 ### F12 — Device Linking

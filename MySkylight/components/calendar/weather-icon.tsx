@@ -11,7 +11,7 @@ interface WeatherIconProps {
   compact?: boolean
 }
 
-function wmoEmoji(code: number): string {
+export function wmoEmoji(code: number): string {
   if (code === 0) return "☀️"
   if (code <= 2) return "🌤️"
   if (code === 3) return "☁️"
