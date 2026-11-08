@@ -139,6 +139,7 @@ export default function TasksPage({ params }: { params: Promise<{ familyId: stri
     const rotating = values.rotate && values.member_ids.length >= 2
     const data: TaskCreatePayload = {
       title: values.title.trim(),
+      icon: values.icon.trim() || null,
       description: values.description?.trim() ? values.description.trim() : null,
       routine_id: values.routine_id === NO_ROUTINE ? null : values.routine_id,
       color: values.color,
@@ -506,7 +507,10 @@ function TaskRow({
     <li className="bg-card ring-foreground/5 group flex items-center gap-3 rounded-2xl p-3 shadow-sm ring-1">
       <span className="size-3 shrink-0 rounded-full" style={{ backgroundColor: color }} />
       <div className="min-w-0 flex-1">
-        <p className="truncate font-medium leading-tight">{task.title}</p>
+        <p className="truncate font-medium leading-tight">
+          {task.icon && <span className="mr-1.5">{task.icon}</span>}
+          {task.title}
+        </p>
         {task.description && (
           <p className="text-muted-foreground mt-0.5 truncate text-xs">{task.description}</p>
         )}

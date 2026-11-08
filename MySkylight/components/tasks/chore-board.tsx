@@ -8,6 +8,7 @@ import {
   ArrowLeftRightIcon,
   BanIcon,
   CalendarArrowDownIcon,
+  CalendarClockIcon,
   CheckIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
@@ -28,7 +29,9 @@ import { useStarBalances } from "@/hooks/use-rewards"
 import { useTodayYMD } from "@/hooks/use-today"
 import {
   useCompleteTask,
+  useClearOccurrenceMove,
   useClearRotationOverride,
+  useMoveOccurrence,
   useMoveTaskToToday,
   useRoutines,
   useSetRotationOverride,
@@ -48,8 +51,9 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { ChoreFilterBar } from "@/components/tasks/chore-filter-bar"
 import { ClearMissedButton } from "@/components/tasks/clear-missed-button"
 import { StarPop } from "@/components/tasks/star-pop"
+import { AllDoneCelebration } from "@/components/tasks/all-done-celebration"
 import { cn } from "@/lib/utils"
-import { isDefiniteClientError } from "@/lib/api-client"
+import { ApiError, isDefiniteClientError } from "@/lib/api-client"
 import { routineAccent } from "@/lib/colors"
 import {
   type ChoreFilters,
@@ -210,6 +214,8 @@ export function ChoreBoard({ familyId }: { familyId: string }) {
   const setOverride = useSetRotationOverride(familyId)
   const clearOverride = useClearRotationOverride(familyId)
   const moveTask = useMoveTaskToToday(familyId)
+  const moveOccurrence = useMoveOccurrence(familyId)
+  const clearMove = useClearOccurrenceMove(familyId)
 
   // Reassigning/skipping a turn is an owner/adult action (kids can't dodge chores).
   const { data: memberships = [] } = useQuery({
@@ -236,6 +242,13 @@ export function ChoreBoard({ familyId }: { familyId: string }) {
   // (not BYDAY-pinned). Occurrences don't carry the rrule, so join from the task list.
   const movableByTaskId = useMemo(
     () => new Map<string, boolean>(tasks.map((t) => [t.id, canRephase(t.rrule)])),
+    [tasks],
+  )
+
+  // task_id → can a single occurrence be pushed to another day? Not a daily chore:
+  // tomorrow already has its own occurrence, so there is nowhere to put it.
+  const deferrableByTaskId = useMemo(
+    () => new Map<string, boolean>(tasks.map((t) => [t.id, classifyFrequency(t.rrule) !== "daily"])),
     [tasks],
   )
 
@@ -340,6 +353,30 @@ export function ChoreBoard({ familyId }: { familyId: string }) {
   // Re-anchor the chore's recurrence to today (its cadence re-phases from today) and
   // complete it today for `memberId` — one tap resolves a missed chore you did today
   // without it nagging you again too soon.
+  // "Do it tomorrow" — push just this occurrence to a later day, leaving the series'
+  // cadence alone (unlike "Move to today"). A missed one lands on today instead.
+  function deferOccurrence(o: TaskOccurrenceOut) {
+    const toDate = o.occurrence_date < today ? today : addDaysYMD(o.occurrence_date, 1)
+    moveOccurrence.mutate(
+      { taskId: o.task_id, occurrenceDate: o.occurrence_date, toDate },
+      {
+        onSuccess: () =>
+          toast.success(`${o.title} moved to ${dayLabel(toDate, today)}`, {
+            action: {
+              label: "Undo",
+              onClick: () =>
+                clearMove.mutate(
+                  { taskId: o.task_id, occurrenceDate: o.occurrence_date },
+                  { onError: () => toast.error("Couldn't undo. Please try again.") },
+                ),
+            },
+          }),
+        onError: (err) =>
+          toast.error(err instanceof ApiError && err.message ? err.message : "Couldn't move this chore."),
+      },
+    )
+  }
+
   function moveToToday(o: TaskOccurrenceOut, memberId: string) {
     moveTask.mutate(
       { taskId: o.task_id, memberId },
@@ -463,6 +500,8 @@ export function ChoreBoard({ familyId }: { familyId: string }) {
                 onSkip={skip}
                 onReset={resetRotation}
                 onMoveToToday={moveToToday}
+                deferrableByTaskId={deferrableByTaskId}
+                onDefer={deferOccurrence}
               />
             )}
 
@@ -483,8 +522,9 @@ export function ChoreBoard({ familyId }: { familyId: string }) {
                 return (
                   <section
                     key={member.id}
-                    className="bg-card ring-foreground/5 flex flex-col gap-4 rounded-3xl p-5 shadow-sm ring-1"
+                    className="bg-card ring-foreground/5 relative flex flex-col gap-4 rounded-3xl p-5 shadow-sm ring-1"
                   >
+                    <AllDoneCelebration active={allDone} />
                     <header className="flex items-center gap-3">
                       <span
                         className="flex size-12 items-center justify-center rounded-full text-lg font-semibold text-white"
@@ -502,7 +542,15 @@ export function ChoreBoard({ familyId }: { familyId: string }) {
                               <span className="mx-1.5 opacity-40">·</span>
                             </span>
                           )}
-                          {doneCount} / {items.length} done
+                          {allDone ? (
+                            <span className="font-semibold text-emerald-600 dark:text-emerald-400">
+                              All done &mdash; nice work!
+                            </span>
+                          ) : (
+                            <>
+                              {doneCount} / {items.length} done
+                            </>
+                          )}
                         </p>
                       </div>
                       {starsByMember.has(member.id) && (
@@ -515,7 +563,7 @@ export function ChoreBoard({ familyId }: { familyId: string }) {
                         </span>
                       )}
                       {allDone && (
-                        <span className="text-2xl" role="img" aria-label="All done">
+                        <span className="text-4xl" role="img" aria-label="All done">
                           🎉
                         </span>
                       )}
@@ -553,6 +601,8 @@ export function ChoreBoard({ familyId }: { familyId: string }) {
                                     onSkip={(scope) => skip(o, scope)}
                                     onReset={() => resetRotation(o)}
                                     onMoveToToday={() => moveToToday(o, member.id)}
+                                    canDefer={deferrableByTaskId.get(o.task_id) ?? false}
+                                    onDefer={() => deferOccurrence(o)}
                                   />
                                 </li>
                               )
@@ -684,6 +734,8 @@ function OverdueSection({
   onSkip,
   onReset,
   onMoveToToday,
+  deferrableByTaskId,
+  onDefer,
 }: {
   familyId: string
   /** Last day (YYYY-MM-DD) that "Clear" dismisses — the day before this section's anchor. */
@@ -699,6 +751,8 @@ function OverdueSection({
   onSkip: (o: TaskOccurrenceOut, scope: "occurrence" | "turn") => void
   onReset: (o: TaskOccurrenceOut) => void
   onMoveToToday: (o: TaskOccurrenceOut, memberId: string) => void
+  deferrableByTaskId: Map<string, boolean>
+  onDefer: (o: TaskOccurrenceOut) => void
 }) {
   return (
     <section className="flex flex-col gap-3 rounded-3xl border border-amber-300/60 bg-amber-50 p-5 dark:border-amber-900/50 dark:bg-amber-950/30">
@@ -731,6 +785,8 @@ function OverdueSection({
                 onSkip={(scope) => onSkip(o, scope)}
                 onReset={() => onReset(o)}
                 onMoveToToday={() => onMoveToToday(o, m.id)}
+                canDefer={deferrableByTaskId.get(o.task_id) ?? false}
+                onDefer={() => onDefer(o)}
               />
             </li>
           ))
@@ -755,6 +811,8 @@ function ChoreRow({
   onSkip,
   onReset,
   onMoveToToday,
+  canDefer,
+  onDefer,
 }: {
   occurrence: TaskOccurrenceOut
   currentMemberId: string
@@ -774,6 +832,9 @@ function ChoreRow({
   onSkip: (scope: "occurrence" | "turn") => void
   onReset: () => void
   onMoveToToday: () => void
+  /** Offer "Do it tomorrow" (just this occurrence). False for a daily chore. */
+  canDefer?: boolean
+  onDefer?: () => void
 }) {
   const { title, effective_color: color, up_next: upNext } = occurrence
   const style: CSSProperties = done
@@ -787,7 +848,11 @@ function ChoreRow({
   // "Move to today" re-phases an interval chore to today; pointless on an
   // occurrence that's already today (no shift), so hide it there.
   const showMove = !!canMove && occurrence.occurrence_date !== today
-  const showMenu = canManage && (isRotating || showMove)
+  // Nothing to defer once someone has done it (the backend refuses too).
+  const showDefer = !!canDefer && !done && occurrence.completed_member_ids.length === 0
+  const deferLabel =
+    today && occurrence.occurrence_date < today ? "Do it today (just once)" : "Do it tomorrow"
+  const showMenu = canManage && (isRotating || showMove || showDefer)
   const multiDayTurn =
     occurrence.rotation_unit !== "occurrence" || occurrence.rotation_interval > 1
   const swapTargets = allMembers.filter((m) => m.id !== currentMemberId)
@@ -825,10 +890,16 @@ function ChoreRow({
               done && "text-muted-foreground line-through",
             )}
           >
+            {occurrence.icon && <span className="mr-2">{occurrence.icon}</span>}
             {title}
           </span>
           {dateLabel ? (
             <span className="text-muted-foreground mt-0.5 block text-xs">{dateLabel}</span>
+          ) : occurrence.is_moved && occurrence.moved_from && !done ? (
+            <span className="text-muted-foreground mt-0.5 flex items-center gap-1 text-xs">
+              <CalendarClockIcon className="size-3" /> Moved from{" "}
+              {dayLabel(occurrence.moved_from, today ?? occurrence.moved_from)}
+            </span>
           ) : occurrence.is_overridden && !done ? (
             <span className="text-muted-foreground mt-0.5 flex items-center gap-1 text-xs">
               <ArrowLeftRightIcon className="size-3" /> Swapped in
@@ -912,6 +983,14 @@ function ChoreRow({
                 {isRotating && <DropdownMenuSeparator />}
                 <DropdownMenuItem onClick={onMoveToToday}>
                   <CalendarArrowDownIcon /> Move to today
+                </DropdownMenuItem>
+              </>
+            )}
+            {showDefer && (
+              <>
+                {(isRotating || showMove) && <DropdownMenuSeparator />}
+                <DropdownMenuItem onClick={onDefer}>
+                  <CalendarClockIcon /> {deferLabel}
                 </DropdownMenuItem>
               </>
             )}
@@ -1262,6 +1341,7 @@ function WeekChoreRow({
               done && "text-muted-foreground line-through",
             )}
           >
+            {occurrence.icon && <span className="mr-1">{occurrence.icon}</span>}
             {title}
           </span>
           {hasMeta && (

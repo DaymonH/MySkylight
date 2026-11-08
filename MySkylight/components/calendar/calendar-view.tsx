@@ -569,6 +569,7 @@ export function CalendarView({
         defaultDate={defaultDate}
         defaultTime={defaultTime}
         editing={editing}
+        existing={occurrences}
       />
 
       <FlyerImportDialog

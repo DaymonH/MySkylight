@@ -1,10 +1,10 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useForm, Controller } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
-import { CloudIcon, HouseIcon, Trash2Icon } from "lucide-react"
+import { CloudIcon, HouseIcon, TriangleAlertIcon, Trash2Icon } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -43,6 +43,7 @@ import type {
   MemberBrief,
   OccurrenceOut,
 } from "@/lib/types/calendar"
+import { findConflicts } from "@/lib/event-conflicts"
 
 const PROVIDER_LABELS: Record<NonNullable<EventSource["provider"]>, string> = {
   google: "Google",
@@ -95,6 +96,8 @@ interface EventSheetProps {
   /** HH:MM start for a new event (tap-to-create on a time slot). Needs defaultDate. */
   defaultTime?: string
   editing?: OccurrenceOut
+  /** Events already on the calendar (the visible range), to warn about double-booking. */
+  existing?: OccurrenceOut[]
 }
 
 const SCOPE_OPTIONS: { value: EditScope; label: string; hint: string }[] = [
@@ -205,6 +208,7 @@ export function EventSheet({
   defaultDate,
   defaultTime,
   editing,
+  existing = [],
 }: EventSheetProps) {
   const now = new Date()
   const pad2 = (n: number) => String(n).padStart(2, "0")
@@ -271,6 +275,22 @@ export function EventSheet({
   }, [open, editing, defaultDate, defaultTime]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const allDay = watch("all_day")
+
+  // Double-booking heads-up: anyone selected who's already on an overlapping event.
+  // A warning only — families legitimately overlap (a parent covering two kids), so
+  // it never blocks saving. Limited to the events loaded for the visible range.
+  const [wStart, wEnd, wMembers] = watch(["start_dt", "end_dt", "member_ids"])
+  const conflicts = useMemo(
+    () =>
+      findConflicts(existing, {
+        start: new Date(wStart),
+        end: new Date(wEnd),
+        memberIds: wMembers ?? [],
+        allDay,
+        ignoreEventId: editing?.event_id,
+      }),
+    [existing, wStart, wEnd, wMembers, allDay, editing?.event_id],
+  )
 
   // Editing touches a shared family event, so confirm before persisting. New
   // events submit straight away — there's nothing to clobber yet. handleSubmit
@@ -583,6 +603,35 @@ export function EventSheet({
                     </ToggleGroup>
                   )}
                 />
+              </div>
+            )}
+
+            {conflicts.length > 0 && (
+              <div
+                role="status"
+                className="flex items-start gap-2 rounded-2xl border border-amber-300/60 bg-amber-50 px-3.5 py-2.5 text-sm text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200"
+              >
+                <TriangleAlertIcon className="mt-0.5 size-4 flex-shrink-0" />
+                <div className="space-y-0.5">
+                  <p className="font-medium">Possible double-booking</p>
+                  {conflicts.slice(0, 3).map((c) => (
+                    <p key={`${c.member.id}:${c.occurrence.event_id}:${c.occurrence.occurrence_date}`} className="text-xs">
+                      {c.member.name} is already on &ldquo;{c.occurrence.title}&rdquo;{" "}
+                      {new Date(c.occurrence.start_dt).toLocaleTimeString(undefined, {
+                        hour: "numeric",
+                        minute: "2-digit",
+                      })}
+                      &ndash;
+                      {new Date(c.occurrence.end_dt).toLocaleTimeString(undefined, {
+                        hour: "numeric",
+                        minute: "2-digit",
+                      })}
+                    </p>
+                  ))}
+                  {conflicts.length > 3 && (
+                    <p className="text-xs">+{conflicts.length - 3} more</p>
+                  )}
+                </div>
               </div>
             )}
 

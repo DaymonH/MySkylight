@@ -48,6 +48,7 @@ import {
   type WeekdayCode,
 } from "@/lib/recurrence"
 import { TimeWheel, TIME_BUCKETS, UNSET_BUCKET } from "@/components/tasks/time-wheel"
+import { IconPicker } from "@/components/tasks/icon-picker"
 import { MEMBER_COLORS } from "@/lib/colors"
 import { cn } from "@/lib/utils"
 import type { MemberBrief } from "@/lib/types/calendar"
@@ -57,6 +58,7 @@ export const NO_ROUTINE = "none"
 
 const schema = z.object({
   title: z.string().min(1, "Title is required").max(200),
+  icon: z.string().max(32),
   description: z.string().optional(),
   routine_id: z.string(),
   // null = inherit the assignee's / default color (no explicit chore color).
@@ -131,6 +133,7 @@ export function TaskSheet({
     resolver: zodResolver(schema),
     defaultValues: {
       title: "",
+      icon: "",
       description: "",
       routine_id: defaultRoutineId ?? NO_ROUTINE,
       color: null,
@@ -173,6 +176,7 @@ export function TaskSheet({
       setIntervalUnit(iv?.unit ?? "day")
       reset({
         title: editing.title,
+        icon: editing.icon ?? "",
         description: editing.description ?? "",
         routine_id: editing.routine_id ?? NO_ROUTINE,
         color: editing.color ?? null,
@@ -194,6 +198,7 @@ export function TaskSheet({
       setIntervalUnit("day")
       reset({
         title: "",
+        icon: "",
         description: "",
         routine_id: defaultRoutineId ?? NO_ROUTINE,
         color: null,
@@ -237,6 +242,18 @@ export function TaskSheet({
               <Label htmlFor="task-title">Title</Label>
               <Input id="task-title" {...register("title")} placeholder="e.g. Make bed" />
               {errors.title && <p className="text-destructive text-xs">{errors.title.message}</p>}
+            </div>
+
+            {/* Icon */}
+            <div className="space-y-1.5">
+              <Label>Icon</Label>
+              <Controller
+                name="icon"
+                control={control}
+                render={({ field }) => (
+                  <IconPicker value={field.value ?? ""} onChange={field.onChange} />
+                )}
+              />
             </div>
 
             {/* Routine */}

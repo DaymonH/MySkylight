@@ -135,6 +135,23 @@ frontend (FE) pieces, and **acceptance criteria** (AC) that define "done".
   companion `FamilyMenu` now links **Chores** (the do/check view) separately from **Manage tasks** (the
   CRUD page). No backend change — `GET …/tasks/occurrences?from&to` already served arbitrary ranges.
   `next build` + typecheck + eslint clean; 25 backend task tests still green. Live two-device smoke pending.
+- **Update (2026-11-08) — emoji, "Do it tomorrow", all-done celebration (BE + FE):**
+  - **Per-chore emoji:** `tasks.icon` (migration `021`); a picker in the task editor
+    (`components/tasks/icon-picker.tsx`, quick-pick grid + type-any-emoji) and the emoji renders on the
+    kiosk board, week grid, phone list and task list. `occurrences` carry `icon`.
+  - **"Do it tomorrow":** a row menu action that pushes *just that occurrence* to a later day without
+    re-phasing the series (unlike "Move to today"). `PUT/DELETE
+    /families/{id}/tasks/{task}/occurrences/{date}/move`, table `task_occurrence_moves`. The original
+    date shows nothing and the new date shows the chore ("Moved from Tue"); completion and stars key to
+    the new date; a rotating chore keeps its original assignee; the streak treats the original date as
+    excused. Missed rows say "Do it today (just once)". Hidden for daily chores (tomorrow already has one),
+    refused if already done or the day is taken, ≤30 days out, owner/adult only, with an Undo toast.
+  - **All-done celebration:** confetti over a person's card + "All done — nice work!" the moment they tick
+    their last chore (`components/tasks/all-done-celebration.tsx`); not on page load, silent for
+    reduced-motion.
+  - **Overlap warning (calendar):** the event sheet warns when a selected person is already on an
+    overlapping timed event (`lib/event-conflicts.ts`). Warning only — it never blocks saving — and
+    limited to the events loaded for the visible range.
 - **Update (2026-11-07) — star feedback on the wall display:** the kiosk chore rows showed no star value
   (the phone list already did). Rows now show **★ N**, completing a chore floats a **+N ★**
   (`components/tasks/star-pop.tsx`, respects reduced-motion), and each person's card header shows their
@@ -191,8 +208,7 @@ frontend (FE) pieces, and **acceptance criteria** (AC) that define "done".
   `lib/recurrence.ts` (`intervalRrule`/`parseInterval`/`isCustomInterval`, `withUntil`/`parseUntil`/`stripUntil`).
   No backend change (model already had every field). `next build` + tsc + eslint clean.
 - **Future (F01 backlog):**
-  - **Per-chore icon / emoji** — Skylight's chores carry playful glyphs; needs a `Task.icon` column +
-    migration and a picker, then render on the board/list. (BE + FE.)
+  - ~~**Per-chore icon / emoji**~~ — **done 2026-11-08** (see the update below).
   - **Chore reminders & overdue nudges** — push/notify when a chore is due or has been missed (e.g. morning
     "your chores" ping, evening "still undone" nudge). Belongs with the Phase 9 notifications track (Web
     Push; reuse the Event `Reminder` plumbing). Backend would schedule per-occurrence; FE needs the PWA
