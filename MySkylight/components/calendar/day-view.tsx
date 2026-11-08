@@ -8,6 +8,8 @@ import type { OccurrenceOut } from "@/lib/types/calendar"
 import type { WeatherDay } from "@/hooks/use-weather"
 import { WeatherIcon } from "./weather-icon"
 import { packDayEvents, minutesNow, slotTimeFromOffset } from "./event-layout"
+import { NowLine } from "./now-line"
+import { useTodayYMD } from "@/hooks/use-today"
 
 interface DayViewProps {
   date: Date
@@ -76,13 +78,8 @@ export function DayView({
   const startMinClamp = startHour * 60
   const endMinClamp = endHour * 60
 
-  const [now, setNow] = useState(() => minutesNow())
-  useEffect(() => {
-    const id = setInterval(() => setNow(minutesNow()), 60_000)
-    return () => clearInterval(id)
-  }, [])
-
-  const isToday = toYMD(date) === toYMD(new Date())
+  const todayYMD = useTodayYMD()
+  const isToday = toYMD(date) === todayYMD
 
   // Phone: the hour range scrolls, so open with the "now" line in view (see WeekView).
   useEffect(() => {
@@ -236,15 +233,12 @@ export function DayView({
             })}
 
             {/* Now indicator */}
-            {isToday && now >= startMinClamp && now <= endMinClamp && (
-              <div
-                className="pointer-events-none absolute inset-x-0 z-30"
-                style={{ top: ((now - startMinClamp) / 60) * hourHeight }}
-              >
-                <div className="bg-now relative h-px">
-                  <span className="bg-now absolute -top-1 -left-1 size-2 rounded-full" />
-                </div>
-              </div>
+            {isToday && (
+              <NowLine
+                startMin={startMinClamp}
+                endMin={endMinClamp}
+                hourHeight={hourHeight}
+              />
             )}
           </div>
         </div>

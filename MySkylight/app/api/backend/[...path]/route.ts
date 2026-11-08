@@ -1,6 +1,12 @@
 import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 
+import {
+  readCachedToken,
+  rememberToken,
+  tokenCacheKey,
+} from "@/lib/clerk-token-cache";
+
 // This proxy forwards live SSE streams (the realtime feed) as well as JSON, so it
 // must never be statically optimized or cached — force per-request dynamic execution.
 export const dynamic = "force-dynamic";
@@ -71,7 +77,15 @@ async function proxyRequest(
     const template =
       process.env.CLERK_JWT_TEMPLATE ??
       process.env.NEXT_PUBLIC_CLERK_JWT_TEMPLATE;
-    const token = await getToken(template ? { template } : undefined);
+    // `getToken({ template })` is a network round trip to Clerk. Reuse a minted
+    // token until it nears its own expiry; `auth()` above still runs every time,
+    // so a revoked session is caught regardless of what's cached.
+    const cacheKey = tokenCacheKey(userId, template);
+    let token = readCachedToken(cacheKey);
+    if (!token) {
+      token = await getToken(template ? { template } : undefined);
+      if (token) rememberToken(cacheKey, token);
+    }
     if (!token) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }

@@ -54,6 +54,25 @@ endpoints, virtualize `ScheduleView`, precache the SW shell, paginate redemption
 multi-day weather endpoint, `MAX(sort_order)` in SQL, hoist `me/memberships` to the layout.
 All catalogued in §3–§9.
 
+### 2a. Shipped 2026-11-07 — ported from PersonalWorkoutApp's latency pass
+
+Measured there (Netlify proxy vs. the Pi: same `/health` 255ms proxied vs 15ms direct; 2.5–3.7s per
+cold function instance; ~0.5s warm), then applied here. Not yet measured on MySkylight — re-run §7.
+
+| Change | Where | Why it helps |
+|---|---|---|
+| **Call the API directly from the browser**, proxy as fallback | `lib/api.ts`, `lib/api-auth.ts`, `components/api-auth-bridge.tsx` | Removes the serverless hop (invocation bill, cold start, per-request Clerk mint) from every read/write. Same idea as the SSE change, now for everything. |
+| **Cache the minted Clerk token** in the proxy | `lib/clerk-token-cache.ts`, `app/api/backend/[...path]/route.ts` | Fallback path only; `getToken({template})` is a network call, so reuse until the token's own `exp`. |
+| **Persist the TanStack Query cache** (24h) | `lib/query-persist.ts`, `components/providers.tsx` | First open of the day / kiosk reboot paints immediately, revalidates behind it. Cleared on sign-out and account switch. |
+| **Static-generate `/app/family/[familyId]/*`** | `app/app/family/[familyId]/layout.tsx` | Were 8 `ƒ` dynamic routes — a function invocation per page view. Now `●` SSG (render once per family, then cached). |
+| **Isolate the "now" line** (also fixes §6.1) | `components/calendar/now-line.tsx` | Per-minute tick no longer re-renders the week/day grid; `useTodayYMD` re-renders only at midnight so "today" still rolls over. |
+
+**Considered and not ported:** the cold-start request gate (moot once calls are direct); the
+50 MB offline exercise-still cache and set-write queue (workout-specific); Caddy `encode zstd gzip`
+(already on). **Not done yet, worth a follow-up:** the workout app's service worker that caches the
+whole built shell + RSC segments (§6.5) and removing Clerk middleware from page loads — both bigger
+changes with offline/auth trade-offs; the Netlify page invocations that remain are the middleware.
+
 ---
 
 ## 3. What's already done well (don't redo)
@@ -161,7 +180,7 @@ is naturally unbounded. Low urgency today; paginate `list_redemptions` first as 
 
 ## 6. Frontend — rendering (kiosk uptime weighted highest)
 
-### 6.1 HIGH — the whole calendar re-renders every minute, 24/7
+### 6.1 HIGH — the whole calendar re-renders every minute, 24/7 — ✅ shipped (`now-line.tsx`)
 `components/calendar/week-view.tsx:77-81`, `day-view.tsx:76-80`:
 `setInterval(() => setNow(...), 60_000)` lives inside the big view, so every minute the
 entire grid re-builds `byDay`, re-filters events, and re-renders all columns — to move a

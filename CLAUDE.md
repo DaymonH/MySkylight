@@ -30,9 +30,10 @@ Backend canonical docs cross-reference here; its API surface is in `docs/PLAN.md
 
 ## Stack & key conventions
 - **Next.js 16 App Router** — newer, breaking changes vs training data. **Read `node_modules/next/dist/docs/` before writing routing/data code** (see `MySkylight/AGENTS.md`).
-- **Clerk** auth via a server-side proxy: `app/api/backend/[...path]/route.ts` injects the Clerk JWT — never call the backend or `getToken()` directly; route data through the proxy / a shared `apiRequest` helper.
+- **Clerk** auth. **All data goes through the shared `apiRequest` helper (`lib/api.ts`) — never `fetch` the backend yourself.** `apiRequest` calls the API **directly** from the browser (`NEXT_PUBLIC_API_BASE_URL`) with a Clerk token handed over by `ApiAuthBridge` → `lib/api-auth.ts`, and falls back to the server-side proxy `app/api/backend/[...path]/route.ts` (which mints and caches the Clerk JWT) when there is no base URL, no token, a 401, or a direct request that never connected. The direct path skips a billed serverless invocation, a possible cold start and a Clerk round trip per request. POST/PATCH are *not* re-sent through the proxy after a thrown error (could double-create).
 - **TanStack Query** for server state; **shadcn/ui** + Tailwind v4 + radix + lucide; **next-themes**.
 - **Realtime:** SSE subscription that live-updates the device; reconnect on `visibilitychange` (iOS drops SSE when backgrounded).
+- **Persisted query cache:** `PersistQueryClientProvider` (`lib/query-persist.ts`) stores the TanStack cache in localStorage (24h, busted per deploy via `NEXT_PUBLIC_BUILD_SHA`, dropped on sign-out / account change in `ApiAuthBridge`) so a cold launch paints last-known data, then revalidates.
 - **PWA:** manifest + service worker; iOS Web Push needs "Add to Home Screen" (16.4+).
 - File/folder naming: kebab-case; components/types PascalCase; hooks/functions camelCase.
 
@@ -58,7 +59,7 @@ Clerk token, and `lib/sse.ts` does the framing.
 - **`NEXT_PUBLIC_API_BASE_URL` must be set in production.** Unset, the stream silently falls back to
   the proxy path and the bill comes back. It's inlined at build time, so changing it needs a redeploy.
 - The backend's `CORS_ORIGINS` must list the site's origin, since the browser now calls it cross-origin.
-- Regular API calls still go through the proxy — that's fine, they scale with actual use.
+- Regular API calls now go direct too (see Stack above); the proxy is only the fallback, so a missing/wrong `NEXT_PUBLIC_API_BASE_URL` silently puts the bill back for *everything*, not just SSE.
 
 ## Never edit
 `.env*` / secrets. `NEXT_PUBLIC_*` are the only client-exposed vars.

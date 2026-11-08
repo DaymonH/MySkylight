@@ -1,4 +1,4 @@
-import type { Metadata } from "next"
+import type { Metadata, Viewport } from "next"
 
 import { DeviceSidebar } from "@/components/device-sidebar"
 import { KioskScale } from "@/components/kiosk-scale"
@@ -14,6 +14,20 @@ export const metadata: Metadata = {
     title: "MySkylight Kiosk",
     statusBarStyle: "default",
   },
+}
+
+// Replaces the root viewport for /device only: the phone companion keeps normal
+// pinch-zoom (accessibility), the wall kiosk does not.
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+  viewportFit: "cover",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
+    { media: "(prefers-color-scheme: dark)", color: "#000000" },
+  ],
 }
 
 export default function DeviceLayout({ children }: { children: React.ReactNode }) {

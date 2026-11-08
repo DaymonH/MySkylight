@@ -1,12 +1,14 @@
 "use client"
 
-import { useMemo, useEffect, useLayoutEffect, useRef, useState } from "react"
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 import { cn } from "@/lib/utils"
 import { readableTextOn } from "@/lib/colors"
 import type { OccurrenceOut } from "@/lib/types/calendar"
 import type { WeatherDay } from "@/hooks/use-weather"
 import { WeatherIcon } from "./weather-icon"
 import { packDayEvents, minutesNow, slotTimeFromOffset } from "./event-layout"
+import { NowLine } from "./now-line"
+import { useTodayYMD } from "@/hooks/use-today"
 
 interface WeekViewProps {
   startDate: Date // Sunday of the week
@@ -76,13 +78,6 @@ export function WeekView({
   const startMinClamp = startHour * 60
   const endMinClamp = endHour * 60
 
-  // Re-render once a minute so the "now" line tracks real time (matters on the wall display).
-  const [now, setNow] = useState(() => minutesNow())
-  useEffect(() => {
-    const id = setInterval(() => setNow(minutesNow()), 60_000)
-    return () => clearInterval(id)
-  }, [])
-
   const days = useMemo(
     () =>
       Array.from({ length: 7 }, (_, i) => {
@@ -93,7 +88,7 @@ export function WeekView({
     [startDate]
   )
 
-  const todayYMD = toYMD(new Date())
+  const todayYMD = useTodayYMD()
 
   // On a phone the grid scrolls (the hour range doesn't fit), and opening at the top
   // of the morning hides what's happening now. When this week contains today, land
@@ -307,15 +302,12 @@ export function WeekView({
                   })}
 
                   {/* Now indicator */}
-                  {isToday && now >= startMinClamp && now <= endMinClamp && (
-                    <div
-                      className="pointer-events-none absolute inset-x-0 z-30"
-                      style={{ top: ((now - startMinClamp) / 60) * hourHeight }}
-                    >
-                      <div className="bg-now relative h-px">
-                        <span className="bg-now absolute -top-1 -left-1 size-2 rounded-full" />
-                      </div>
-                    </div>
+                  {isToday && (
+                    <NowLine
+                      startMin={startMinClamp}
+                      endMin={endMinClamp}
+                      hourHeight={hourHeight}
+                    />
                   )}
                 </div>
               )
