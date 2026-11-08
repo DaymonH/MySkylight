@@ -36,6 +36,7 @@ Backend canonical docs cross-reference here; its API surface is in `docs/PLAN.md
 - **Persisted query cache:** `PersistQueryClientProvider` (`lib/query-persist.ts`) stores the TanStack cache in localStorage (24h, busted per deploy via `NEXT_PUBLIC_BUILD_SHA`, dropped on sign-out / account change in `ApiAuthBridge`) so a cold launch paints last-known data, then revalidates.
 - **PWA:** manifest + service worker; iOS Web Push needs "Add to Home Screen" (16.4+).
 - **Naming:** the UI never says "task". A recurring item is a **chore** and a one-time item is a **to-do** (Lists are a separate feature). The code, API (`/tasks`) and DB keep `Task` as the internal name, so don't rename identifiers; just keep user-visible text as chore / to-do.
+- **Navigation (companion app):** one list in `components/app-nav-items.ts` feeds both the header menu (`family-menu.tsx`, sm+) and the phone bottom bar (`bottom-nav.tsx`, below sm). Add a page there, not in either component. Chores is one entry: `/chores` (Today/Week) and `/tasks` (Edit) share the `ChoresViewSwitch`.
 - File/folder naming: kebab-case; components/types PascalCase; hooks/functions camelCase.
 
 ## Deployment — automatic on push to `main` (no manual deploy)

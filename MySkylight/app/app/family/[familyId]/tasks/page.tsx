@@ -32,6 +32,7 @@ import {
   useUpdateRoutine,
   useUpdateTask,
 } from "@/hooks/use-tasks"
+import { ChoresViewSwitch } from "@/components/chores-view-switch"
 import { NO_ROUTINE, TaskSheet, type TaskFormValues } from "@/components/tasks/task-sheet"
 import { BalanceSheet } from "@/components/tasks/balance-sheet"
 import { bucketLabel } from "@/components/tasks/time-wheel"
@@ -247,12 +248,15 @@ export default function TasksPage({ params }: { params: Promise<{ familyId: stri
 
   return (
     <div className="thin-scrollbar mx-auto flex w-full max-w-2xl flex-col gap-6 overflow-y-auto p-4 pb-24 sm:p-6 sm:pb-24 [&>*]:shrink-0">
-      <header className="flex flex-col gap-1">
-        <h1 className="font-heading text-xl font-semibold tracking-tight">Chores &amp; to-dos</h1>
-        <p className="text-muted-foreground text-sm">
-          Chores and habits for your family. Group them into routines like Morning or Bedtime —
-          they show up as checkable cards on the device.
-        </p>
+      <header className="flex flex-wrap items-center gap-3">
+        <div className="min-w-0 flex-1">
+          <h1 className="font-heading text-xl font-semibold tracking-tight">Chores</h1>
+          <p className="text-muted-foreground text-sm">
+            Add and edit chores, to-dos and routines. Group chores into routines like Morning or
+            Bedtime — they show up as checkable cards on the device.
+          </p>
+        </div>
+        <ChoresViewSwitch familyId={familyId} value="edit" />
       </header>
 
       {canManage && (

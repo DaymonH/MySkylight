@@ -2,6 +2,7 @@ import { CalendarDaysIcon } from "lucide-react"
 
 import { SettingsButton } from "@/components/settings-dialog"
 import { FamilyMenu } from "@/components/family-menu"
+import { BottomNav } from "@/components/bottom-nav"
 import { SurfaceMarker } from "@/components/surface-marker"
 
 export const metadata = { title: "MySkylight" }
@@ -20,11 +21,15 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           </span>
         </div>
         <div className="flex items-center gap-1">
-          <FamilyMenu />
+          {/* Phones navigate with the bottom bar instead. */}
+          <div className="hidden sm:block">
+            <FamilyMenu />
+          </div>
           <SettingsButton />
         </div>
       </header>
       <main className="flex min-h-0 flex-1 flex-col">{children}</main>
+      <BottomNav />
     </div>
   )
 }

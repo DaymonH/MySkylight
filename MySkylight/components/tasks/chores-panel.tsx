@@ -1,7 +1,6 @@
 "use client"
 
-import { useMemo, useState } from "react"
-import Link from "next/link"
+import { useEffect, useMemo, useState } from "react"
 import { useQuery } from "@tanstack/react-query"
 import {
   AlertTriangleIcon,
@@ -12,12 +11,12 @@ import {
   CheckIcon,
   EllipsisVerticalIcon,
   PartyPopperIcon,
-  PencilIcon,
   StarIcon,
   Undo2Icon,
 } from "lucide-react"
 import { toast } from "sonner"
 
+import { ChoresViewSwitch } from "@/components/chores-view-switch"
 import { useApi } from "@/hooks/use-api"
 import { useRealtime } from "@/hooks/use-realtime"
 import { useTodayYMD } from "@/hooks/use-today"
@@ -41,8 +40,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
-import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { ChoreFilterBar } from "@/components/tasks/chore-filter-bar"
 import { ClearMissedButton } from "@/components/tasks/clear-missed-button"
@@ -97,6 +94,11 @@ export function ChoresPanel({ familyId }: { familyId: string }) {
   const today = useTodayYMD()
 
   const [view, setView] = useState<"today" | "week">("today")
+  // The Edit screen's "Week" tab links here with #week.
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- read the URL hash once after mount (static page; avoids a hydration mismatch)
+    if (window.location.hash === "#week") setView("week")
+  }, [])
   const [filters, setFilters] = useState<ChoreFilters>(DEFAULT_FILTERS)
 
   const week = weekRangeYMD(today)
@@ -276,21 +278,7 @@ export function ChoresPanel({ familyId }: { familyId: string }) {
             Everyone&apos;s chores — tap a face to mark it done.
           </p>
         </div>
-        <Button asChild variant="outline" size="sm">
-          <Link href={`/app/family/${familyId}/tasks`}>
-            <PencilIcon /> Manage
-          </Link>
-        </Button>
-        <ToggleGroup
-          type="single"
-          variant="outline"
-          size="sm"
-          value={view}
-          onValueChange={(v) => v && setView(v as "today" | "week")}
-        >
-          <ToggleGroupItem value="today">Today</ToggleGroupItem>
-          <ToggleGroupItem value="week">Week</ToggleGroupItem>
-        </ToggleGroup>
+        <ChoresViewSwitch familyId={familyId} value={view} onChange={setView} />
       </header>
 
       <ChoreFilterBar
