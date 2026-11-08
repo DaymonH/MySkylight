@@ -372,7 +372,7 @@ Goal: notifications, offline, accessibility, performance, deploy.
 - [ ] `[FE]` iOS install: show "Add to Home Screen" tooltip when `navigator.standalone === false` + iOS Safari
 - [ ] `[FE]` SW update toast: listen for `controllerchange`, show "Updated — reload to apply" nudge
 - [ ] `[FE]` Accessibility pass (contrast, focus, tap targets, screen-reader labels)
-- [ ] `[FE]` Kiosk hardening: wake-lock, prevent stray navigation, fullscreen
+- [ ] `[FE]` Kiosk hardening: wake-lock, prevent stray navigation, fullscreen _(wake-lock is in-app (`KeepScreenOn`); stray navigation + fullscreen are solved at the **device** level — pinned full-screen PWA + root watchdog, see [`docs/kiosk/README.md`](./kiosk/README.md))_
 - [ ] `[BE]` Rate limiting on abuse-sensitive routes + `/webhooks/clerk` (Clerk handles login rate-limiting)
 - [ ] `[INFRA]` Nightly SQLite backup task + restore doc
 - [ ] `[INFRA]` Docker Compose deploy (api + web) on a mounted volume
