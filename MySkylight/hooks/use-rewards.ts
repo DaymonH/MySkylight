@@ -8,6 +8,9 @@ import type {
   RewardCreatePayload,
   RewardOut,
   RewardUpdatePayload,
+  StarAdjustmentOut,
+  StarAdjustmentPayload,
+  StarAdjustmentResult,
   StarBalanceOut,
 } from "@/lib/types/reward"
 
@@ -49,6 +52,7 @@ function useInvalidateRewards(familyId: string) {
     qc.invalidateQueries({ queryKey: ["rewards", familyId] })
     qc.invalidateQueries({ queryKey: ["star-balances", familyId] })
     qc.invalidateQueries({ queryKey: ["redemptions", familyId] })
+    qc.invalidateQueries({ queryKey: ["star-adjustments", familyId] })
   }
 }
 
@@ -104,5 +108,32 @@ export function useDecideRedemption(familyId: string) {
         `/families/${familyId}/redemptions/${redemptionId}/${approve ? "approve" : "reject"}`,
       ),
     onSuccess: invalidate,
+  })
+}
+
+// ── Star corrections (parents) ────────────────────────────────────────────────
+
+/** The correction history for one member, newest first. */
+export function useStarAdjustments(familyId: string, memberId: string, enabled = true) {
+  const api = useApi()
+  return useQuery({
+    queryKey: ["star-adjustments", familyId, memberId],
+    queryFn: () =>
+      api.get<StarAdjustmentOut[]>(`/families/${familyId}/star-adjustments?member_id=${memberId}`),
+    enabled: enabled && !!familyId && !!memberId,
+  })
+}
+
+/**
+ * Correct a member's stars: add/remove an amount, or set their balance to an exact
+ * number. Recorded as a ledger entry; the completions themselves are untouched.
+ */
+export function useAdjustStars(familyId: string) {
+  const api = useApi()
+  const invalidate = useInvalidateRewards(familyId)
+  return useMutation({
+    mutationFn: (data: StarAdjustmentPayload) =>
+      api.post<StarAdjustmentResult>(`/families/${familyId}/star-adjustments`, data),
+    onSettled: invalidate,
   })
 }

@@ -3,7 +3,7 @@
 import { use, useState } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { toast } from "sonner"
-import { CheckIcon, GiftIcon, PencilIcon, PlusIcon, StarIcon, XIcon } from "lucide-react"
+import { CheckIcon, GiftIcon, PencilIcon, PlusIcon, SlidersHorizontalIcon, StarIcon, XIcon } from "lucide-react"
 
 import { useApi } from "@/hooks/use-api"
 import { useRealtime } from "@/hooks/use-realtime"
@@ -17,6 +17,7 @@ import {
   useStarBalances,
   useUpdateReward,
 } from "@/hooks/use-rewards"
+import { AdjustStarsDialog } from "@/components/rewards/adjust-stars-dialog"
 import { RewardSheet, type RewardFormValues } from "@/components/rewards/reward-sheet"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -58,6 +59,8 @@ export default function RewardsPage({ params }: { params: Promise<{ familyId: st
 
   const { data: rewards = [], isLoading: rewardsLoading } = useRewards(familyId)
   const { data: balances = [] } = useStarBalances(familyId)
+  // A parent fixing someone's stars (e.g. after a ticked-off backlog).
+  const [adjusting, setAdjusting] = useState<StarBalanceOut | null>(null)
   const { data: pending = [] } = useRedemptions(familyId, "pending")
 
   const createReward = useCreateReward(familyId)
@@ -168,10 +171,30 @@ export default function RewardsPage({ params }: { params: Promise<{ familyId: st
                     )}
                   </p>
                 </div>
+                {canManage && (
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label={`Adjust ${b.name}'s stars`}
+                    className="text-muted-foreground -mr-1"
+                    onClick={() => setAdjusting(b)}
+                  >
+                    <SlidersHorizontalIcon />
+                  </Button>
+                )}
               </div>
             ))}
           </div>
         </section>
+      )}
+
+      {adjusting && (
+        <AdjustStarsDialog
+          key={adjusting.member_id}
+          familyId={familyId}
+          balance={adjusting}
+          onClose={() => setAdjusting(null)}
+        />
       )}
 
       {/* Pending approvals (parents) */}
