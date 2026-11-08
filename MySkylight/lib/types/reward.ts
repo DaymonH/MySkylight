@@ -15,7 +15,7 @@ export interface RewardOut {
   updated_at: string
 }
 
-/** A member's star ledger; `available = earned - spent - pending`. */
+/** A member's star ledger; `available = earned + adjustment - spent - pending`. */
 export interface StarBalanceOut {
   member_id: string
   name: string
@@ -23,7 +23,32 @@ export interface StarBalanceOut {
   earned: number
   spent: number
   pending: number
+  /** A parent's manual corrections (signed); already included in `available`. */
+  adjustment: number
   available: number
+}
+
+/** One manual correction to a member's stars (newest first in the history). */
+export interface StarAdjustmentOut {
+  id: string
+  member_id: string
+  amount: number // signed
+  note: string | null
+  created_at: string
+}
+
+/** Result of correcting stars; `adjustment` is null if the balance was already right. */
+export interface StarAdjustmentResult {
+  adjustment: StarAdjustmentOut | null
+  balance: StarBalanceOut
+}
+
+/** Give exactly one of `amount` or `set_available_to`. */
+export interface StarAdjustmentPayload {
+  member_id: string
+  amount?: number
+  set_available_to?: number
+  note?: string | null
 }
 
 export interface RewardBrief {

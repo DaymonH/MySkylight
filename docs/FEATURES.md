@@ -460,6 +460,18 @@ frontend (FE) pieces, and **acceptance criteria** (AC) that define "done".
   `reward-sheet.tsx`) and a device board `reward-board.tsx` at `/device/rewards`; task editor gains a
   "Stars for completing" field and the chore board/task list show ⭐ values; `reward.*`/`task.*` wired
   into `use-realtime.ts`. `tsc` + `next build` clean. **Deferred:** live two-device smoke.
+- **Update (2026-11-08) — parents can correct a member's stars:** because stars were purely derived,
+  there was no way to fix a balance inflated by ticking off a backlog of chores nobody did. Added an
+  append-only **ledger of manual adjustments** (`star_adjustments`, migration `023`):
+  `POST /families/{id}/star-adjustments` (owner/adult only — a child can't give themselves stars) either
+  adds/removes an `amount` or sets the spendable balance to an exact number (`set_available_to`, so
+  "reset to 0" is one call and accounts for spent/pending); `GET` lists the history. `earned` stays the
+  honest sum of completions; balances gain a separate **`adjustment`** that `available` now includes
+  (`available = earned + adjustment − spent − pending`), including the redeem check, so removed stars can't
+  be spent. A no-op records nothing; completions are never rewritten. **FE:** a slider button on each
+  balance chip on the Rewards page (parents only) opens `adjust-stars-dialog.tsx` — *Set to a number* /
+  *Add or remove*, a "Reset to 0" shortcut, a before→after preview, an optional note, and the last few
+  changes. Prevention: **Clear missed** (2026-11-07) dismisses a backlog without awarding stars.
 - _Phase 5_
 
 ### F15 — Meal Planning ⭐
