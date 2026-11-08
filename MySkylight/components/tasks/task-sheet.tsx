@@ -33,9 +33,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
 import {
-  bydayRrule,
   CUSTOM_INTERVAL,
-  CUSTOM_WEEKLY,
   intervalRrule,
   isCustomInterval,
   isPinnedWeekly,
@@ -46,7 +44,6 @@ import {
   stripUntil,
   TASK_RRULE_OPTIONS,
   WEEKDAYS,
-  weekdayOf,
   type IntervalUnit,
   type WeekdayCode,
 } from "@/lib/recurrence"
@@ -119,15 +116,13 @@ function todayYMD() {
   ).padStart(2, "0")}`
 }
 
-// Which Repeat select item an rrule maps to. A weekly BYDAY rule that isn't a named
-// preset maps to "Custom days…". Note a custom set can coincide with a preset value
-// (e.g. Mon–Fri === the Weekdays preset) — picker mode is tracked separately so the
-// custom picker stays open while the user edits, regardless of that coincidence.
+// Which Repeat select item an rrule maps to. Pinned weekdays (BYDAY) are a separate
+// "Day" control, so the cadence is read with them stripped.
 const selectRepeatValue = (rrule: string): string => {
-  if (TASK_RRULE_OPTIONS.some((o) => o.value === rrule)) return rrule
-  if (isCustomInterval(rrule)) return CUSTOM_INTERVAL
-  if (rrule.includes("FREQ=WEEKLY") && rrule.includes("BYDAY=")) return CUSTOM_WEEKLY
-  return rrule || "none"
+  const base = stripByday(rrule)
+  if (TASK_RRULE_OPTIONS.some((o) => o.value === base && !o.value.includes("BYDAY"))) return base
+  if (isCustomInterval(base)) return CUSTOM_INTERVAL
+  return base || "none"
 }
 
 export function TaskSheet({
@@ -173,7 +168,6 @@ export function TaskSheet({
   // Whether the Repeat picker is in "Custom days…" mode. Tracked explicitly (not
   // derived from the rrule) so the picker stays open even when the chosen day-set
   // happens to equal a preset value (e.g. Mon–Fri === the Weekdays preset).
-  const [customMode, setCustomMode] = useState(false)
   // "Every N days/weeks/months…" mode + its number box (a string so it can go
   // briefly empty while the user retypes; normalised on blur) and chosen unit.
   const [customIntervalMode, setCustomIntervalMode] = useState(false)
@@ -195,7 +189,6 @@ export function TaskSheet({
       const iv = parseInterval(pattern)
       const repeatVal = selectRepeatValue(pattern)
       // eslint-disable-next-line react-hooks/set-state-in-effect -- reset picker mode alongside the form reset
-      setCustomMode(repeatVal === CUSTOM_WEEKLY)
       setCustomIntervalMode(repeatVal === CUSTOM_INTERVAL)
       setIntervalEvery(String(iv && iv.n >= 2 ? iv.n : 2))
       setIntervalUnit(iv?.unit ?? "day")
@@ -218,7 +211,6 @@ export function TaskSheet({
         rotation_anchor_date: editing.rotation_anchor_date ?? "",
       })
     } else {
-      setCustomMode(false)
       setCustomIntervalMode(false)
       setIntervalEvery("2")
       setIntervalUnit("day")
@@ -410,56 +402,36 @@ export function TaskSheet({
                 name="rrule"
                 control={control}
                 render={({ field }) => {
-                  const selectValue = customMode
-                    ? CUSTOM_WEEKLY
-                    : customIntervalMode
-                      ? CUSTOM_INTERVAL
-                      : selectRepeatValue(field.value)
+                  const selectValue = customIntervalMode
+                    ? CUSTOM_INTERVAL
+                    : selectRepeatValue(field.value)
+                  const days = parseByday(field.value)
                   const onRepeatChange = (val: string) => {
-                    if (val === CUSTOM_WEEKLY) {
-                      // Entering custom mode: keep any existing day-set, else seed
-                      // with the start date's weekday so it's never an empty rule.
-                      setCustomMode(true)
-                      setCustomIntervalMode(false)
-                      const existing = parseByday(field.value)
-                      const seed = startDate ? weekdayOf(startDate) : "MO"
-                      field.onChange(bydayRrule(existing.length ? existing : [seed]))
-                    } else if (val === CUSTOM_INTERVAL) {
+                    if (val === CUSTOM_INTERVAL) {
                       // "Every N days/weeks/months…": keep an existing interval, else
                       // seed at every-2 (1 is just the plain "Every day/week" preset).
-                      setCustomMode(false)
                       setCustomIntervalMode(true)
                       const existing = parseInterval(field.value)
                       const n = existing && existing.n >= 2 ? existing.n : 2
                       const unit = existing?.unit ?? "day"
                       setIntervalEvery(String(n))
                       setIntervalUnit(unit)
-                      field.onChange(intervalRrule(n, unit, parseByday(field.value)))
+                      field.onChange(intervalRrule(n, unit, days))
                     } else {
-                      setCustomMode(false)
                       setCustomIntervalMode(false)
-                      field.onChange(val)
+                      // Switching between weekly cadences keeps any pinned days.
+                      const p = parseInterval(val)
+                      field.onChange(
+                        p?.unit === "week" && days.length ? intervalRrule(p.n, "week", days) : val,
+                      )
                     }
                   }
-                  const days = parseByday(field.value)
-                  // Every-N-weeks (N ≥ 2) offers an optional pinned weekday; empty = Auto.
+                  // Weekly cadences (any N) get the optional Day control; empty = Auto.
                   const weekly = parseInterval(field.value)
-                  const weeklyN = weekly?.unit === "week" && weekly.n >= 2 ? weekly.n : null
-                  const onToggleIntervalDays = (next: string[]) => {
-                    if (weeklyN === null) return
-                    // Picking a day from the "Every 2 weeks" preset moves it into the
-                    // interval editor so the dropdown keeps matching the rule.
-                    if (next.length) {
-                      setCustomMode(false)
-                      setCustomIntervalMode(true)
-                      setIntervalEvery(String(weeklyN))
-                      setIntervalUnit("week")
-                    }
-                    field.onChange(intervalRrule(weeklyN, "week", next as WeekdayCode[]))
-                  }
+                  const weeklyN = weekly?.unit === "week" ? weekly.n : null
                   const onToggleDays = (next: string[]) => {
-                    if (next.length === 0) return // keep at least one day selected
-                    field.onChange(bydayRrule(next as WeekdayCode[]))
+                    if (weeklyN === null) return
+                    field.onChange(intervalRrule(weeklyN, "week", next as WeekdayCode[]))
                   }
                   return (
                     <>
@@ -468,13 +440,12 @@ export function TaskSheet({
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          {TASK_RRULE_OPTIONS.map((o) => (
+                          {TASK_RRULE_OPTIONS.filter((o) => !o.value.includes("BYDAY")).map((o) => (
                             <SelectItem key={o.value} value={o.value}>
                               {o.label}
                             </SelectItem>
                           ))}
                           <SelectItem value={CUSTOM_INTERVAL}>Every N days/weeks/months…</SelectItem>
-                          <SelectItem value={CUSTOM_WEEKLY}>Custom days…</SelectItem>
                         </SelectContent>
                       </Select>
 
@@ -540,15 +511,24 @@ export function TaskSheet({
                               size="sm"
                               variant={days.length === 0 ? "default" : "outline"}
                               className="rounded-full"
-                              onClick={() => onToggleIntervalDays([])}
+                              onClick={() => onToggleDays([])}
                             >
                               Auto
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              className="rounded-full"
+                              onClick={() => onToggleDays(["MO", "TU", "WE", "TH", "FR"])}
+                            >
+                              Weekdays
                             </Button>
                             <ToggleGroup
                               type="multiple"
                               variant="outline"
                               value={days}
-                              onValueChange={onToggleIntervalDays}
+                              onValueChange={onToggleDays}
                               className="flex flex-wrap justify-start"
                             >
                               {WEEKDAYS.map((d) => (
@@ -572,9 +552,7 @@ export function TaskSheet({
                             ? `Currently on ${WEEKDAYS.find((d) => d.code === parseByday(editing.rrule)[0])?.label}s. `
                             : ""}
                           The app picks the day that best balances everyone&apos;s chores.{" "}
-                          {weeklyN !== null
-                            ? "Pick a day above to choose it yourself."
-                            : "Choose “Custom days…” to pick the day yourself."}
+                          Pick a day above to choose it yourself.
                         </p>
                       )}
 
@@ -593,27 +571,6 @@ export function TaskSheet({
                             Leave blank to repeat forever. The chore stops after this date.
                           </p>
                         </div>
-                      )}
-
-                      {selectValue === CUSTOM_WEEKLY && (
-                        <ToggleGroup
-                          type="multiple"
-                          variant="outline"
-                          value={days}
-                          onValueChange={onToggleDays}
-                          className="flex flex-wrap justify-start pt-1"
-                        >
-                          {WEEKDAYS.map((d) => (
-                            <ToggleGroupItem
-                              key={d.code}
-                              value={d.code}
-                              aria-label={d.label}
-                              className="w-12 rounded-full data-[state=on]:border-primary data-[state=on]:bg-primary data-[state=on]:text-primary-foreground data-[state=on]:hover:bg-primary data-[state=on]:hover:text-primary-foreground"
-                            >
-                              {d.label}
-                            </ToggleGroupItem>
-                          ))}
-                        </ToggleGroup>
                       )}
                     </>
                   )

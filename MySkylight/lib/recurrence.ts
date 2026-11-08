@@ -26,10 +26,6 @@ export const WEEKDAYS = [
 
 export type WeekdayCode = (typeof WEEKDAYS)[number]["code"]
 
-// Sentinel value for the Repeat select's "Custom days…" mode. Never stored as an
-// rrule — the form field always holds the assembled FREQ=WEEKLY;BYDAY=… string.
-export const CUSTOM_WEEKLY = "custom-weekly"
-
 // Sentinel for the Repeat select's "Every N days/weeks/months…" mode. The form
 // field holds the assembled FREQ=…;INTERVAL=N string; N=1 collapses to the plain
 // "every day/week/month" preset.
@@ -45,23 +41,24 @@ const FREQ_FOR_UNIT: Record<IntervalUnit, string> = {
 
 /**
  * Build an "every N {unit}s" rrule. N=1 collapses to the plain `FREQ=…` preset.
- * `days` pins weekday(s) and only applies to every-N-weeks (N ≥ 2); every-week
- * day-sets are the separate "Custom days…" mode.
+ * `days` pins weekday(s) and only applies to weekly cadences (any N).
  */
 export function intervalRrule(n: number, unit: IntervalUnit, days: WeekdayCode[] = []): string {
   const interval = Math.max(1, Math.floor(n))
   const freq = FREQ_FOR_UNIT[unit]
-  if (interval === 1) return `FREQ=${freq}`
-  const base = `FREQ=${freq};INTERVAL=${interval}`
-  if (unit !== "week" || !days.length) return base
-  return `${base};BYDAY=${WEEKDAYS.map((d) => d.code).filter((c) => days.includes(c)).join(",")}`
+  if (unit === "week" && days.length) {
+    const byday = WEEKDAYS.map((d) => d.code).filter((c) => days.includes(c)).join(",")
+    return interval === 1
+      ? `FREQ=WEEKLY;BYDAY=${byday}`
+      : `FREQ=WEEKLY;INTERVAL=${interval};BYDAY=${byday}`
+  }
+  return interval === 1 ? `FREQ=${freq}` : `FREQ=${freq};INTERVAL=${interval}`
 }
 
 /**
- * Read a plain interval rule into `{ n, unit }`. Returns null for every-week day-sets
- * (BYDAY with no interval) — the separate "Custom days…" mode — and for anything
- * that isn't daily/weekly/monthly. A BYDAY on an every-N-weeks rule (N ≥ 2) is a
- * pinned weekday and still reads as an interval. UNTIL (an end date) is ignored.
+ * Read a recurrence into `{ n, unit }`. Returns null for anything that isn't
+ * daily/weekly/monthly. A BYDAY on a weekly rule is a pinned weekday and is ignored
+ * here (read it with `parseByday`). UNTIL (an end date) is ignored.
  */
 export function parseInterval(rrule: string | null): { n: number; unit: IntervalUnit } | null {
   if (!rrule) return null
@@ -72,7 +69,7 @@ export function parseInterval(rrule: string | null): { n: number; unit: Interval
   if (!unit) return null
   const m = rrule.match(/INTERVAL=(\d+)/)
   const n = m ? Math.max(1, parseInt(m[1], 10)) : 1
-  if (rrule.includes("BYDAY=") && !(unit === "week" && n >= 2)) return null
+  if (rrule.includes("BYDAY=") && unit !== "week") return null
   return { n, unit }
 }
 

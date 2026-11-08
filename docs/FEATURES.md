@@ -646,8 +646,9 @@ frontend (FE) pieces, and **acceptance criteria** (AC) that define "done".
   it only when its schedule changes or it goes from pinned back to Auto. Daily, monthly and every-N-days
   chores start today (no auto weekday yet). Design + plan: `docs/superpowers/specs/2026-11-08-auto-day-chores-design.md`,
   `docs/superpowers/plans/2026-11-08-auto-day-chores.md`. Auto-placed weekly chores read "Tue (auto)" in
-  task lists and the save toast names the chosen day. Every-N-weeks chores (N ≥ 2) get an optional **Day**
-  picker (Auto by default); a chosen day is saved as `INTERVAL=N;BYDAY=…` and pinned.
+  task lists and the save toast names the chosen day. Every weekly cadence (every week, every N weeks) gets one
+  optional **Day** row (Auto by default, Mon–Sun chips, a Weekdays shortcut); chosen days are saved as
+  `[INTERVAL=N;]BYDAY=…` and pinned. The old "Custom days…" Repeat entry is gone.
 ### F28 — Recipe → Grocery List (ingredient aggregation) ⭐
 
 > _Inspired by **Skylight**'s "advanced grocery integration" (auto-calculates ingredient quantities for
