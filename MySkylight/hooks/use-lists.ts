@@ -3,6 +3,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useApi } from "@/hooks/use-api"
 import type {
+  ListSuggestion,
+  ListType,
   ListCreatePayload,
   ListItemCreatePayload,
   ListItemOut,
@@ -136,5 +138,64 @@ export function useToggleItem(familyId: string) {
       if (ctx?.prev) qc.setQueryData(["lists", familyId], ctx.prev)
     },
     onSettled: () => qc.invalidateQueries({ queryKey: ["lists", familyId] }),
+  })
+}
+
+// ── Clear completed / reorder / suggestions ───────────────────────────────────
+
+export function useClearCompleted(familyId: string) {
+  const api = useApi()
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (listId: string) =>
+      api.delete(`/families/${familyId}/lists/${listId}/items/completed`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["lists", familyId] }),
+  })
+}
+
+/** Persist a new item order. The cache is reordered up-front so a drop feels instant. */
+export function useReorderItems(familyId: string) {
+  const api = useApi()
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ listId, itemIds }: { listId: string; itemIds: string[] }) =>
+      api.post(`/families/${familyId}/lists/${listId}/items/reorder`, { item_ids: itemIds }),
+    onMutate: async ({ listId, itemIds }) => {
+      await qc.cancelQueries({ queryKey: ["lists", familyId] })
+      const prev = qc.getQueryData<ListOut[]>(["lists", familyId])
+      const rank = new Map(itemIds.map((id, i) => [id, i]))
+      qc.setQueryData<ListOut[]>(["lists", familyId], (old) =>
+        old?.map((l) =>
+          l.id !== listId
+            ? l
+            : {
+                ...l,
+                items: [...l.items].sort(
+                  (a, b) => (rank.get(a.id) ?? 1e9) - (rank.get(b.id) ?? 1e9),
+                ),
+              },
+        ),
+      )
+      return { prev }
+    },
+    onError: (_e, _v, ctx) => {
+      if (ctx?.prev) qc.setQueryData(["lists", familyId], ctx.prev)
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: ["lists", familyId] }),
+  })
+}
+
+/** Items this family has added to lists of this type before, matching what's typed. */
+export function useListSuggestions(familyId: string, listType: ListType, q: string) {
+  const api = useApi()
+  return useQuery({
+    queryKey: ["list-suggestions", familyId, listType, q],
+    queryFn: () =>
+      api.get<ListSuggestion[]>(
+        `/families/${familyId}/list-suggestions?list_type=${listType}&q=${encodeURIComponent(q)}&limit=8`,
+      ),
+    enabled: !!familyId,
+    staleTime: 60_000,
+    placeholderData: (prev) => prev,
   })
 }

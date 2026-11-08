@@ -281,6 +281,11 @@ frontend (FE) pieces, and **acceptance criteria** (AC) that define "done".
   `/device/lists`; `list.*` wired into `hooks/use-realtime.ts`; linked from `FamilyMenu` + `DeviceNav`.
   `tsc` + `next build` clean. **Deferred:** FE drag-reorder (backend reorder endpoints exist); live
   two-device smoke is the final sign-off.
+- **Update (2026-11-08):** drag-to-reorder open items (dnd-kit handle; within a category group), a
+  **Clear** button on the Completed section (`DELETE …/items/completed`), a done/total progress bar,
+  and quick-add **suggestions** from the family's past items per list type (`GET …/list-suggestions`,
+  reads soft-deleted rows so history survives clearing; picking one reuses its quantity/category, and
+  re-adding a completed item just un-checks it). The device board already lets you tap to check items.
 - _Phase 4_
 
 ### F05 — Grocery Shopping (Instacart) 🔌 — ❌ DESCOPED

@@ -46,3 +46,10 @@ export interface ListItemCreatePayload {
 }
 
 export type ListItemUpdatePayload = Partial<ListItemCreatePayload> & { is_checked?: boolean }
+
+export interface ListSuggestion {
+  text: string
+  quantity: string | null
+  category: string | null
+  count: number
+}

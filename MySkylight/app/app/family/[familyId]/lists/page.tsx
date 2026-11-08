@@ -1,10 +1,11 @@
 "use client"
 
-import { use, useState, useEffect, useRef } from "react"
+import { use, useState, useEffect, useRef, useDeferredValue } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { toast } from "sonner"
 import {
   CheckIcon,
+  GripVerticalIcon,
   ListTodoIcon,
   PencilIcon,
   PlusIcon,
@@ -13,14 +14,35 @@ import {
   XIcon,
 } from "lucide-react"
 
+import {
+  DndContext,
+  PointerSensor,
+  KeyboardSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core"
+import {
+  SortableContext,
+  arrayMove,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable"
+import { CSS } from "@dnd-kit/utilities"
+
 import { useApi } from "@/hooks/use-api"
 import { useRealtime } from "@/hooks/use-realtime"
 import {
   useAddItem,
+  useClearCompleted,
   useCreateList,
   useDeleteItem,
   useDeleteList,
+  useListSuggestions,
   useLists,
+  useReorderItems,
   useToggleItem,
   useUpdateItem,
   useUpdateList,
@@ -269,8 +291,17 @@ function ListPanel({
   const deleteItem = useDeleteItem(familyId)
   const updateList = useUpdateList(familyId)
   const deleteList = useDeleteList(familyId)
+  const clearCompleted = useClearCompleted(familyId)
+  const reorderItems = useReorderItems(familyId)
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  )
 
   const [quickText, setQuickText] = useState("")
+  const [quickFocused, setQuickFocused] = useState(false)
+  const deferredText = useDeferredValue(quickText.trim())
+  const { data: suggestions = [] } = useListSuggestions(familyId, list.list_type, deferredText)
   const [renaming, setRenaming] = useState(false)
   const [name, setName] = useState(list.name)
   const [sheetItem, setSheetItem] = useState<ListItemOut | undefined>()
@@ -281,16 +312,61 @@ function ListPanel({
   const completed = list.items.filter((i) => i.is_checked)
   const groups = groupByCategory(active)
 
-  function handleQuickAdd() {
-    const text = quickText.trim()
-    if (!text) return
+  // Adding something already on the list's "Completed" section just un-checks it again
+  // instead of creating a duplicate.
+  function addOrRestore(text: string, quantity?: string | null, category?: string | null) {
+    const done = completed.find((i) => i.text.trim().toLowerCase() === text.toLowerCase())
+    if (done) {
+      toggleItem.mutate({ listId: list.id, itemId: done.id, isChecked: false })
+      setQuickText("")
+      return
+    }
     addItem.mutate(
-      { listId: list.id, data: { text } },
+      {
+        listId: list.id,
+        data: { text, ...(quantity ? { quantity } : {}), ...(category ? { category } : {}) },
+      },
       {
         onSuccess: () => setQuickText(""),
         onError: () => toast.error("Couldn't add the item. Please try again."),
       },
     )
+  }
+
+  function handleQuickAdd() {
+    const text = quickText.trim()
+    if (!text) return
+    // Typing a name you've used before carries over its usual quantity and category.
+    const known = suggestions.find((s) => s.text.toLowerCase() === text.toLowerCase())
+    addOrRestore(text, known?.quantity, known?.category)
+  }
+
+  // Suggestions skip anything already waiting on the list.
+  const activeTexts = new Set(active.map((i) => i.text.trim().toLowerCase()))
+  const shownSuggestions = suggestions.filter((s) => !activeTexts.has(s.text.toLowerCase())).slice(0, 6)
+
+  function handleDragEnd(groupName: string, groupItems: ListItemOut[], e: DragEndEvent) {
+    const { active: dragged, over } = e
+    if (!over || dragged.id === over.id) return
+    const from = groupItems.findIndex((i) => i.id === dragged.id)
+    const to = groupItems.findIndex((i) => i.id === over.id)
+    if (from < 0 || to < 0) return
+    const moved = arrayMove(groupItems, from, to).map((i) => i.id)
+    const order = groups
+      .flatMap((g) => (g.name === groupName ? moved : g.items.map((i) => i.id)))
+      .concat(completed.map((i) => i.id))
+    reorderItems.mutate(
+      { listId: list.id, itemIds: order },
+      { onError: () => toast.error("Couldn't reorder the list.") },
+    )
+  }
+
+  function handleClearCompleted() {
+    const n = completed.length
+    clearCompleted.mutate(list.id, {
+      onSuccess: () => toast.success(`Cleared ${n} completed ${n === 1 ? "item" : "items"}`),
+      onError: () => toast.error("Couldn't clear the completed items."),
+    })
   }
 
   function saveName() {
@@ -459,6 +535,8 @@ function ListPanel({
           <Input
             value={quickText}
             onChange={(e) => setQuickText(e.target.value)}
+            onFocus={() => setQuickFocused(true)}
+            onBlur={() => setQuickFocused(false)}
             placeholder={isGrocery ? "Add a grocery…" : "Add a to-do…"}
             maxLength={500}
           />
@@ -466,6 +544,43 @@ function ListPanel({
             <PlusIcon />
           </Button>
         </form>
+      )}
+
+      {/* Suggestions from what this family has added before */}
+      {canEdit && quickFocused && shownSuggestions.length > 0 && (
+        <div
+          className="-mt-2 flex flex-wrap gap-1.5"
+          // Keep the input focused so tapping a chip doesn't dismiss the row first.
+          onPointerDown={(e) => e.preventDefault()}
+        >
+          {shownSuggestions.map((s) => (
+            <button
+              key={s.text}
+              type="button"
+              onClick={() => addOrRestore(s.text, s.quantity, s.category)}
+              className="bg-muted hover:bg-muted/70 flex items-center gap-1 rounded-full px-3 py-1 text-sm transition-colors"
+            >
+              <PlusIcon className="text-muted-foreground size-3.5" />
+              {s.text}
+              {s.quantity && <span className="text-muted-foreground"> · {s.quantity}</span>}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Progress */}
+      {list.items.length > 0 && (
+        <div className="flex items-center gap-3">
+          <div className="bg-muted h-1.5 flex-1 overflow-hidden rounded-full">
+            <div
+              className="bg-primary h-full rounded-full transition-all"
+              style={{ width: `${(completed.length / list.items.length) * 100}%` }}
+            />
+          </div>
+          <span className="text-muted-foreground text-xs tabular-nums">
+            {completed.length} of {list.items.length} done
+          </span>
+        </div>
       )}
 
       {/* Active items */}
@@ -482,28 +597,54 @@ function ListPanel({
                   {g.name}
                 </p>
               )}
-              <ul className="flex flex-col gap-2">
-                {g.items.map((item) => (
-                  <ItemRow
-                    key={item.id}
-                    item={item}
-                    canEdit={canEdit}
-                    onToggle={() =>
-                      toggleItem.mutate({ listId: list.id, itemId: item.id, isChecked: true })
-                    }
-                    onEdit={() => openEdit(item)}
-                  />
-                ))}
-              </ul>
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragEnd={(e) => handleDragEnd(g.name, g.items, e)}
+              >
+                <SortableContext
+                  items={g.items.map((i) => i.id)}
+                  strategy={verticalListSortingStrategy}
+                  disabled={!canEdit}
+                >
+                  <ul className="flex flex-col gap-2">
+                    {g.items.map((item) => (
+                      <ItemRow
+                        key={item.id}
+                        item={item}
+                        canEdit={canEdit}
+                        sortable
+                        onToggle={() =>
+                          toggleItem.mutate({ listId: list.id, itemId: item.id, isChecked: true })
+                        }
+                        onEdit={() => openEdit(item)}
+                      />
+                    ))}
+                  </ul>
+                </SortableContext>
+              </DndContext>
             </div>
           ))}
 
           {/* Completed */}
           {completed.length > 0 && (
             <div className="flex flex-col gap-2">
-              <p className="text-muted-foreground text-xs font-semibold uppercase tracking-wide">
-                Completed · {completed.length}
-              </p>
+              <div className="flex items-center justify-between">
+                <p className="text-muted-foreground text-xs font-semibold uppercase tracking-wide">
+                  Completed · {completed.length}
+                </p>
+                {canEdit && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={handleClearCompleted}
+                    disabled={clearCompleted.isPending}
+                    className="text-muted-foreground hover:text-foreground h-7"
+                  >
+                    <Trash2Icon /> Clear
+                  </Button>
+                )}
+              </div>
               <ul className="flex flex-col gap-2">
                 {completed.map((item) => (
                   <ItemRow
@@ -537,20 +678,49 @@ function ListPanel({
   )
 }
 
+// dnd-kit's useSortable hands back ref-callbacks + listeners that the React Compiler lint
+// flags as "refs during render"; that's its documented usage, so silence the rule here.
+/* eslint-disable react-hooks/refs */
 function ItemRow({
   item,
   canEdit,
+  sortable = false,
   onToggle,
   onEdit,
 }: {
   item: ListItemOut
   canEdit: boolean
+  /** Show a drag handle (open items only; must sit inside a SortableContext). */
+  sortable?: boolean
   onToggle: () => void
   onEdit: () => void
 }) {
   const checked = item.is_checked
+  const sort = useSortable({ id: item.id, disabled: !sortable || !canEdit })
   return (
-    <li className="bg-card ring-foreground/5 flex items-center gap-3 rounded-2xl p-2.5 pl-3 shadow-sm ring-1">
+    <li
+      ref={sort.setNodeRef}
+      style={{
+        transform: CSS.Transform.toString(sort.transform),
+        transition: sort.transition,
+        zIndex: sort.isDragging ? 10 : undefined,
+      }}
+      className={cn(
+        "bg-card ring-foreground/5 flex items-center gap-3 rounded-2xl p-2.5 pl-3 shadow-sm ring-1",
+        sort.isDragging && "shadow-lg ring-primary/30",
+      )}
+    >
+      {sortable && canEdit && (
+        <button
+          type="button"
+          aria-label={`Reorder ${item.text}`}
+          className="text-muted-foreground/60 hover:text-foreground -ml-1 flex size-6 shrink-0 cursor-grab touch-none items-center justify-center active:cursor-grabbing"
+          {...sort.attributes}
+          {...sort.listeners}
+        >
+          <GripVerticalIcon className="size-4" />
+        </button>
+      )}
       <button
         type="button"
         onClick={onToggle}
@@ -604,3 +774,4 @@ function ItemRow({
     </li>
   )
 }
+/* eslint-enable react-hooks/refs */
