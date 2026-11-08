@@ -149,7 +149,7 @@ export function BalanceSheet({
           res.updated === 0
             ? "Nothing to update"
             : `Balanced ${res.updated} chore${res.updated === 1 ? "" : "s"}`,
-          { description: "Your tasks and the device will refresh in a moment." },
+          { description: "Your chores and the device will refresh in a moment." },
         )
         onClose()
       },

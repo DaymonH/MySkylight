@@ -182,6 +182,7 @@ export default function TasksPage({ params }: { params: Promise<{ familyId: stri
       estimated_minutes: values.estimated_minutes > 0 ? values.estimated_minutes : null,
       member_ids: values.member_ids,
     }
+    const noun = data.rrule ? "Chore" : "To-do"
     try {
       if (editing) {
         const saved = await updateTask.mutateAsync({ taskId: editing.id, data })
@@ -195,25 +196,25 @@ export default function TasksPage({ params }: { params: Promise<{ familyId: stri
           (editing.day_pinned || editing.start_date !== saved.start_date)
         toast.success(
           day
-            ? `Task updated. Scheduled on ${day} to balance chores.`
+            ? `${noun} updated. Scheduled on ${day} to balance chores.`
             : phaseMoved
-              ? `Task updated. Starts ${formatTaskDate(saved.start_date)} to balance chores.`
-              : "Task updated",
+              ? `${noun} updated. Starts ${formatTaskDate(saved.start_date)} to balance chores.`
+              : `${noun} updated`,
         )
       } else {
         const saved = await createTask.mutateAsync(data)
         const day = isAutoPlaced(saved) ? autoDayName(saved.rrule) : null
         toast.success(
           day
-            ? `Task created. Scheduled on ${day} to balance chores.`
+            ? `${noun} created. Scheduled on ${day} to balance chores.`
             : isPhaseAuto(saved.rrule) && !saved.day_pinned
-              ? `Task created. Starts ${formatTaskDate(saved.start_date)} to balance chores.`
-              : "Task created",
+              ? `${noun} created. Starts ${formatTaskDate(saved.start_date)} to balance chores.`
+              : `${noun} created`,
         )
       }
       setSheetOpen(false)
     } catch {
-      toast.error("Couldn't save the task. Please try again.")
+      toast.error(`Couldn't save the ${noun.toLowerCase()}. Please try again.`)
     }
   }
 
@@ -221,10 +222,10 @@ export default function TasksPage({ params }: { params: Promise<{ familyId: stri
     if (!editing) return
     try {
       await deleteTask.mutateAsync(editing.id)
-      toast.success("Task deleted")
+      toast.success(`${editing.rrule ? "Chore" : "To-do"} deleted`)
       setSheetOpen(false)
     } catch {
-      toast.error("Couldn't delete the task. Please try again.")
+      toast.error(`Couldn't delete the ${editing.rrule ? "chore" : "to-do"}. Please try again.`)
     }
   }
 
@@ -247,7 +248,7 @@ export default function TasksPage({ params }: { params: Promise<{ familyId: stri
   return (
     <div className="thin-scrollbar mx-auto flex w-full max-w-2xl flex-col gap-6 overflow-y-auto p-4 pb-24 sm:p-6 sm:pb-24 [&>*]:shrink-0">
       <header className="flex flex-col gap-1">
-        <h1 className="font-heading text-xl font-semibold tracking-tight">Tasks &amp; routines</h1>
+        <h1 className="font-heading text-xl font-semibold tracking-tight">Chores &amp; to-dos</h1>
         <p className="text-muted-foreground text-sm">
           Chores and habits for your family. Group them into routines like Morning or Bedtime —
           they show up as checkable cards on the device.
@@ -257,7 +258,7 @@ export default function TasksPage({ params }: { params: Promise<{ familyId: stri
       {canManage && (
         <div className="flex flex-wrap items-center gap-2">
           <Button size="sm" onClick={() => openCreate()}>
-            <PlusIcon /> Add task
+            <PlusIcon /> Add
           </Button>
           <Button
             size="sm"
@@ -309,9 +310,9 @@ export default function TasksPage({ params }: { params: Promise<{ familyId: stri
             <ListChecksIcon className="size-6" />
           </div>
           <div>
-            <p className="font-medium">No tasks yet</p>
+            <p className="font-medium">No chores or to-dos yet</p>
             <p className="text-muted-foreground text-sm">
-              {canManage ? "Add your first task or routine to get started." : "Nothing assigned yet."}
+              {canManage ? "Add your first chore, to-do or routine to get started." : "Nothing assigned yet."}
             </p>
           </div>
         </div>
@@ -453,7 +454,7 @@ function RoutineSection({
             {canManage && (
               <>
                 <Button size="sm" variant="ghost" onClick={onAddTask}>
-                  <PlusIcon /> Task
+                  <PlusIcon /> Chore
                 </Button>
                 <Button
                   size="icon-sm"

@@ -64,7 +64,7 @@ export function FamilyMenu() {
         </DropdownMenuItem>
         <DropdownMenuItem asChild>
           <Link href={`/app/family/${familyId}/tasks`}>
-            <ClipboardListIcon /> Manage tasks
+            <ClipboardListIcon /> Chores &amp; to-dos
           </Link>
         </DropdownMenuItem>
         <DropdownMenuItem asChild>

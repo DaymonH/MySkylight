@@ -264,7 +264,7 @@ export function TaskSheet({
     <Sheet open={open} onOpenChange={(o) => !o && onClose()}>
       <SheetContent side="right" className="w-full gap-0 p-0 sm:max-w-md">
         <SheetHeader className="border-b">
-          <SheetTitle className="text-lg">{editing ? "Edit task" : "New task"}</SheetTitle>
+          <SheetTitle className="text-lg">{editing ? "Edit" : "New"} {isRecurring ? "chore" : "to-do"}</SheetTitle>
         </SheetHeader>
 
         <form onSubmit={handleSubmit(onSubmit)} className="flex min-h-0 flex-1 flex-col">
@@ -884,15 +884,15 @@ export function TaskSheet({
             {onDelete && (
               <AlertDialog>
                 <AlertDialogTrigger asChild>
-                  <Button type="button" variant="destructive" size="icon" aria-label="Delete task">
+                  <Button type="button" variant="destructive" size="icon" aria-label={`Delete ${isRecurring ? "chore" : "to-do"}`}>
                     <Trash2Icon />
                   </Button>
                 </AlertDialogTrigger>
                 <AlertDialogContent>
                   <AlertDialogHeader>
-                    <AlertDialogTitle>Delete this task?</AlertDialogTitle>
+                    <AlertDialogTitle>Delete this {isRecurring ? "chore" : "to-do"}?</AlertDialogTitle>
                     <AlertDialogDescription>
-                      This permanently removes the task and its completion history for everyone in the
+                      This permanently removes the {isRecurring ? "chore" : "to-do"} and its completion history for everyone in the
                       family. This can&apos;t be undone.
                     </AlertDialogDescription>
                   </AlertDialogHeader>
@@ -913,7 +913,7 @@ export function TaskSheet({
               Cancel
             </Button>
             <Button type="submit" className="flex-1" disabled={isPending}>
-              {isPending ? "Saving…" : editing ? "Save changes" : "Create task"}
+              {isPending ? "Saving…" : editing ? "Save changes" : `Create ${isRecurring ? "chore" : "to-do"}`}
             </Button>
           </SheetFooter>
         </form>
