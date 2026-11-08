@@ -152,6 +152,22 @@ frontend (FE) pieces, and **acceptance criteria** (AC) that define "done".
   - **Overlap warning (calendar):** the event sheet warns when a selected person is already on an
     overlapping timed event (`lib/event-conflicts.ts`). Warning only — it never blocks saving — and
     limited to the events loaded for the visible range.
+- **Update (2026-11-08) — push notifications: event reminders + evening chore nudge (BE + FE):** the
+  reminders the event form always saved are finally **delivered**, and the "chore reminders & overdue
+  nudges" backlog item below is built as a daily nudge.
+  - **What phones get:** a reminder at each of an event's reminder times (to the people it's assigned to,
+    via `Member.user_id`; a family-wide event, or one for a child with no login, goes to every phone that
+    opted in), and one **"Chores still to do — Mia: 2 · Dev: 1"** nudge per family each evening at 17:30
+    family time, only if something's left. Per-phone switches for each kind.
+  - **How:** a per-minute APScheduler job (`app/services/push.py`, `PUSH_ENABLED`, `CHORE_NUDGE_TIME`);
+    every send is claimed first in `push_sent` so restarts/overlaps never double-send; reminders >5 min
+    late are skipped, not sent stale. Dead subscriptions (404/410) are removed at once, flaky ones after 5
+    failures. Migration `022`: `push_subscriptions`, `push_sent`.
+  - **Zero setup:** the server's VAPID key pair is generated on first use and stored beside the SQLite DB in
+    the data volume (same approach as workout-api) — no secret to configure.
+  - **FE:** **Notifications** in the phone menu (`app/app/family/[familyId]/notifications`): turn on for
+    this phone, two switches, "Send a test". `push`/`notificationclick` handlers in the service worker
+    route; iPhone needs the app added to the Home Screen first (the page says so).
 - **Update (2026-11-07) — star feedback on the wall display:** the kiosk chore rows showed no star value
   (the phone list already did). Rows now show **★ N**, completing a chore floats a **+N ★**
   (`components/tasks/star-pop.tsx`, respects reduced-motion), and each person's card header shows their
@@ -213,7 +229,8 @@ frontend (FE) pieces, and **acceptance criteria** (AC) that define "done".
     "your chores" ping, evening "still undone" nudge). Belongs with the Phase 9 notifications track (Web
     Push; reuse the Event `Reminder` plumbing). Backend would schedule per-occurrence; FE needs the PWA
     push opt-in. (BE + FE, larger.)
-  - **Parent approval / proof on completion** — optional gate so a kid's check-off needs a parent confirm
+  - **Parent approval / proof on completion** — **decided not to build (2026-11-08):** the kids are too
+    young for it, so no approval gate and no photo proof. (Original idea, kept for context:) optional gate so a kid's check-off needs a parent confirm
     (and/or a photo). Touches the completion model + rewards (stars on approval). (BE + FE.)
 - _Phase 3_
 
@@ -286,6 +303,13 @@ frontend (FE) pieces, and **acceptance criteria** (AC) that define "done".
 - **BE:** Occurrence expansion endpoint with date-range params.
 - **FE:** Day / Week / Month / Schedule(list) components; view toggle; remembers per-device choice.
 - **AC:** All four views render the same events correctly, including recurring + all-day.
+- **Update (2026-11-08) — Today screen is the kiosk's landing view:** `/device` is now **Today**
+  (`components/today/today-screen.tsx`): big clock, date and weather; today's events with what's happening
+  *now* highlighted and finished ones dimmed; each person's chores as a tappable card (progress bar, ★
+  balance, the same +★ pop and all-done confetti as the chore board); and today's planned meals. It reads
+  the same cached queries as the full pages and shares their realtime stream. The full calendar moved to
+  **`/device/calendar`** (the sidebar gets a Today tab; the PWA shortcut still opens `/device`, so it lands on
+  Today). Phone `/app` is unchanged.
 - **Update (2026-11-08) — drag to move and resize events (FE only):** in the Day and Week grids, drag a
   timed event to move it (Week: onto any day) or drag its bottom edge to resize it, snapped to 15 min and
   kept inside the visible hours (`hooks/use-event-drag.ts`, maths in `lib/event-drag.ts`). A press only
@@ -342,6 +366,15 @@ frontend (FE) pieces, and **acceptance criteria** (AC) that define "done".
   - Note: wake lock is released automatically by the browser when the PWA is backgrounded; re-acquire it
     on `visibilitychange` when the app returns to foreground during active hours.
 - **AC:** Device screen stays on during active hours; goes to sleep overlay at the set time; wakes on schedule; configurable per device.
+- **Update (2026-11-08) — device-local version shipped (FE only):** `/device` now holds a **Wake Lock**
+  (`KeepScreenOn`, `hooks/use-wake-lock.ts`, re-acquired on `visibilitychange`) and a **sleep overlay**
+  (`components/sleep-overlay.tsx`): solid black with an optional very dim clock that drifts a few pixels
+  every 10 min (burn-in), from the configured start to end time (overnight windows handled; equal times
+  mean "off", never "always dark"). **Tap to wake**; it stays awake until 5 min after the last touch, then
+  goes dark again while still in the window. Configured in **Settings → Night sleep** on the wall display
+  only, stored in `localStorage` (`skylight:settings:sleep`, off by default). Pure logic in `lib/sleep.ts`.
+  **Still pending (needs F12 pairing):** per-device settings on the backend and `device.sleep`/`device.wake`
+  events — the schedule is per-browser until a device identity exists.
 - _Phase 8_
 
 ### F12 — Device Linking

@@ -1,23 +1,15 @@
 "use client"
 
-import { CalendarDaysIcon } from "lucide-react"
+import { SunIcon } from "lucide-react"
 
 import { DeviceFamilyGate } from "@/components/device-family-gate"
-import { CalendarView } from "@/components/calendar/calendar-view"
+import { TodayScreen } from "@/components/today/today-screen"
 
+/** The wall display's landing screen (the kiosk's home-screen shortcut opens here). */
 export default function DevicePage() {
   return (
-    <DeviceFamilyGate icon={CalendarDaysIcon} label="Loading your calendar…">
-      {(familyId) => (
-        <div className="flex h-full w-full flex-col overflow-hidden">
-          <CalendarView
-            familyId={familyId}
-            defaultView="week"
-            storageKey="skylight:view:device"
-            surface="device"
-          />
-        </div>
-      )}
+    <DeviceFamilyGate icon={SunIcon} label="Loading your day…">
+      {(familyId) => <TodayScreen familyId={familyId} />}
     </DeviceFamilyGate>
   )
 }

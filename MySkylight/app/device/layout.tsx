@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next"
 
 import { DeviceSidebar } from "@/components/device-sidebar"
 import { KioskScale } from "@/components/kiosk-scale"
+import { SleepOverlay, KeepScreenOn } from "@/components/sleep-overlay"
 import { SurfaceMarker } from "@/components/surface-marker"
 
 // Override the root manifest so adding /device to the Home Screen installs a
@@ -35,6 +36,8 @@ export default function DeviceLayout({ children }: { children: React.ReactNode }
     <div className="bg-background text-foreground flex h-screen w-screen overflow-hidden">
       <SurfaceMarker surface="device" />
       <KioskScale />
+      <KeepScreenOn />
+      <SleepOverlay />
       <DeviceSidebar />
       <main className="min-h-0 flex-1 overflow-hidden">{children}</main>
     </div>
