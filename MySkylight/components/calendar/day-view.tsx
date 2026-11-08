@@ -5,6 +5,8 @@ import { MapPinIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { readableTextOn } from "@/lib/colors"
 import type { OccurrenceOut } from "@/lib/types/calendar"
+import { useEventDrag } from "@/hooks/use-event-drag"
+import type { Span } from "@/lib/event-drag"
 import type { WeatherDay } from "@/hooks/use-weather"
 import { WeatherIcon } from "./weather-icon"
 import { packDayEvents, minutesNow, slotTimeFromOffset } from "./event-layout"
@@ -17,6 +19,8 @@ interface DayViewProps {
   onEventClick: (occ: OccurrenceOut) => void
   /** Tap an empty spot: start a new event on this day at that time. */
   onSlotClick?: (date: string, time: string) => void
+  /** Drag an event to move it, or its bottom edge to resize it. */
+  onEventMove?: (occ: OccurrenceOut, span: Span) => void
   weather?: WeatherDay
   large?: boolean
   /** First hour shown in the time grid (0–23). Default 7 (7 AM). */
@@ -40,6 +44,7 @@ export function DayView({
   occurrences,
   onEventClick,
   onSlotClick,
+  onEventMove,
   weather,
   large = false,
   dayStartHour = 7,
@@ -77,6 +82,15 @@ export function DayView({
   const totalHeight = spanHours * hourHeight
   const startMinClamp = startHour * 60
   const endMinClamp = endHour * 60
+
+  const drag = useEventDrag({
+    hourHeight,
+    startMin: startMinClamp,
+    endMin: endMinClamp,
+    columnWidth: 0, // one column: the drag is vertical only
+    touchEnabled: large, // finger-drag only on the wall display; a phone's grid must scroll
+    onCommit: (occ, span) => onEventMove?.(occ, span),
+  })
 
   const todayYMD = useTodayYMD()
   const isToday = toYMD(date) === todayYMD
@@ -191,7 +205,8 @@ export function DayView({
                 <button
                   key={i}
                   onClick={() => onEventClick(p.occ)}
-                  className="absolute z-10 flex flex-col overflow-hidden rounded-md px-2.5 py-1 text-left shadow-sm ring-1 ring-black/5 transition-shadow hover:z-20 hover:shadow-md active:shadow-md"
+                  {...(onEventMove ? drag.eventProps(p.occ) : {})}
+                  className="absolute z-10 flex flex-col overflow-hidden rounded-md px-2.5 py-1 text-left shadow-sm ring-1 ring-black/5 transition-shadow select-none hover:z-20 hover:shadow-md active:shadow-md"
                   style={{
                     top,
                     height,
@@ -199,6 +214,7 @@ export function DayView({
                     width: `calc(${widthPct}% - 8px)`,
                     backgroundColor: p.occ.effective_color,
                     color: readableTextOn(p.occ.effective_color),
+                    ...(onEventMove ? drag.style(p.occ, height) : {}),
                   }}
                 >
                   <span
@@ -227,6 +243,17 @@ export function DayView({
                       <MapPinIcon className="size-3 shrink-0" />
                       {p.occ.location}
                     </span>
+                  )}
+                  {onEventMove && drag.canDrag(p.occ) && height > 28 && (
+                    <span
+                      aria-hidden
+                      {...drag.handleProps(p.occ)}
+                      className={cn(
+                        "absolute inset-x-0 bottom-0 cursor-ns-resize",
+                        large ? "h-4" : "h-2"
+                      )}
+                      style={large ? { touchAction: "none" } : undefined}
+                    />
                   )}
                 </button>
               )

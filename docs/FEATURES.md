@@ -286,6 +286,17 @@ frontend (FE) pieces, and **acceptance criteria** (AC) that define "done".
 - **BE:** Occurrence expansion endpoint with date-range params.
 - **FE:** Day / Week / Month / Schedule(list) components; view toggle; remembers per-device choice.
 - **AC:** All four views render the same events correctly, including recurring + all-day.
+- **Update (2026-11-08) — drag to move and resize events (FE only):** in the Day and Week grids, drag a
+  timed event to move it (Week: onto any day) or drag its bottom edge to resize it, snapped to 15 min and
+  kept inside the visible hours (`hooks/use-event-drag.ts`, maths in `lib/event-drag.ts`). A press only
+  becomes a drag after 6 px of travel, so a plain tap still opens the editor; Esc cancels. Saves once, on
+  release, with an **Undo** toast. **Repeating events** ask *This event / This and following / All* first
+  (the same picker as the editor, now `scope-picker.tsx`), and can only be dragged *within their day* — a
+  single occurrence of a series hopping to another day is awkward (its series is anchored to a
+  weekday/date), so changing the day goes through the editor. Not draggable: all-day, multi-day, and
+  read-only synced events. **Touch:** finger-dragging is enabled **only on the wall display** (whose grid
+  fits the screen and doesn't scroll); on the phone a finger on an event still scrolls the grid, so drag is
+  mouse/pen-only there. Not yet exercised on real hardware — see the PR description for what to try.
 - **Update (2026-11-07):** **tap an empty spot in the Day/Week grid to create an event at that time**
   (snapped to 30 min); on phone the grid **opens scrolled to "now"**. The wall display now **rolls over
   at midnight on its own** — the calendar anchor, countdown window, chore board and phone chores panel
