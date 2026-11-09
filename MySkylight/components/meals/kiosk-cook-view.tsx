@@ -8,7 +8,9 @@ import {
   CheckIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
+  ListIcon,
   MinusIcon,
+  SquareIcon,
   PlusIcon,
   TimerIcon,
   XIcon,
@@ -39,12 +41,47 @@ export function KioskCookView({
   const scale = scaleFactor(recipe, servings)
   const [got, setGot] = useState<Set<string>>(new Set())
   const [step, setStep] = useState(0)
+  // "one": a single big step at a time (+ a preview of the next). "all": every step in a list.
+  const [mode, setModeState] = useState<"one" | "all">(() => {
+    try {
+      return localStorage.getItem(MODE_KEY) === "all" ? "all" : "one"
+    } catch {
+      return "one"
+    }
+  })
+  const [doneSteps, setDoneSteps] = useState<Set<number>>(new Set())
   const { timers, now, start, dismiss } = useCookTimers()
 
   // Swipe left/right to change step (the Next/Back buttons are the primary control).
   const touchX = useRef<number | null>(null)
   const lastStep = Math.max(0, steps.length - 1)
   const go = (d: number) => setStep((s) => Math.min(lastStep, Math.max(0, s + d)))
+
+  // Switching views keeps your place: steps before the current one count as done in the
+  // list, and the first step not yet done becomes the current one.
+  function setMode(next: "one" | "all") {
+    if (next === mode) return
+    if (next === "all") {
+      setDoneSteps(new Set(Array.from({ length: step }, (_, i) => i)))
+    } else {
+      const first = steps.findIndex((_, i) => !doneSteps.has(i))
+      setStep(first === -1 ? lastStep : first)
+    }
+    setModeState(next)
+    try {
+      localStorage.setItem(MODE_KEY, next)
+    } catch {
+      // Storage blocked: the choice just won't be remembered.
+    }
+  }
+  const toggleDone = (i: number) =>
+    setDoneSteps((s) => {
+      const next = new Set(s)
+      if (next.has(i)) next.delete(i)
+      else next.add(i)
+      return next
+    })
+  const firstOpen = steps.findIndex((_, i) => !doneSteps.has(i))
 
   const toggleGot = (id: string) =>
     setGot((s) => {
@@ -193,7 +230,7 @@ export function KioskCookView({
           className="flex min-h-0 min-w-0 flex-1 flex-col p-5"
           onTouchStart={(e) => (touchX.current = e.touches[0].clientX)}
           onTouchEnd={(e) => {
-            if (touchX.current == null) return
+            if (mode !== "one" || touchX.current == null) return
             const dx = e.changedTouches[0].clientX - touchX.current
             touchX.current = null
             if (Math.abs(dx) > 80) go(dx < 0 ? 1 : -1)
@@ -205,58 +242,124 @@ export function KioskCookView({
             <>
               <div className="mb-3 flex items-center gap-3">
                 <h2 className="font-heading text-lg font-semibold">
-                  Step {step + 1} <span className="text-muted-foreground font-normal">of {steps.length}</span>
+                  {mode === "one" ? (
+                    <>
+                      Step {step + 1}{" "}
+                      <span className="text-muted-foreground font-normal">of {steps.length}</span>
+                    </>
+                  ) : (
+                    <>
+                      Steps{" "}
+                      <span className="text-muted-foreground font-normal">
+                        · {doneSteps.size} of {steps.length} done
+                      </span>
+                    </>
+                  )}
                 </h2>
                 <div className="flex flex-1 gap-1" aria-hidden>
                   {steps.map((_, i) => (
                     <span
                       key={i}
-                      className={cn("h-1.5 flex-1 rounded-full", i <= step ? "bg-primary" : "bg-muted")}
+                      className={cn(
+                        "h-1.5 flex-1 rounded-full",
+                        (mode === "one" ? i <= step : doneSteps.has(i)) ? "bg-primary" : "bg-muted",
+                      )}
                     />
                   ))}
                 </div>
+                <ViewToggle mode={mode} onChange={setMode} />
               </div>
 
-              <div className="thin-scrollbar flex-1 overflow-y-auto">
-                <StepText
-                  text={steps[step]}
-                  onTimer={(label, seconds) => start(label, seconds)}
-                />
-                {step < lastStep && (
-                  <p className="text-muted-foreground mt-6 border-t pt-3 text-base leading-snug">
-                    <span className="text-sm font-semibold tracking-wide uppercase">Next · </span>
-                    {steps[step + 1]}
-                  </p>
-                )}
-              </div>
+              {mode === "one" ? (
+                <>
+                  <div className="thin-scrollbar flex-1 overflow-y-auto">
+                    <StepText text={steps[step]} onTimer={(label, seconds) => start(label, seconds)} />
+                    {step < lastStep && (
+                      <p className="text-muted-foreground mt-6 border-t pt-3 text-base leading-snug">
+                        <span className="text-sm font-semibold tracking-wide uppercase">Next · </span>
+                        {steps[step + 1]}
+                      </p>
+                    )}
+                  </div>
 
-              <div className="mt-4 flex gap-4">
-                <button
-                  type="button"
-                  onClick={() => go(-1)}
-                  disabled={step === 0}
-                  className="bg-muted flex h-16 flex-1 items-center justify-center gap-2 rounded-2xl text-xl font-semibold disabled:opacity-40"
-                >
-                  <ChevronLeftIcon className="size-6" /> Back
-                </button>
-                {step < lastStep ? (
-                  <button
-                    type="button"
-                    onClick={() => go(1)}
-                    className="bg-primary text-primary-foreground flex h-16 flex-[2] items-center justify-center gap-2 rounded-2xl text-2xl font-semibold"
-                  >
-                    Next <ChevronRightIcon className="size-7" />
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={onBack}
-                    className="bg-primary text-primary-foreground flex h-16 flex-[2] items-center justify-center gap-2 rounded-2xl text-2xl font-semibold"
-                  >
-                    <CheckIcon className="size-7" /> All done
-                  </button>
-                )}
-              </div>
+                  <div className="mt-4 flex gap-4">
+                    <button
+                      type="button"
+                      onClick={() => go(-1)}
+                      disabled={step === 0}
+                      className="bg-muted flex h-16 flex-1 items-center justify-center gap-2 rounded-2xl text-xl font-semibold disabled:opacity-40"
+                    >
+                      <ChevronLeftIcon className="size-6" /> Back
+                    </button>
+                    {step < lastStep ? (
+                      <button
+                        type="button"
+                        onClick={() => go(1)}
+                        className="bg-primary text-primary-foreground flex h-16 flex-[2] items-center justify-center gap-2 rounded-2xl text-2xl font-semibold"
+                      >
+                        Next <ChevronRightIcon className="size-7" />
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={onBack}
+                        className="bg-primary text-primary-foreground flex h-16 flex-[2] items-center justify-center gap-2 rounded-2xl text-2xl font-semibold"
+                      >
+                        <CheckIcon className="size-7" /> All done
+                      </button>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <ol className="thin-scrollbar flex flex-1 flex-col gap-2 overflow-y-auto">
+                  {steps.map((text, i) => {
+                    const done = doneSteps.has(i)
+                    return (
+                      <li key={i}>
+                        {/* A div, not a button: the timers inside are buttons themselves. */}
+                        <div
+                          role="button"
+                          tabIndex={0}
+                          aria-pressed={done}
+                          onClick={() => toggleDone(i)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.preventDefault()
+                              toggleDone(i)
+                            }
+                          }}
+                          className={cn(
+                            "flex w-full cursor-pointer gap-4 rounded-2xl border-2 p-4 text-left transition-colors",
+                            done && "text-muted-foreground border-transparent opacity-60",
+                            !done && i === firstOpen ? "border-primary bg-primary/5" : !done && "border-transparent",
+                          )}
+                        >
+                          <span className="bg-primary/10 text-primary flex size-8 shrink-0 items-center justify-center rounded-full text-sm font-semibold tabular-nums">
+                            {done ? <CheckIcon className="size-5" /> : i + 1}
+                          </span>
+                          <StepText
+                            text={text}
+                            size="list"
+                            struck={done}
+                            onTimer={(label, seconds) => start(label, seconds)}
+                          />
+                        </div>
+                      </li>
+                    )
+                  })}
+                  {doneSteps.size === steps.length && (
+                    <li>
+                      <button
+                        type="button"
+                        onClick={onBack}
+                        className="bg-primary text-primary-foreground mt-2 flex h-16 w-full items-center justify-center gap-2 rounded-2xl text-2xl font-semibold"
+                      >
+                        <CheckIcon className="size-7" /> All done
+                      </button>
+                    </li>
+                  )}
+                </ol>
+              )}
             </>
           )}
         </section>
@@ -269,9 +372,14 @@ export function KioskCookView({
 function StepText({
   text,
   onTimer,
+  size = "one",
+  struck = false,
 }: {
   text: string
   onTimer: (label: string, seconds: number) => void
+  /** "one": the big single-step size; "list": a bit smaller so several steps fit. */
+  size?: "one" | "list"
+  struck?: boolean
 }) {
   const timers = findTimers(text)
   const parts: React.ReactNode[] = []
@@ -282,7 +390,10 @@ function StepText({
       <button
         key={i}
         type="button"
-        onClick={() => onTimer(t.text, t.seconds)}
+        onClick={(e) => {
+          e.stopPropagation() // don't also tick the step off when it sits inside the list
+          onTimer(t.text, t.seconds)
+        }}
         aria-label={`Start a ${t.text} timer`}
         className="bg-primary/15 text-primary hover:bg-primary/25 mx-0.5 inline-flex items-center gap-1.5 rounded-lg px-2.5 py-0.5 align-baseline font-semibold"
       >
@@ -293,5 +404,46 @@ function StepText({
     cursor = t.index + t.text.length
   })
   if (cursor < text.length) parts.push(text.slice(cursor))
-  return <p className="text-[1.7rem] leading-snug font-medium break-words">{parts}</p>
+  return (
+    <p
+      className={cn(
+        "leading-snug font-medium break-words",
+        size === "one" ? "text-[1.7rem]" : "text-[1.3rem]",
+        struck && "line-through",
+      )}
+    >
+      {parts}
+    </p>
+  )
+}
+
+const MODE_KEY = "skylight:cook-view-mode"
+
+/** One step at a time vs. every step in a list. Remembered on this device. */
+function ViewToggle({
+  mode,
+  onChange,
+}: {
+  mode: "one" | "all"
+  onChange: (m: "one" | "all") => void
+}) {
+  const opt = (value: "one" | "all", label: string, Icon: typeof ListIcon) => (
+    <button
+      type="button"
+      aria-pressed={mode === value}
+      onClick={() => onChange(value)}
+      className={cn(
+        "flex h-10 items-center gap-1.5 rounded-lg px-3 text-sm font-medium transition-colors",
+        mode === value ? "bg-primary text-primary-foreground" : "text-muted-foreground",
+      )}
+    >
+      <Icon className="size-4" /> {label}
+    </button>
+  )
+  return (
+    <div className="bg-muted flex shrink-0 gap-0.5 rounded-xl p-0.5" role="group" aria-label="Step view">
+      {opt("one", "One step", SquareIcon)}
+      {opt("all", "All steps", ListIcon)}
+    </div>
+  )
 }

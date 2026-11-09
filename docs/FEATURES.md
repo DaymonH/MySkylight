@@ -522,7 +522,8 @@ frontend (FE) pieces, and **acceptance criteria** (AC) that define "done".
   (`lib/recipe-timers.ts`; several can run at once, beep + flash when done). The kiosk Meals page has a
   **Tonight's dinner** card with **Cook this**, and every planned recipe meal links into the cook view
   (`from=meals` sends Back to Meals). The kiosk Recipes library shows **Planned this week**, favorites first,
-  and stars / last-made on each tile.
+  and stars / last-made on each tile. The step pane has a **One step / All steps** toggle (remembered per device): one big step with a
+  next-step preview, or every step in a tap-to-check list (timers work in both; switching keeps your place).
 ### F16 — Photo Screensaver ⭐ — ⏸ PARKED (kept for later)
 
 > _"Display favorite photos when idle… organize into albums to choose what's featured."_
