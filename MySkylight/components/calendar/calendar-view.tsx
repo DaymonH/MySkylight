@@ -460,12 +460,21 @@ export function CalendarView({
     }
   }
 
-  const VIEW_TABS: { label: string; value: CalendarView }[] = [
-    { label: "Month", value: "month" },
-    { label: "Week", value: "week" },
-    { label: "Day", value: "day" },
-    { label: "Schedule", value: "schedule" },
-  ]
+  // Companion app: Schedule first (it's the default there). The wall display keeps
+  // the classic Month → Schedule order.
+  const VIEW_TABS: { label: string; value: CalendarView }[] = isDevice
+    ? [
+        { label: "Month", value: "month" },
+        { label: "Week", value: "week" },
+        { label: "Day", value: "day" },
+        { label: "Schedule", value: "schedule" },
+      ]
+    : [
+        { label: "Schedule", value: "schedule" },
+        { label: "Month", value: "month" },
+        { label: "Week", value: "week" },
+        { label: "Day", value: "day" },
+      ]
 
   return (
     <div className="flex h-full flex-col">
@@ -527,7 +536,9 @@ export function CalendarView({
                 <TabsTrigger
                   key={t.value}
                   value={t.value}
-                  className={cn("flex-1", isDevice && "px-4 text-base")}
+                  // min-w-0 + tight padding so four labels fit a phone without the
+                  // selected pill spilling out of the bar.
+                  className={cn("min-w-0 flex-1 px-1.5 sm:px-3", isDevice && "px-4 text-base")}
                 >
                   {t.label}
                 </TabsTrigger>

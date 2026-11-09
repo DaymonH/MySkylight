@@ -99,29 +99,28 @@ export function ScheduleView({ occurrences, onEventClick, onAdd }: ScheduleViewP
             </div>
 
             {/* Events */}
-            <div className="flex flex-1 flex-col gap-2">
+            <div className="flex min-w-0 flex-1 flex-col gap-2">
               {evts.map((occ, i) => (
                 <button
                   key={i}
                   onClick={() => onEventClick(occ)}
-                  className="bg-card ring-foreground/5 hover:bg-accent/50 active:bg-accent group flex items-start gap-3 rounded-2xl p-3 text-left shadow-sm ring-1 transition-colors"
+                  className="bg-card ring-foreground/5 hover:bg-accent/50 active:bg-accent group flex w-full min-w-0 items-start gap-3 rounded-2xl p-3 text-left shadow-sm ring-1 transition-colors"
                 >
                   <span
                     className="mt-0.5 h-9 w-1 flex-shrink-0 rounded-full"
                     style={{ backgroundColor: occ.effective_color }}
                   />
                   <div className="min-w-0 flex-1">
-                    <p className="truncate font-medium leading-snug">{occ.title}</p>
-                    <p className="text-muted-foreground mt-0.5 flex items-center gap-1.5 text-xs">
-                      <span className="tabular-nums">{formatTime(occ.start_dt, occ.all_day)}</span>
-                      {occ.location && (
-                        <span className="flex items-center gap-1 truncate">
-                          <span className="text-muted-foreground/50">·</span>
-                          <MapPinIcon className="size-3 shrink-0" />
-                          <span className="truncate">{occ.location}</span>
-                        </span>
-                      )}
+                    <p className="font-medium leading-snug break-words">{occ.title}</p>
+                    <p className="text-muted-foreground mt-0.5 text-xs tabular-nums">
+                      {formatTime(occ.start_dt, occ.all_day)}
                     </p>
+                    {occ.location && (
+                      <p className="text-muted-foreground mt-0.5 flex items-start gap-1 text-xs">
+                        <MapPinIcon className="mt-0.5 size-3 shrink-0" />
+                        <span className="min-w-0 break-words">{occ.location}</span>
+                      </p>
+                    )}
                     {occ.is_countdown && occ.days_until !== null && (
                       <p className="mt-1 text-xs font-semibold" style={{ color: occ.effective_color }}>
                         {occ.days_until === 0 ? "🎉 Today!" : occ.days_until > 0 ? `${occ.days_until} days away` : "Past"}

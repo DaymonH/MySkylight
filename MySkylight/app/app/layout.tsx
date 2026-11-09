@@ -7,9 +7,13 @@ import { SurfaceMarker } from "@/components/surface-marker"
 
 export const metadata = { title: "MySkylight" }
 
+// The shell is pinned to the viewport (`fixed inset-0`, not h-dvh) so the page itself can
+// never scroll or rubber-band: only the content inside <main> scrolls and the bottom bar
+// stays put on iOS. Being fixed, it ignores the body's safe-area padding, so it applies
+// the top/side insets itself (the bottom inset lives on the bottom nav).
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex h-dvh flex-col overflow-hidden bg-background text-foreground">
+    <div className="fixed inset-0 flex flex-col overflow-hidden overscroll-none bg-background pt-[env(safe-area-inset-top)] pr-[env(safe-area-inset-right)] pl-[env(safe-area-inset-left)] text-foreground">
       <SurfaceMarker surface="app" />
       <header className="sticky top-0 z-30 flex h-14 flex-shrink-0 items-center justify-between border-b bg-background/80 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="flex items-center gap-2.5">
