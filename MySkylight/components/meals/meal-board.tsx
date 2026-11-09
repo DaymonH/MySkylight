@@ -1,7 +1,8 @@
 "use client"
 
 import { useMemo } from "react"
-import { Loader2Icon, UtensilsCrossedIcon } from "lucide-react"
+import { useRouter } from "next/navigation"
+import { ChefHatIcon, Loader2Icon, UtensilsCrossedIcon } from "lucide-react"
 
 import { useRealtime } from "@/hooks/use-realtime"
 import { useMealPlans } from "@/hooks/use-meals"
@@ -38,6 +39,8 @@ function isoDate(d: Date): string {
  */
 export function MealBoard({ familyId }: { familyId: string }) {
   useRealtime(familyId)
+  const router = useRouter()
+  const cook = (recipeId: string) => router.push(`/device/recipes?recipe=${recipeId}&from=meals`)
 
   const weekStart = useMemo(() => startOfWeek(new Date()), [])
   const days = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)), [weekStart])
@@ -58,6 +61,8 @@ export function MealBoard({ familyId }: { familyId: string }) {
     return map
   }, [meals])
 
+  const tonight = byCell.get(`${todayISO}|dinner`) ?? []
+
   return (
     <div className="flex h-full flex-col">
       <div className="flex items-center gap-3 border-b px-5 py-3.5">
@@ -77,6 +82,33 @@ export function MealBoard({ familyId }: { familyId: string }) {
             Loading meals…
           </div>
         ) : (
+          <div className="flex flex-col gap-4">
+          {/* Tonight: the one thing you want from this screen at 5pm. */}
+          <section className="bg-primary/10 ring-primary/30 flex flex-wrap items-center gap-4 rounded-3xl p-5 ring-2">
+            <div className="min-w-0 flex-1">
+              <p className="text-primary text-sm font-semibold tracking-wide uppercase">Tonight&apos;s dinner</p>
+              {tonight.length === 0 ? (
+                <p className="text-muted-foreground mt-1 text-2xl font-medium">Nothing planned yet</p>
+              ) : (
+                tonight.map((meal) => (
+                  <div key={meal.id} className="mt-1 flex flex-wrap items-center gap-4">
+                    <p className="font-heading text-3xl font-semibold tracking-tight">
+                      {meal.display_title}
+                    </p>
+                    {meal.recipe_id && (
+                      <button
+                        type="button"
+                        onClick={() => cook(meal.recipe_id!)}
+                        className="bg-primary text-primary-foreground flex h-14 items-center gap-2 rounded-2xl px-6 text-xl font-semibold shadow-sm"
+                      >
+                        <ChefHatIcon className="size-6" /> Cook this
+                      </button>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
+          </section>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 xl:grid-cols-7">
             {days.map((day) => {
               const dayISO = isoDate(day)
@@ -107,11 +139,23 @@ export function MealBoard({ familyId }: { familyId: string }) {
                           <p className="text-muted-foreground text-[10px] font-semibold uppercase tracking-wide">
                             {SLOT_LABELS[slot]}
                           </p>
-                          {cellMeals.map((meal) => (
-                            <p key={meal.id} className="text-sm font-medium leading-snug">
-                              {meal.display_title}
-                            </p>
-                          ))}
+                          {cellMeals.map((meal) =>
+                            meal.recipe_id ? (
+                              // A planned recipe opens straight into the cook view.
+                              <button
+                                key={meal.id}
+                                type="button"
+                                onClick={() => cook(meal.recipe_id!)}
+                                className="text-primary block py-0.5 text-left text-sm leading-snug font-medium underline-offset-2 hover:underline"
+                              >
+                                {meal.display_title}
+                              </button>
+                            ) : (
+                              <p key={meal.id} className="text-sm leading-snug font-medium">
+                                {meal.display_title}
+                              </p>
+                            ),
+                          )}
                         </div>
                       )
                     })}
@@ -122,6 +166,7 @@ export function MealBoard({ familyId }: { familyId: string }) {
                 </div>
               )
             })}
+          </div>
           </div>
         )}
       </div>

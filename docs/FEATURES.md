@@ -516,6 +516,13 @@ frontend (FE) pieces, and **acceptance criteria** (AC) that define "done".
   ★ **favorite**, 1–5 **rating**, **last made / times made** (derived), search + tag/favorite filters + sort,
   **serving scaler**, and a full-screen **Cook mode** (big text, tick-off, screen wake lock). The grocery review
   has a per-line **"I already have this"** pantry toggle (remembered per browser). Migration `025`.
+- **Update (2026-11-08) — kiosk cook view:** `/device/recipes?recipe=<id>` now opens `KioskCookView`: ingredients
+  on the left (tap-to-check, servings −/+ scaling), the **current step in very large type** on the right with
+  step progress, big Back/Next (and swipe), and a **one-tap timer** for any time written in a step
+  (`lib/recipe-timers.ts`; several can run at once, beep + flash when done). The kiosk Meals page has a
+  **Tonight's dinner** card with **Cook this**, and every planned recipe meal links into the cook view
+  (`from=meals` sends Back to Meals). The kiosk Recipes library shows **Planned this week**, favorites first,
+  and stars / last-made on each tile.
 ### F16 — Photo Screensaver ⭐ — ⏸ PARKED (kept for later)
 
 > _"Display favorite photos when idle… organize into albums to choose what's featured."_
