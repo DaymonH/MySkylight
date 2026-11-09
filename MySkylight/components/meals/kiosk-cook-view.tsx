@@ -1,5 +1,6 @@
 "use client"
 
+import { mediaUrl } from "@/lib/media"
 import { Fragment, useRef, useState } from "react"
 import {
   ArrowLeftIcon,
@@ -69,7 +70,7 @@ export function KioskCookView({
         </button>
         {recipe.image_url && (
           // eslint-disable-next-line @next/next/no-img-element -- arbitrary external recipe URL; next/image would need per-host config
-          <img src={recipe.image_url} alt="" className="size-14 shrink-0 rounded-xl object-cover" />
+          <img src={mediaUrl(recipe.image_url)} alt="" className="size-14 shrink-0 rounded-xl object-cover" />
         )}
         <div className="min-w-0 flex-1">
           <h1 className="font-heading truncate text-3xl font-semibold tracking-tight">{recipe.name}</h1>

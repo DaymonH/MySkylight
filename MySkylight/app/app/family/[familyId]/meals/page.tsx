@@ -12,6 +12,7 @@ import {
   useCreateRecipe,
   useDeleteRecipe,
   useRecipes,
+  useSetRecipeImage,
   useUpdateRecipe,
 } from "@/hooks/use-meals"
 import { GroceryBuildDialog } from "@/components/meals/grocery-build-dialog"
@@ -24,6 +25,7 @@ import {
   type RecipeFormValues,
   toRecipePayload,
 } from "@/components/meals/recipe-sheet"
+import { splitRemotePhoto } from "@/lib/recipe-photo"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import type { AggregatedLine, RecipeOut } from "@/lib/types/meal"
@@ -224,31 +226,31 @@ function RecipeSheetContainer({
   const createRecipe = useCreateRecipe(familyId)
   const updateRecipe = useUpdateRecipe(familyId)
   const deleteRecipe = useDeleteRecipe(familyId)
+  const setPhoto = useSetRecipeImage(familyId)
   const editing = state.editing
 
-  function handleSubmit(values: RecipeFormValues) {
-    const payload = toRecipePayload(values)
-    if (editing) {
-      updateRecipe.mutate(
-        { recipeId: editing.id, data: payload },
-        {
-          onSuccess: () => {
-            onClose()
-            toast.success("Recipe saved")
-          },
-          onError: () =>
-            toast.error("Couldn't save the recipe. Please try again."),
-        }
-      )
-    } else {
-      createRecipe.mutate(payload, {
-        onSuccess: () => {
+  async function handleSubmit(values: RecipeFormValues) {
+    // A photo URL from another site is copied to our server once the recipe is saved.
+    const { payload, remote } = splitRemotePhoto(toRecipePayload(values))
+    try {
+      const saved = editing
+        ? await updateRecipe.mutateAsync({ recipeId: editing.id, data: payload })
+        : await createRecipe.mutateAsync(payload)
+      if (remote) {
+        try {
+          await setPhoto.mutateAsync({ recipeId: saved.id, url: remote, referer: payload.source_url })
+        } catch {
+          toast.warning("Recipe saved, but its photo couldn't be saved. Check the link and try again.")
           onClose()
-          toast.success("Recipe created")
-        },
-        onError: () =>
-          toast.error("Couldn't create the recipe. Please try again."),
-      })
+          return
+        }
+      }
+      onClose()
+      toast.success(editing ? "Recipe saved" : "Recipe created")
+    } catch {
+      toast.error(
+        editing ? "Couldn't save the recipe. Please try again." : "Couldn't create the recipe. Please try again."
+      )
     }
   }
 
@@ -269,7 +271,7 @@ function RecipeSheetContainer({
       onClose={onClose}
       onSubmit={handleSubmit}
       onDelete={editing ? handleDelete : undefined}
-      isPending={createRecipe.isPending || updateRecipe.isPending}
+      isPending={createRecipe.isPending || updateRecipe.isPending || setPhoto.isPending}
       isDeleting={deleteRecipe.isPending}
       editing={editing}
     />

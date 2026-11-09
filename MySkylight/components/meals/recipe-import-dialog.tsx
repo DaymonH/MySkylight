@@ -10,7 +10,9 @@ import {
   useExtractRecipeFromImage,
   useExtractRecipeFromLink,
 } from "@/hooks/use-magic-import"
-import { useCreateRecipe } from "@/hooks/use-meals"
+import { useCreateRecipe, useSetRecipeImage } from "@/hooks/use-meals"
+import { RecipePhotoPicker } from "@/components/meals/recipe-photo-picker"
+import { splitRemotePhoto } from "@/lib/recipe-photo"
 import {
   RecipeSheet,
   type RecipeFormValues,
@@ -29,6 +31,7 @@ import {
 } from "@/components/ui/dialog"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import type {
+  ImageCandidate,
   RecipeDraft,
   RecipeExtractionResult,
 } from "@/lib/types/magic-import"
@@ -84,16 +87,26 @@ function ImportFlow({
   onClose: () => void
 }) {
   const [prefill, setPrefill] = useState<RecipeFormValues | null>(null)
+  // After a link import: the recipe read from the page, waiting while the user picks a photo.
+  const [choosing, setChoosing] = useState<{
+    form: RecipeFormValues
+    candidates: ImageCandidate[]
+  } | null>(null)
   const [url, setUrl] = useState("")
 
   const extractImage = useExtractRecipeFromImage(familyId)
   const extractLink = useExtractRecipeFromLink(familyId)
   const createRecipe = useCreateRecipe(familyId)
+  const setPhoto = useSetRecipeImage(familyId)
   const busy = extractImage.isPending || extractLink.isPending
 
   function handleResult(res: RecipeExtractionResult) {
     if (res.recipe) {
-      setPrefill(draftToForm(res.recipe))
+      const form = draftToForm(res.recipe)
+      const candidates = res.image_candidates ?? []
+      // A link import found photos on the page: let the user pick one before reviewing.
+      if (candidates.length > 0) setChoosing({ form, candidates })
+      else setPrefill(form)
     } else {
       toast.info(res.notes ?? "Couldn't find a recipe — try the other option.")
     }
@@ -126,6 +139,20 @@ function ImportFlow({
     )
   }
 
+  // Photo step (link import): one candidate at a time until one is confirmed.
+  if (choosing) {
+    return (
+      <RecipePhotoPicker
+        recipeName={choosing.form.name}
+        candidates={choosing.candidates}
+        onChoose={(photo) => {
+          setPrefill({ ...choosing.form, image_url: photo ?? "" })
+          setChoosing(null)
+        }}
+      />
+    )
+  }
+
   // Review step: reuse the normal recipe form (create mode) seeded with the draft.
   if (prefill) {
     return (
@@ -133,17 +160,31 @@ function ImportFlow({
         open
         onClose={onClose}
         prefill={prefill}
-        isPending={createRecipe.isPending}
-        onSubmit={(values) =>
-          createRecipe.mutate(toRecipePayload(values), {
-            onSuccess: () => {
-              toast.success("Recipe added")
-              onClose()
-            },
-            onError: () =>
-              toast.error("Couldn't save the recipe. Please try again."),
-          })
-        }
+        isPending={createRecipe.isPending || setPhoto.isPending}
+        onSubmit={async (values) => {
+          // A photo from another site is copied to our server after the recipe exists.
+          const { payload, remote } = splitRemotePhoto(toRecipePayload(values))
+          try {
+            const saved = await createRecipe.mutateAsync(payload)
+            if (remote) {
+              try {
+                await setPhoto.mutateAsync({
+                  recipeId: saved.id,
+                  url: remote,
+                  referer: payload.source_url,
+                })
+              } catch {
+                toast.warning("Recipe added, but its photo couldn't be saved. Edit the recipe to try again.")
+                onClose()
+                return
+              }
+            }
+            toast.success("Recipe added")
+            onClose()
+          } catch {
+            toast.error("Couldn't save the recipe. Please try again.")
+          }
+        }}
       />
     )
   }

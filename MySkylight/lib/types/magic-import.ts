@@ -43,8 +43,15 @@ export interface RecipeDraft {
   source_url: string | null
 }
 
+export interface ImageCandidate {
+  url: string
+  alt: string | null
+}
+
 export interface RecipeExtractionResult {
   recipe: RecipeDraft | null
+  // Likeliest main photos found on the page, best first (link import only).
+  image_candidates?: ImageCandidate[]
   confidence: number
   notes: string | null
 }

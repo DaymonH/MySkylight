@@ -48,6 +48,17 @@ export function useUpdateRecipe(familyId: string) {
   })
 }
 
+/** Download the photo at `url` and keep a local copy as the recipe's picture. */
+export function useSetRecipeImage(familyId: string) {
+  const api = useApi()
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ recipeId, url, referer }: { recipeId: string; url: string; referer?: string | null }) =>
+      api.post<RecipeOut>(`/families/${familyId}/recipes/${recipeId}/image`, { url, referer: referer ?? null }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["recipes", familyId] }),
+  })
+}
+
 export function useDeleteRecipe(familyId: string) {
   const api = useApi()
   const qc = useQueryClient()

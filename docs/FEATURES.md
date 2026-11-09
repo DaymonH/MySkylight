@@ -788,6 +788,14 @@ frontend (FE) pieces, and **acceptance criteria** (AC) that define "done".
 > (one-way pull):** external events are mirrored in to *display* in the app; **MySkylight never writes back**
 > to Google/Apple. This drops the two-way push, conflict-resolution, and write-back work entirely.
 
+- **Update (2026-11-08) — recipe photos are saved, not hotlinked:** a link import now has the *server* fetch
+  the page and collect candidate photos (JSON-LD recipe images → `og:image` / `twitter:image` → body `<img>`s,
+  junk-filtered), then Gemini ranks them (by index, so it can't invent one). The app shows them **one at a
+  time** ("Photo 2 of 6": Use this photo / Previous / Next / No photo; broken or tiny images are skipped) before
+  the review form. On save, `POST …/recipes/{id}/image {url}` downloads the chosen photo (SSRF-guarded: public
+  hosts only, size-capped), shrinks it to 1200px JPEG and stores it under the media dir (`/app/data/media`, served
+  at `/api/v1/media/recipes/<file>`), so it survives the source page disappearing. Any remote photo URL typed in
+  the recipe editor is copied the same way. One-off for older recipes: `scripts/localize_recipe_images.py`.
 ### F18 — Google sync 🔌 ⭐ _(kept — read-only)_
 
 - **Approach:** OAuth2 + Google Calendar API (read-only `calendar.readonly` scope); incremental pull via

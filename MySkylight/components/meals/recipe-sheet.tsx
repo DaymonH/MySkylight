@@ -6,6 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
 import { GripVerticalIcon, PlusIcon, Trash2Icon, XIcon } from "lucide-react"
 
+import { isLocalPhoto, mediaUrl } from "@/lib/media"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -118,6 +119,7 @@ export function RecipeSheet({
 }: RecipeSheetProps) {
   const {
     register,
+    setValue,
     handleSubmit,
     control,
     reset,
@@ -128,6 +130,7 @@ export function RecipeSheet({
 
   // Live ingredient values drive the grouped section subheadings as the user types.
   const watchedIngredients = useWatch({ control, name: "ingredients" })
+  const photo = (useWatch({ control, name: "image_url" }) ?? "").trim()
   const sectionAt = (i: number) => (watchedIngredients?.[i]?.section ?? "").trim()
 
   useEffect(() => {
@@ -211,8 +214,33 @@ export function RecipeSheet({
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="recipe-image">Image URL</Label>
-              <Input id="recipe-image" {...register("image_url")} placeholder="https://…" />
+              <Label htmlFor="recipe-image">Photo</Label>
+              {photo && (
+                // eslint-disable-next-line @next/next/no-img-element -- arbitrary photo URL; next/image would need per-host config
+                <img
+                  src={mediaUrl(photo)}
+                  alt=""
+                  referrerPolicy="no-referrer"
+                  className="h-32 w-full rounded-xl object-cover"
+                />
+              )}
+              {isLocalPhoto(photo) ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setValue("image_url", "", { shouldDirty: true })}
+                >
+                  Remove photo
+                </Button>
+              ) : (
+                <>
+                  <Input id="recipe-image" {...register("image_url")} placeholder="Paste a photo link (https://…)" />
+                  <p className="text-muted-foreground text-xs">
+                    We save a copy on your server, so it still works if the original disappears.
+                  </p>
+                </>
+              )}
             </div>
 
             <div className="space-y-1.5">

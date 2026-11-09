@@ -1,4 +1,5 @@
 import { Fragment } from "react"
+import { mediaUrl } from "@/lib/media"
 import { ExternalLinkIcon } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
@@ -42,7 +43,7 @@ export function RecipeContent({
       {recipe.image_url && (
         // eslint-disable-next-line @next/next/no-img-element -- arbitrary external recipe URL; next/image would need per-host config
         <img
-          src={recipe.image_url}
+          src={mediaUrl(recipe.image_url)}
           alt={recipe.name}
           className="max-h-56 w-full rounded-2xl object-cover"
         />

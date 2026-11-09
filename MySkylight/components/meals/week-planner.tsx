@@ -1,5 +1,6 @@
 "use client"
 
+import { mediaUrl } from "@/lib/media"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { toast } from "sonner"
 import {
@@ -423,7 +424,7 @@ function MealRow({
     <>
       {meal.recipe?.image_url ? (
         // eslint-disable-next-line @next/next/no-img-element -- arbitrary external recipe URL; next/image would need per-host config
-        <img src={meal.recipe.image_url} alt="" className="size-11 shrink-0 rounded-lg object-cover" />
+        <img src={mediaUrl(meal.recipe.image_url)} alt="" className="size-11 shrink-0 rounded-lg object-cover" />
       ) : (
         <span
           className={cn(

@@ -1,5 +1,6 @@
 "use client"
 
+import { mediaUrl } from "@/lib/media"
 import { useMemo, useState } from "react"
 import { BookOpenIcon, PencilIcon, SearchIcon, ShoppingCartIcon, StarIcon, XIcon } from "lucide-react"
 
@@ -249,7 +250,7 @@ function RecipeCard({
       <div className="flex items-start gap-2">
         {recipe.image_url && (
           // eslint-disable-next-line @next/next/no-img-element -- arbitrary external recipe URL; next/image would need per-host config
-          <img src={recipe.image_url} alt="" className="size-12 shrink-0 rounded-xl object-cover" />
+          <img src={mediaUrl(recipe.image_url)} alt="" className="size-12 shrink-0 rounded-xl object-cover" />
         )}
         <div className="min-w-0 flex-1">
           <p className="truncate leading-tight font-semibold">{recipe.name}</p>

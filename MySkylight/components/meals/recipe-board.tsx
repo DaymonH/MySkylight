@@ -1,5 +1,6 @@
 "use client"
 
+import { mediaUrl } from "@/lib/media"
 import { useMemo } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { BookOpenIcon, CalendarCheckIcon, Loader2Icon, StarIcon } from "lucide-react"
@@ -144,7 +145,7 @@ function RecipeTile({ recipe, onOpen }: { recipe: RecipeOut; onOpen: () => void 
       )}
       {recipe.image_url && (
         // eslint-disable-next-line @next/next/no-img-element -- arbitrary external recipe URL; next/image would need per-host config
-        <img src={recipe.image_url} alt="" className="h-28 w-full object-cover" />
+        <img src={mediaUrl(recipe.image_url)} alt="" className="h-28 w-full object-cover" />
       )}
       <div className="flex flex-1 flex-col gap-1 p-3">
         <p className="leading-tight font-semibold">{recipe.name}</p>
