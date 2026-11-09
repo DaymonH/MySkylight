@@ -76,6 +76,14 @@ interface MembershipResponse {
 }
 
 
+/** 1 once everyone assigned has done it (or it's skipped), else 0 — for sinking done rows. */
+function doneRank(o: TaskOccurrenceOut): number {
+  if (o.is_skipped) return 1
+  return o.members.length > 0 && o.members.every((m) => o.completed_member_ids.includes(m.id))
+    ? 1
+    : 0
+}
+
 function initials(name: string) {
   const parts = name.trim().split(/\s+/)
   return ((parts[0]?.[0] ?? "") + (parts[1]?.[0] ?? "")).toUpperCase() || "?"
@@ -161,7 +169,8 @@ export function ChoresPanel({ familyId }: { familyId: string }) {
         date,
         items: filteredMain
           .filter((o) => o.occurrence_date === date)
-          .sort((a, b) => a.title.localeCompare(b.title)),
+          // Open chores first; finished ones sink to the bottom of the day.
+          .sort((a, b) => doneRank(a) - doneRank(b) || a.title.localeCompare(b.title)),
       }))
       .filter((g) => g.items.length > 0)
   }, [view, filteredMain, today])
@@ -275,7 +284,7 @@ export function ChoresPanel({ familyId }: { familyId: string }) {
         <div className="flex-1">
           <h1 className="font-heading text-xl font-semibold tracking-tight">Chores</h1>
           <p className="text-muted-foreground text-sm">
-            Everyone&apos;s chores — tap a face to mark it done.
+            Tap the circle to mark a chore done.
           </p>
         </div>
         <ChoresViewSwitch familyId={familyId} value={view} onChange={setView} />
@@ -436,15 +445,51 @@ function ChoreListRow({
   // "+N ★" feedback on completing (not on undoing).
   const [popKey, setPopKey] = useState(0)
 
+  // One person on it: a big checkbox on the left finishes it for them (the face on the
+  // right just says who). Several people: each face is its own checkbox, since the
+  // chore has to be ticked off per person.
+  const solo = !o.is_skipped && visibleMembers.length === 1 ? visibleMembers[0] : null
+  const soloDone = solo ? o.completed_member_ids.includes(solo.id) : false
+  const allDone = doneRank(o) === 1 && !o.is_skipped
+  function press(memberId: string, done: boolean) {
+    if (!done) setPopKey((k) => k + 1)
+    onToggle(memberId)
+  }
+
   return (
-    <li className="bg-card ring-foreground/5 relative flex items-center gap-3 rounded-2xl p-3 shadow-sm ring-1">
+    <li
+      className={cn(
+        "bg-card ring-foreground/5 relative flex items-center gap-3 rounded-2xl border-l-4 p-3 shadow-sm ring-1 transition-opacity",
+        allDone && "opacity-60",
+      )}
+      // The routine's color rides along the left edge.
+      style={{ borderLeftColor: o.effective_color }}
+    >
       <StarPop amount={o.star_value} popKey={popKey} />
-      <span className="size-3 shrink-0 rounded-full" style={{ backgroundColor: o.effective_color }} />
+      {solo && (
+        <button
+          type="button"
+          onClick={() => press(solo.id, soloDone)}
+          aria-pressed={soloDone}
+          aria-label={`${soloDone ? "Undo" : "Mark"} ${o.title} done`}
+          className={cn(
+            "flex size-9 shrink-0 items-center justify-center rounded-full border-2 transition-colors",
+            "focus-visible:ring-ring/50 focus-visible:outline-none focus-visible:ring-2",
+            soloDone ? "text-white" : "hover:bg-muted/60",
+          )}
+          style={{
+            borderColor: solo.color,
+            backgroundColor: soloDone ? solo.color : undefined,
+          }}
+        >
+          {soloDone && <CheckIcon className="size-5 animate-in zoom-in-50" />}
+        </button>
+      )}
       <div className="min-w-0 flex-1">
         <p
           className={cn(
             "truncate font-medium leading-tight",
-            o.is_skipped && "text-muted-foreground line-through",
+            (o.is_skipped || allDone) && "text-muted-foreground line-through",
           )}
         >
           {o.icon && <span className="mr-1.5">{o.icon}</span>}
@@ -468,7 +513,8 @@ function ChoreListRow({
         </div>
       </div>
 
-      {/* Assignee avatars double as the done toggle. */}
+      {/* Who it's for. With one person it's just a label; with several, each face is a
+          checkbox: an empty ring until they've done it, a filled check after. */}
       <div className="flex items-center gap-1.5">
         {o.is_skipped ? (
           <span className="text-muted-foreground inline-flex items-center gap-1 text-xs">
@@ -476,6 +522,14 @@ function ChoreListRow({
           </span>
         ) : visibleMembers.length === 0 ? (
           <span className="text-muted-foreground text-xs">Unassigned</span>
+        ) : solo ? (
+          <span
+            title={solo.name}
+            className="flex size-9 items-center justify-center rounded-full text-xs font-semibold text-white"
+            style={{ backgroundColor: solo.color }}
+          >
+            {initials(solo.name)}
+          </span>
         ) : (
           visibleMembers.map((m) => {
             const done = o.completed_member_ids.includes(m.id)
@@ -483,19 +537,20 @@ function ChoreListRow({
               <button
                 key={m.id}
                 type="button"
-                onClick={() => {
-                  if (!done) setPopKey((k) => k + 1)
-                  onToggle(m.id)
-                }}
+                onClick={() => press(m.id, done)}
                 aria-pressed={done}
                 aria-label={`${done ? "Undo" : "Mark"} ${o.title} done for ${m.name}`}
                 title={m.name}
                 className={cn(
-                  "relative flex size-9 items-center justify-center rounded-full text-xs font-semibold text-white transition-all",
+                  "relative flex size-9 items-center justify-center rounded-full border-2 text-xs font-semibold transition-all",
                   "focus-visible:ring-ring/50 focus-visible:outline-none focus-visible:ring-2",
-                  done ? "ring-2 ring-offset-1" : "opacity-90 hover:opacity-100",
+                  done ? "text-white" : "hover:bg-muted/60",
                 )}
-                style={{ backgroundColor: m.color }}
+                style={{
+                  borderColor: m.color,
+                  backgroundColor: done ? m.color : undefined,
+                  color: done ? undefined : m.color,
+                }}
               >
                 {done ? <CheckIcon className="size-5 animate-in zoom-in-50" /> : initials(m.name)}
               </button>
