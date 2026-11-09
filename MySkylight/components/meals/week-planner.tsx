@@ -1,7 +1,7 @@
 "use client"
 
 import { mediaUrl } from "@/lib/media"
-import { useEffect, useMemo, useRef, useState } from "react"
+import { Fragment, useEffect, useMemo, useRef, useState } from "react"
 import { toast } from "sonner"
 import {
   CalendarPlusIcon,
@@ -45,6 +45,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
@@ -110,7 +111,16 @@ export function WeekPlanner({
   const todayISO = isoDate(new Date())
   const isCurrentWeek = todayISO >= weekStartISO && todayISO <= weekEndISO
 
-  const { data: meals = [], isLoading } = useMealPlans(familyId, weekStartISO, weekEndISO)
+  // On the current week the list carries on into next week, so fetch both.
+  const nextStart = addDays(weekStart, 7)
+  const nextStartISO = isoDate(nextStart)
+  const nextEndISO = isoDate(addDays(weekStart, 13))
+  const nextDays = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(nextStart, i)), [nextStart])
+  const { data: meals = [], isLoading } = useMealPlans(
+    familyId,
+    weekStartISO,
+    isCurrentWeek ? nextEndISO : weekEndISO,
+  )
   const copyMeals = useCopyMeals(familyId)
   const autofill = useAutofillMeals(familyId)
 
@@ -139,6 +149,11 @@ export function WeekPlanner({
     6,
   ).toLocaleDateString(undefined, { month: "short", day: "numeric" })}`
 
+  const nextLabel = `${nextStart.toLocaleDateString(undefined, { month: "short", day: "numeric" })} – ${addDays(
+    nextStart,
+    6,
+  ).toLocaleDateString(undefined, { month: "short", day: "numeric" })}`
+
   // Land on today when this week opens (the grid is long on a phone). Once per week shown.
   const scrolledFor = useRef<string | null>(null)
   useEffect(() => {
@@ -159,30 +174,32 @@ export function WeekPlanner({
     }
   }
 
-  function handleCopyLastWeek() {
+  function copyWeek(fromStart: Date, toStart: Date, from: "last" | "this") {
     copyMeals.mutate(
-      { from_date: isoDate(addDays(weekStart, -7)), to_date: weekStartISO, days: 7 },
+      { from_date: isoDate(fromStart), to_date: isoDate(toStart), days: 7 },
       {
         onSuccess: (created) =>
           created.length > 0
-            ? toast.success(`Copied ${plural(created.length, "meal")} from last week`)
-            : toast.info("Nothing to copy — last week is empty, or this week is already planned."),
-        onError: () => toast.error("Couldn't copy last week."),
+            ? toast.success(
+                `Copied ${plural(created.length, "meal")} from ${from === "last" ? "last" : "this"} week`,
+              )
+            : toast.info(
+                from === "last"
+                  ? "Nothing to copy — last week is empty, or this week is already planned."
+                  : "Nothing to copy — this week is empty, or next week is already planned.",
+              ),
+        onError: () => toast.error("Couldn't copy the meals."),
       },
     )
   }
 
-  function handleAutofill() {
-    if (weekEndISO < todayISO) {
+  function fillDinners(fromISO: string, toISO: string) {
+    if (toISO < todayISO) {
       toast.info("That week is already over.")
       return
     }
     autofill.mutate(
-      {
-        from_date: weekStartISO > todayISO ? weekStartISO : todayISO,
-        to_date: weekEndISO,
-        slots: ["dinner"],
-      },
+      { from_date: fromISO > todayISO ? fromISO : todayISO, to_date: toISO, slots: ["dinner"] },
       {
         onSuccess: (created) =>
           created.length > 0
@@ -254,12 +271,44 @@ export function WeekPlanner({
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-60">
-                <DropdownMenuItem onSelect={handleCopyLastWeek} disabled={copyMeals.isPending}>
+                <DropdownMenuItem
+                  onSelect={() => copyWeek(addDays(weekStart, -7), weekStart, "last")}
+                  disabled={copyMeals.isPending}
+                >
                   <CopyIcon /> Copy last week&apos;s meals
                 </DropdownMenuItem>
-                <DropdownMenuItem onSelect={handleAutofill} disabled={autofill.isPending}>
+                <DropdownMenuItem
+                  onSelect={() => fillDinners(weekStartISO, weekEndISO)}
+                  disabled={autofill.isPending}
+                >
                   <SparklesIcon /> Fill empty dinners for me
                 </DropdownMenuItem>
+                {isCurrentWeek && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuLabel className="text-muted-foreground text-xs">Next week</DropdownMenuLabel>
+                    <DropdownMenuItem
+                      onSelect={() => copyWeek(weekStart, nextStart, "this")}
+                      disabled={copyMeals.isPending}
+                    >
+                      <CopyIcon /> Copy this week&apos;s meals
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onSelect={() => fillDinners(nextStartISO, isoDate(addDays(nextStart, 6)))}
+                      disabled={autofill.isPending}
+                    >
+                      <SparklesIcon /> Fill empty dinners
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onSelect={() =>
+                        onBuildGroceries(nextStartISO, isoDate(addDays(nextStart, 6)), `Groceries (${nextLabel})`)
+                      }
+                      disabled={building}
+                    >
+                      <ShoppingCartIcon /> Build grocery list
+                    </DropdownMenuItem>
+                  </>
+                )}
               </DropdownMenuContent>
             </DropdownMenu>
           </>
@@ -331,15 +380,23 @@ export function WeekPlanner({
               Hide earlier days
             </button>
           )}
-          {visibleDays.map((day) => {
+          {[...visibleDays, ...(isCurrentWeek ? nextDays : [])].map((day) => {
             const iso = isoDate(day)
             const isToday = iso === todayISO
             const filled = (slot: MealSlot) => byCell.get(`${iso}|${slot}`) ?? []
             const shownSlots = MEAL_SLOTS.filter((s) => s === "dinner" || filled(s).length > 0)
             const hiddenSlots = MEAL_SLOTS.filter((s) => !shownSlots.includes(s))
             return (
+              <Fragment key={iso}>
+              {isCurrentWeek && iso === nextStartISO && (
+                <div className="mt-2 flex items-baseline justify-between px-1">
+                  <h2 className="font-heading text-muted-foreground text-sm font-semibold tracking-wide uppercase">
+                    Next week
+                  </h2>
+                  <span className="text-muted-foreground text-xs">{nextLabel}</span>
+                </div>
+              )}
               <section
-                key={iso}
                 id={`meal-day-${iso}`}
                 className={cn(
                   "bg-card ring-foreground/5 scroll-mt-24 rounded-2xl p-3 shadow-sm ring-1",
@@ -416,6 +473,7 @@ export function WeekPlanner({
                   )}
                 </div>
               </section>
+              </Fragment>
             )
           })}
         </div>
