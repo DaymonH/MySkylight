@@ -124,6 +124,13 @@ export function WeekPlanner({
   }, [meals])
   const plannedDays = useMemo(() => new Set(meals.map((m) => m.date)), [meals])
 
+  // This week, days that are already over fold away so today is the first thing you see.
+  const [expandedWeek, setExpandedWeek] = useState<string | null>(null)
+  const showPast = !isCurrentWeek || expandedWeek === weekStartISO
+  const pastDays = isCurrentWeek ? days.filter((d) => isoDate(d) < todayISO) : []
+  const visibleDays = showPast ? days : days.filter((d) => isoDate(d) >= todayISO)
+  const pastMealCount = meals.filter((m) => m.date < todayISO).length
+
   const [addCell, setAddCell] = useState<{ date: string; slot: MealSlot; label: string } | null>(null)
   const [editing, setEditing] = useState<MealPlanOut | null>(null)
 
@@ -141,7 +148,15 @@ export function WeekPlanner({
   }, [isLoading, isCurrentWeek, weekStartISO, todayISO])
 
   function jumpTo(iso: string) {
-    document.getElementById(`meal-day-${iso}`)?.scrollIntoView({ behavior: "smooth", block: "start" })
+    const scroll = () =>
+      document.getElementById(`meal-day-${iso}`)?.scrollIntoView({ behavior: "smooth", block: "start" })
+    if (!showPast && iso < todayISO) {
+      // A folded-away day: open the earlier days first, then scroll once they've rendered.
+      setExpandedWeek(weekStartISO)
+      requestAnimationFrame(() => requestAnimationFrame(scroll))
+    } else {
+      scroll()
+    }
   }
 
   function handleCopyLastWeek() {
@@ -254,7 +269,9 @@ export function WeekPlanner({
       {/* Day strip: sticky, jumps to a day */}
       <nav
         aria-label="Jump to a day"
-        className="bg-background/95 sticky top-0 z-10 -mx-4 flex justify-between gap-1 border-b px-4 py-2 backdrop-blur sm:-mx-6 sm:px-6"
+        // `-top-*` cancels the page's own padding, which sticky would otherwise keep as a gap
+        // (where scrolled content showed through above the strip); `pt-*` puts it back inside.
+        className="bg-background/95 sticky -top-4 z-10 -mx-4 flex justify-between gap-1 border-b px-4 pt-6 pb-2 backdrop-blur sm:-top-6 sm:-mx-6 sm:px-6 sm:pt-8"
       >
         {days.map((d) => {
           const iso = isoDate(d)
@@ -291,7 +308,30 @@ export function WeekPlanner({
         </div>
       ) : (
         <div className="flex flex-col gap-3">
-          {days.map((day) => {
+          {isCurrentWeek && !showPast && pastDays.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setExpandedWeek(weekStartISO)}
+              className="text-muted-foreground hover:text-foreground hover:bg-muted/50 flex items-center justify-between rounded-2xl border border-dashed px-4 py-3 text-sm transition-colors"
+            >
+              <span>
+                Earlier this week · {pastDays.length} {pastDays.length === 1 ? "day" : "days"}
+              </span>
+              <span className="text-xs">
+                {pastMealCount > 0 ? `${pastMealCount} planned · ` : ""}Show
+              </span>
+            </button>
+          )}
+          {isCurrentWeek && showPast && pastDays.length > 0 && expandedWeek === weekStartISO && (
+            <button
+              type="button"
+              onClick={() => setExpandedWeek(null)}
+              className="text-muted-foreground hover:text-foreground self-start px-1 text-xs"
+            >
+              Hide earlier days
+            </button>
+          )}
+          {visibleDays.map((day) => {
             const iso = isoDate(day)
             const isToday = iso === todayISO
             const filled = (slot: MealSlot) => byCell.get(`${iso}|${slot}`) ?? []
