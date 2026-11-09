@@ -3,6 +3,7 @@ import { ExternalLinkIcon } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
 import { parseSteps } from "@/lib/recipe-steps"
+import { fmtQty } from "@/lib/recipe-scale"
 import { cn } from "@/lib/utils"
 import type { RecipeOut } from "@/lib/types/meal"
 
@@ -27,9 +28,12 @@ export function metaSummary(r: RecipeOut): string {
 export function RecipeContent({
   recipe,
   className,
+  scale = 1,
 }: {
   recipe: RecipeOut
   className?: string
+  /** Multiplies every ingredient quantity (cooking for a different head-count). */
+  scale?: number
 }) {
   const steps = parseSteps(recipe.instructions)
 
@@ -70,7 +74,7 @@ export function RecipeContent({
               const section = (ing.section ?? "").trim()
               const prev = idx > 0 ? (recipe.ingredients[idx - 1].section ?? "").trim() : ""
               const showHeader = section.length > 0 && section !== prev
-              const measure = [ing.quantity != null ? String(ing.quantity) : "", ing.unit ?? ""]
+              const measure = [ing.quantity != null ? fmtQty(ing.quantity * scale) : "", ing.unit ?? ""]
                 .filter(Boolean)
                 .join(" ")
               return (

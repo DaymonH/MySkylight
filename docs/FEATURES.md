@@ -508,6 +508,14 @@ frontend (FE) pieces, and **acceptance criteria** (AC) that define "done".
   Gemini 3.1 Flash-Lite** land with Phase 6 (F17 — see PLAN §2 D3); live two-device smoke.
 - _Phase 5 (AI recipe gen lands with Phase 6)_
 
+- **Update (2026-11-08) — meals overhaul (BE + FE):** the planner opens on today with a sticky day strip, shows
+  **Dinner** by default (breakfast/lunch/snack appear when used or via "+ Breakfast"), and has a ⋮ menu with
+  **Copy last week** (`POST …/mealplans/copy`) and **Fill empty dinners** (`POST …/mealplans/autofill`: skips
+  recipes cooked in the last 14 days, favours ★/rated). Meals can be **Leftovers** / **Eating out** (`kind`),
+  moved to another day/slot, and given a **servings** override that scales the grocery list. Recipes gain
+  ★ **favorite**, 1–5 **rating**, **last made / times made** (derived), search + tag/favorite filters + sort,
+  **serving scaler**, and a full-screen **Cook mode** (big text, tick-off, screen wake lock). The grocery review
+  has a per-line **"I already have this"** pantry toggle (remembered per browser). Migration `025`.
 ### F16 — Photo Screensaver ⭐ — ⏸ PARKED (kept for later)
 
 > _"Display favorite photos when idle… organize into albums to choose what's featured."_

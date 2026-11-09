@@ -39,6 +39,11 @@ export interface RecipeOut {
   cook_minutes: number | null
   source_url: string | null
   tags: string[]
+  is_favorite: boolean
+  rating: number | null
+  // Derived from past meal plans (up to today).
+  last_made: string | null
+  times_made: number
   ingredients: RecipeIngredient[]
   created_at: string
   updated_at: string
@@ -57,9 +62,14 @@ export interface RecipeCreatePayload {
   ingredients?: RecipeIngredientInput[]
 }
 
-export type RecipeUpdatePayload = Partial<RecipeCreatePayload>
+export type RecipeUpdatePayload = Partial<RecipeCreatePayload> & {
+  is_favorite?: boolean
+  rating?: number | null // null clears the rating
+}
 
 // ── Meal plans ──────────────────────────────────────────────────────────────
+
+export type MealKind = "meal" | "leftovers" | "eating_out"
 
 export interface MealPlanOut {
   id: string
@@ -69,6 +79,8 @@ export interface MealPlanOut {
   recipe_id: string | null
   title: string | null
   display_title: string
+  kind: MealKind
+  servings: number | null
   recipe: RecipeBrief | null
   calendar_event_id: string | null
   created_at: string
@@ -80,9 +92,23 @@ export interface MealPlanCreatePayload {
   slot: MealSlot
   recipe_id?: string | null
   title?: string | null
+  kind?: MealKind
+  servings?: number | null
 }
 
 export type MealPlanUpdatePayload = Partial<MealPlanCreatePayload>
+
+export interface MealCopyPayload {
+  from_date: string
+  to_date: string
+  days?: number
+}
+
+export interface MealAutofillPayload {
+  from_date: string
+  to_date: string
+  slots?: MealSlot[]
+}
 
 // ── Grocery aggregation (F28) ─────────────────────────────────────────────────
 
@@ -95,6 +121,8 @@ export interface AggregatedLine {
 
 export interface GroceryAggregatePayload {
   recipe_ids?: string[]
+  // Cook-for-N override per recipe id (scales that recipe's quantities).
+  recipe_servings?: Record<string, number>
   from_date?: string
   to_date?: string
 }

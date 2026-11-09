@@ -23,7 +23,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import type { MealSlot, RecipeOut } from "@/lib/types/meal"
+import type { MealKind, MealSlot, RecipeOut } from "@/lib/types/meal"
 
 const SLOT_LABELS: Record<MealSlot, string> = {
   breakfast: "Breakfast",
@@ -89,9 +89,11 @@ function AddMealForm({
   onDone: () => void
 }) {
   const createMeal = useCreateMeal(familyId)
-  const [mode, setMode] = useState<"recipe" | "text">(recipes.length > 0 ? "recipe" : "text")
+  type Mode = "recipe" | "text" | MealKind
+  const [mode, setMode] = useState<Mode>(recipes.length > 0 ? "recipe" : "text")
   const [recipeId, setRecipeId] = useState("")
   const [title, setTitle] = useState("")
+  const [servings, setServings] = useState("")
 
   function handleAdd() {
     if (mode === "recipe" && !recipeId) {
@@ -102,10 +104,13 @@ function AddMealForm({
       toast.error("Enter a meal name.")
       return
     }
+    const n = parseInt(servings, 10)
     const data =
       mode === "recipe"
-        ? { date, slot, recipe_id: recipeId }
-        : { date, slot, title: title.trim() }
+        ? { date, slot, recipe_id: recipeId, ...(n >= 1 ? { servings: n } : {}) }
+        : mode === "text"
+          ? { date, slot, title: title.trim() }
+          : { date, slot, kind: mode } // leftovers / eating out: no recipe, label defaults
     createMeal.mutate(data, {
       onSuccess: () => onDone(),
       onError: () => toast.error("Couldn't add the meal. Please try again."),
@@ -119,16 +124,19 @@ function AddMealForm({
           type="single"
           variant="outline"
           value={mode}
-          onValueChange={(v) => v && setMode(v as "recipe" | "text")}
-          className="justify-start"
+          onValueChange={(v) => v && setMode(v as Mode)}
+          className="flex-wrap justify-start"
         >
           <ToggleGroupItem value="recipe" disabled={recipes.length === 0}>
-            From recipe
+            Recipe
           </ToggleGroupItem>
-          <ToggleGroupItem value="text">Free text</ToggleGroupItem>
+          <ToggleGroupItem value="text">Other</ToggleGroupItem>
+          <ToggleGroupItem value="leftovers">Leftovers</ToggleGroupItem>
+          <ToggleGroupItem value="eating_out">Eating out</ToggleGroupItem>
         </ToggleGroup>
 
         {mode === "recipe" ? (
+          <div className="space-y-3">
           <div className="space-y-1.5">
             <Label>Recipe</Label>
             <Select value={recipeId} onValueChange={setRecipeId}>
@@ -144,6 +152,26 @@ function AddMealForm({
               </SelectContent>
             </Select>
           </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="meal-servings">Cooking for (optional)</Label>
+            <Input
+              id="meal-servings"
+              type="number"
+              inputMode="numeric"
+              min={1}
+              max={100}
+              value={servings}
+              onChange={(e) => setServings(e.target.value)}
+              placeholder="Uses the recipe's servings"
+            />
+          </div>
+          </div>
+        ) : mode === "leftovers" || mode === "eating_out" ? (
+          <p className="text-muted-foreground text-sm">
+            {mode === "leftovers"
+              ? "Marks this slot as leftovers — nothing to cook or shop for."
+              : "Marks this slot as eating out — nothing to cook or shop for."}
+          </p>
         ) : (
           <div className="space-y-1.5">
             <Label htmlFor="meal-title">Meal</Label>
@@ -151,7 +179,7 @@ function AddMealForm({
               id="meal-title"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder="e.g. Leftovers, Takeout"
+              placeholder="e.g. Pizza night at Grandma's"
               maxLength={200}
               autoFocus
             />

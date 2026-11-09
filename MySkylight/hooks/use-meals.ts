@@ -7,6 +7,8 @@ import type {
   AggregatedLine,
   GroceryAggregatePayload,
   GroceryBuildPayload,
+  MealAutofillPayload,
+  MealCopyPayload,
   MealPlanCreatePayload,
   MealPlanOut,
   MealPlanUpdatePayload,
@@ -73,7 +75,10 @@ export function useCreateMeal(familyId: string) {
   return useMutation({
     mutationFn: (data: MealPlanCreatePayload) =>
       api.post<MealPlanOut>(`/families/${familyId}/mealplans`, data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["mealplans", familyId] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["mealplans", familyId] })
+      qc.invalidateQueries({ queryKey: ["recipes", familyId] }) // "last made"
+    },
   })
 }
 
@@ -93,6 +98,34 @@ export function useDeleteMeal(familyId: string) {
   return useMutation({
     mutationFn: (mealId: string) => api.delete(`/families/${familyId}/mealplans/${mealId}`),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["mealplans", familyId] }),
+  })
+}
+
+/** Copy one week's meals onto another; slots already planned there are left alone. */
+export function useCopyMeals(familyId: string) {
+  const api = useApi()
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (data: MealCopyPayload) =>
+      api.post<MealPlanOut[]>(`/families/${familyId}/mealplans/copy`, data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["mealplans", familyId] })
+      qc.invalidateQueries({ queryKey: ["recipes", familyId] })
+    },
+  })
+}
+
+/** Fill empty slots with recipes that haven't been cooked lately. */
+export function useAutofillMeals(familyId: string) {
+  const api = useApi()
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (data: MealAutofillPayload) =>
+      api.post<MealPlanOut[]>(`/families/${familyId}/mealplans/autofill`, data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["mealplans", familyId] })
+      qc.invalidateQueries({ queryKey: ["recipes", familyId] })
+    },
   })
 }
 
