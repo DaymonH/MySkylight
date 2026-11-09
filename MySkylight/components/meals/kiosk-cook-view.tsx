@@ -64,16 +64,16 @@ export function KioskCookView({
           type="button"
           onClick={onBack}
           aria-label="Back"
-          className="text-muted-foreground hover:bg-muted hover:text-foreground flex size-12 shrink-0 items-center justify-center rounded-xl transition-colors"
+          className="text-muted-foreground hover:bg-muted hover:text-foreground flex size-11 shrink-0 items-center justify-center rounded-xl transition-colors"
         >
-          <ArrowLeftIcon className="size-7" />
+          <ArrowLeftIcon className="size-6" />
         </button>
         {recipe.image_url && (
           // eslint-disable-next-line @next/next/no-img-element -- arbitrary external recipe URL; next/image would need per-host config
-          <img src={mediaUrl(recipe.image_url)} alt="" className="size-14 shrink-0 rounded-xl object-cover" />
+          <img src={mediaUrl(recipe.image_url)} alt="" className="size-12 shrink-0 rounded-xl object-cover" />
         )}
         <div className="min-w-0 flex-1">
-          <h1 className="font-heading truncate text-3xl font-semibold tracking-tight">{recipe.name}</h1>
+          <h1 className="font-heading truncate text-2xl font-semibold tracking-tight">{recipe.name}</h1>
           {total > 0 && <p className="text-muted-foreground text-sm">{total} min total</p>}
         </div>
 
@@ -96,7 +96,7 @@ export function KioskCookView({
               >
                 {t.done ? <BellRingIcon className="size-6" /> : <TimerIcon className="size-6" />}
                 <span className="leading-tight">
-                  <span className="block text-2xl font-semibold tabular-nums">
+                  <span className="block text-xl font-semibold tabular-nums">
                     {t.done ? "Done!" : clock(left)}
                   </span>
                   <span className="block max-w-32 truncate text-xs opacity-80">{t.label}</span>
@@ -112,7 +112,7 @@ export function KioskCookView({
         {/* Ingredients */}
         <aside className="thin-scrollbar flex max-h-[40%] min-h-0 flex-col overflow-y-auto border-b p-5 md:max-h-none md:w-[36%] md:shrink-0 md:border-r md:border-b-0">
           <div className="mb-3 flex items-center justify-between gap-2">
-            <h2 className="font-heading text-xl font-semibold">Ingredients</h2>
+            <h2 className="font-heading text-lg font-semibold">Ingredients</h2>
             {base != null && servings != null && (
               <div className="flex items-center gap-1.5">
                 <button
@@ -163,17 +163,17 @@ export function KioskCookView({
                         onClick={() => toggleGot(ing.id)}
                         aria-pressed={isGot}
                         className={cn(
-                          "flex min-h-14 w-full items-center gap-3 rounded-xl px-2 py-2 text-left text-xl leading-snug",
+                          "flex min-h-12 w-full items-center gap-3 rounded-xl px-2 py-1.5 text-left text-lg leading-snug",
                           isGot && "text-muted-foreground line-through",
                         )}
                       >
                         <span
                           className={cn(
-                            "flex size-8 shrink-0 items-center justify-center rounded-lg border-2",
+                            "flex size-7 shrink-0 items-center justify-center rounded-lg border-2",
                             isGot ? "border-primary bg-primary text-primary-foreground" : "border-muted-foreground/40",
                           )}
                         >
-                          {isGot && <CheckIcon className="size-5" />}
+                          {isGot && <CheckIcon className="size-4" />}
                         </span>
                         <span>
                           {measure && <span className="font-semibold">{measure} </span>}
@@ -200,11 +200,11 @@ export function KioskCookView({
           }}
         >
           {steps.length === 0 ? (
-            <p className="text-muted-foreground m-auto text-2xl">No instructions yet.</p>
+            <p className="text-muted-foreground m-auto text-xl">No instructions yet.</p>
           ) : (
             <>
               <div className="mb-3 flex items-center gap-3">
-                <h2 className="font-heading text-xl font-semibold">
+                <h2 className="font-heading text-lg font-semibold">
                   Step {step + 1} <span className="text-muted-foreground font-normal">of {steps.length}</span>
                 </h2>
                 <div className="flex flex-1 gap-1" aria-hidden>
@@ -223,7 +223,7 @@ export function KioskCookView({
                   onTimer={(label, seconds) => start(label, seconds)}
                 />
                 {step < lastStep && (
-                  <p className="text-muted-foreground mt-8 border-t pt-4 text-xl leading-snug">
+                  <p className="text-muted-foreground mt-6 border-t pt-3 text-base leading-snug">
                     <span className="text-sm font-semibold tracking-wide uppercase">Next · </span>
                     {steps[step + 1]}
                   </p>
@@ -235,25 +235,25 @@ export function KioskCookView({
                   type="button"
                   onClick={() => go(-1)}
                   disabled={step === 0}
-                  className="bg-muted flex h-20 flex-1 items-center justify-center gap-2 rounded-2xl text-2xl font-semibold disabled:opacity-40"
+                  className="bg-muted flex h-16 flex-1 items-center justify-center gap-2 rounded-2xl text-xl font-semibold disabled:opacity-40"
                 >
-                  <ChevronLeftIcon className="size-8" /> Back
+                  <ChevronLeftIcon className="size-6" /> Back
                 </button>
                 {step < lastStep ? (
                   <button
                     type="button"
                     onClick={() => go(1)}
-                    className="bg-primary text-primary-foreground flex h-20 flex-[2] items-center justify-center gap-2 rounded-2xl text-3xl font-semibold"
+                    className="bg-primary text-primary-foreground flex h-16 flex-[2] items-center justify-center gap-2 rounded-2xl text-2xl font-semibold"
                   >
-                    Next <ChevronRightIcon className="size-9" />
+                    Next <ChevronRightIcon className="size-7" />
                   </button>
                 ) : (
                   <button
                     type="button"
                     onClick={onBack}
-                    className="bg-primary text-primary-foreground flex h-20 flex-[2] items-center justify-center gap-2 rounded-2xl text-3xl font-semibold"
+                    className="bg-primary text-primary-foreground flex h-16 flex-[2] items-center justify-center gap-2 rounded-2xl text-2xl font-semibold"
                   >
-                    <CheckIcon className="size-9" /> All done
+                    <CheckIcon className="size-7" /> All done
                   </button>
                 )}
               </div>
@@ -284,14 +284,14 @@ function StepText({
         type="button"
         onClick={() => onTimer(t.text, t.seconds)}
         aria-label={`Start a ${t.text} timer`}
-        className="bg-primary/15 text-primary hover:bg-primary/25 mx-0.5 inline-flex items-center gap-1.5 rounded-xl px-3 py-0.5 align-baseline font-semibold"
+        className="bg-primary/15 text-primary hover:bg-primary/25 mx-0.5 inline-flex items-center gap-1.5 rounded-lg px-2.5 py-0.5 align-baseline font-semibold"
       >
-        <TimerIcon className="size-7" />
+        <TimerIcon className="size-5" />
         {t.text}
       </button>,
     )
     cursor = t.index + t.text.length
   })
   if (cursor < text.length) parts.push(text.slice(cursor))
-  return <p className="text-[2.4rem] leading-snug font-medium break-words">{parts}</p>
+  return <p className="text-[1.7rem] leading-snug font-medium break-words">{parts}</p>
 }

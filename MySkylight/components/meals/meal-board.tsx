@@ -92,14 +92,14 @@ export function MealBoard({ familyId }: { familyId: string }) {
               ) : (
                 tonight.map((meal) => (
                   <div key={meal.id} className="mt-1 flex flex-wrap items-center gap-4">
-                    <p className="font-heading text-3xl font-semibold tracking-tight">
+                    <p className="font-heading text-2xl font-semibold tracking-tight">
                       {meal.display_title}
                     </p>
                     {meal.recipe_id && (
                       <button
                         type="button"
                         onClick={() => cook(meal.recipe_id!)}
-                        className="bg-primary text-primary-foreground flex h-14 items-center gap-2 rounded-2xl px-6 text-xl font-semibold shadow-sm"
+                        className="bg-primary text-primary-foreground flex h-12 items-center gap-2 rounded-2xl px-5 text-lg font-semibold shadow-sm"
                       >
                         <ChefHatIcon className="size-6" /> Cook this
                       </button>
