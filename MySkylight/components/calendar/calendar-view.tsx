@@ -52,6 +52,12 @@ import {
 import { ScopePicker } from "./scope-picker"
 import type { Span } from "@/lib/event-drag"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { cn } from "@/lib/utils"
 import type {
   CalendarView,
@@ -460,6 +466,18 @@ export function CalendarView({
     }
   }
 
+  const calendarFilter =
+    calendarSources.length > 1 ? (
+      <CalendarFilter
+        sources={calendarSources}
+        hidden={hidden}
+        onToggle={toggle}
+        onShowAll={showAll}
+        onHideAll={() => hideAll(calendarSources.map((s) => s.key))}
+        large={isDevice}
+      />
+    ) : null
+
   // Companion app: Schedule first (it's the default there). The wall display keeps
   // the classic Month → Schedule order.
   const VIEW_TABS: { label: string; value: CalendarView }[] = isDevice
@@ -546,46 +564,62 @@ export function CalendarView({
             </TabsList>
           </Tabs>
           {/* Only worth showing once there's more than the native calendar to
-              toggle — otherwise there's nothing to filter. */}
-          {calendarSources.length > 1 && (
-            <CalendarFilter
-              sources={calendarSources}
-              hidden={hidden}
-              onToggle={toggle}
-              onShowAll={showAll}
-              onHideAll={() => hideAll(calendarSources.map((s) => s.key))}
-              large={isDevice}
-            />
-          )}
-          {!isDevice && (
+              toggle — otherwise there's nothing to filter. On a phone it moves down
+              into the member row to keep this one uncluttered. */}
+          {!isPhone && calendarFilter}
+          {!isDevice && !isPhone && (
             <Button variant="outline" size="sm" onClick={() => setImportOpen(true)}>
               <SparklesIcon />
               <span className="hidden sm:inline">Import</span>
             </Button>
           )}
-          <Button size={isDevice ? "lg" : "sm"} onClick={() => openNew()}>
-            <PlusIcon />
-            <span className={isDevice ? "" : "hidden sm:inline"}>Add</span>
-          </Button>
+          {isPhone ? (
+            // Phone: "+" opens a small menu so flyer import doesn't need its own button.
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button size="sm" aria-label="Add">
+                  <PlusIcon />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onSelect={() => openNew()}>
+                  <PlusIcon /> New event
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => setImportOpen(true)}>
+                  <SparklesIcon /> Import from flyer
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : (
+            <Button size={isDevice ? "lg" : "sm"} onClick={() => openNew()}>
+              <PlusIcon />
+              <span className={isDevice ? "" : "hidden sm:inline"}>Add</span>
+            </Button>
+          )}
         </div>
       </div>
 
       {/* Member filter + countdowns share one horizontal band so they don't eat
           two full rows of vertical space on the wide wall display; they stack
           only on narrow phone screens. */}
-      {(members.length > 0 || hasCountdowns) && (
+      {(members.length > 0 || hasCountdowns || (isPhone && calendarSources.length > 1)) && (
         <div className="flex flex-col border-b lg:flex-row lg:items-stretch">
           {/* Profile switcher — filter the calendar to one member (device + app) */}
-          <MemberFilter
-            members={members}
-            activeMemberId={effectiveMemberId}
-            onSelect={setActiveMember}
-            large={isDevice}
+          <div
             className={cn(
-              "lg:flex-shrink-0",
+              "flex items-center lg:flex-shrink-0",
               hasCountdowns && "border-b lg:border-r lg:border-b-0"
             )}
-          />
+          >
+            <MemberFilter
+              members={members}
+              activeMemberId={effectiveMemberId}
+              onSelect={setActiveMember}
+              large={isDevice}
+              className="min-w-0 flex-1"
+            />
+            {isPhone && calendarFilter && <div className="flex-shrink-0 pr-3">{calendarFilter}</div>}
+          </div>
 
           {/* Countdown strip — anchored to today, independent of the viewed month */}
           <CountdownStrip
